@@ -9,7 +9,14 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "check:syntax": "node --check server.js && node --check src/app.js && node --check src/routes/api.js && node --check src/config/env.js && node --check assets/app.js && node --check assets/auth-runtime.js && node --check assets/auth-guard.js",
+    "test": "node --test test/**/*.test.js",
+    "test:auth": "node --test test/auth.integration.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:auth": "playwright test test/e2e/auth-login.spec.js",
+    "test:e2e:install": "playwright install chromium",
+    "verify": "npm run check:syntax && npm run test:auth"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,6 +31,9 @@
     "morgan": "^1.10.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@playwright/test": "^1.54.2",
+    "mongodb-memory-server": "^10.2.3",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.1.4"
   }
 }

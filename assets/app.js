@@ -11,9 +11,10 @@ const STORAGE_KEYS = {
   authSession: "booqdat_auth_session"
 };
 
-const API_BASE = `${window.location.origin}/api`;
-const syncTimers = {};
-let refreshRequestPromise = null;
+const authRuntime = window.BOOQDATAuthRuntime;
+if (!authRuntime) {
+  throw new Error("Missing auth runtime module: assets/auth-runtime.js");
+}
 const ROLE_GUARDS_BY_PAGE = {
   "admin.html": ["admin"],
   "promoter-dashboard.html": ["promoter", "admin"]
@@ -103,126 +104,43 @@ function redirectToLogin(requiredRoles = [], redirectPath = currentPageName()) {
 }
 
 function readAuthSession() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.authSession);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    const token = String(parsed.token || "").trim();
-    const refreshToken = String(parsed.refreshToken || "").trim();
-    const user = parsed.user && typeof parsed.user === "object" ? parsed.user : null;
-    if (!token || !refreshToken || !user) return null;
-    return { token, refreshToken, user };
-  } catch {
-    return null;
-  }
+  return authRuntime.readAuthSession();
 }
 
 function writeAuthSession(session) {
-  if (!session || !session.token || !session.refreshToken || !session.user) return;
-  localStorage.setItem(STORAGE_KEYS.authSession, JSON.stringify({
-    token: String(session.token),
-    refreshToken: String(session.refreshToken),
-    user: session.user
-  }));
+  return authRuntime.writeAuthSession(session);
 }
 
 function clearAuthSession() {
-  localStorage.removeItem(STORAGE_KEYS.authSession);
+  return authRuntime.clearAuthSession();
 }
 
 function getAuthToken() {
-  return readAuthSession()?.token || "";
+  return authRuntime.getAuthToken();
 }
 
 function getRefreshToken() {
-  return readAuthSession()?.refreshToken || "";
+  return authRuntime.getRefreshToken();
 }
 
 function hasAnyRole(user, roles) {
-  const role = normalizeRole(user?.role);
-  return roles.some((candidate) => normalizeRole(candidate) === role);
+  return authRuntime.hasAnyRole(user, roles);
 }
 
 function canUseApi() {
-  return typeof window !== "undefined" && window.location.protocol.startsWith("http");
+  return authRuntime.canUseApi();
 }
 
 function extractAuthTokens(payload, fallbackRefreshToken = "") {
-  const accessToken = String(payload?.accessToken || payload?.token || "").trim();
-  const refreshToken = String(payload?.refreshToken || fallbackRefreshToken || "").trim();
-  return { accessToken, refreshToken };
+  return authRuntime.extractAuthTokens(payload, fallbackRefreshToken);
 }
 
 async function refreshAuthSession() {
-  if (!canUseApi()) return null;
-  const existing = readAuthSession();
-  if (!existing?.refreshToken) return null;
-
-  if (refreshRequestPromise) return refreshRequestPromise;
-  refreshRequestPromise = (async () => {
-    try {
-      const response = await fetch(`${API_BASE}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: existing.refreshToken })
-      });
-      const contentType = response.headers.get("content-type") || "";
-      const payload = contentType.includes("application/json")
-        ? await response.json().catch(() => null)
-        : null;
-
-      if (!response.ok || !payload?.ok) {
-        if ([400, 401, 403].includes(response.status)) clearAuthSession();
-        return null;
-      }
-
-      const tokens = extractAuthTokens(payload);
-      const nextUser = payload.user && typeof payload.user === "object" ? payload.user : existing.user;
-      if (!tokens.accessToken || !tokens.refreshToken || !nextUser) {
-        clearAuthSession();
-        return null;
-      }
-
-      const nextSession = {
-        token: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        user: nextUser
-      };
-      writeAuthSession(nextSession);
-      return nextSession;
-    } catch {
-      return null;
-    } finally {
-      refreshRequestPromise = null;
-    }
-  })();
-
-  return refreshRequestPromise;
+  return authRuntime.refreshAuthSession();
 }
 
 async function logoutCurrentSession() {
-  const session = readAuthSession();
-  if (!session) {
-    clearAuthSession();
-    return;
-  }
-
-  if (canUseApi()) {
-    try {
-      await fetch(`${API_BASE}/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.token}`
-        },
-        body: JSON.stringify({ refreshToken: session.refreshToken })
-      });
-    } catch {
-      // ignore logout transport failures and clear local auth regardless
-    }
-  }
-  clearAuthSession();
+  return authRuntime.logoutCurrentSession();
 }
 
 function getPromoterProfileEmail() {
@@ -274,70 +192,11 @@ function notifyPromoterEventPublished(eventDetails, shareLink) {
 }
 
 async function apiRequest(path, options = {}) {
-  if (!canUseApi()) return null;
-  try {
-    const token = options.skipAuth ? "" : getAuthToken();
-    const method = String(options.method || "GET").toUpperCase();
-    let requestUrl = `${API_BASE}${path}`;
-    if (method === "GET" && !options.skipCacheBust) {
-      const sep = requestUrl.includes("?") ? "&" : "?";
-      requestUrl = `${requestUrl}${sep}_=${Date.now()}`;
-    }
-    const headers = {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store, no-cache, max-age=0",
-      Pragma: "no-cache",
-      ...(options.headers || {})
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(requestUrl, {
-      method,
-      cache: "no-store",
-      headers,
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
-    const contentType = response.headers.get("content-type") || "";
-    const payload = contentType.includes("application/json")
-      ? await response.json().catch(() => null)
-      : null;
-
-    if (!response.ok) {
-      const isAuthError = response.status === 401 || response.status === 403;
-      if (isAuthError && !options.skipAuth && !options.skipAuthRefresh) {
-        const refreshed = await refreshAuthSession();
-        if (refreshed?.token) {
-          return apiRequest(path, {
-            ...options,
-            skipAuthRefresh: true,
-            suppressAuthRedirect: true
-          });
-        }
-      }
-      if (isAuthError && !options.suppressAuthRedirect && currentPageName() !== "login.html") {
-        clearAuthSession();
-        redirectToLogin(getRequiredRolesForCurrentPage(), currentPageName());
-      }
-      if (options.includeErrorResponse) {
-        return payload || { ok: false, error: `Request failed (${response.status})`, gatewayStatus: response.status };
-      }
-      return null;
-    }
-
-    if (!payload || typeof payload !== "object") {
-      return { ok: true };
-    }
-    return payload;
-  } catch {
-    return null;
-  }
+  return authRuntime.apiRequest(path, options);
 }
 
 function queueApiSync(key, path, payload, delayMs = 450) {
-  if (!canUseApi()) return;
-  clearTimeout(syncTimers[key]);
-  syncTimers[key] = setTimeout(() => {
-    apiRequest(path, { method: "PUT", body: payload, suppressAuthRedirect: true });
-  }, delayMs);
+  return authRuntime.queueApiSync(key, path, payload, delayMs);
 }
 
 let didHydrateFromApi = false;
@@ -907,7 +766,8 @@ function setupAuthPage() {
     target.style.color = isError ? "#b3261e" : "";
   }
 
-  if (loginForm) {
+  if (loginForm && loginForm.dataset.authGuardBound !== "1") {
+    loginForm.dataset.authGuardBound = "1";
     loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(loginForm);
@@ -949,7 +809,8 @@ function setupAuthPage() {
     });
   }
 
-  if (registerForm) {
+  if (registerForm && registerForm.dataset.authGuardBound !== "1") {
+    registerForm.dataset.authGuardBound = "1";
     if (preferredSignupRole && registerForm.elements?.role) {
       registerForm.elements.role.value = preferredSignupRole;
     }
@@ -1388,7 +1249,8 @@ function setupUserPortal() {
     });
   }
 
-  if (loginForm && loginEmailInput && loginPasswordInput) {
+  if (loginForm && loginEmailInput && loginPasswordInput && loginForm.dataset.authGuardBound !== "1") {
+    loginForm.dataset.authGuardBound = "1";
     loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const email = normalizeEmail(loginEmailInput.value);
