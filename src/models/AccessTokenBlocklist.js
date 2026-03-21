@@ -4,7 +4,7 @@ const accessTokenBlocklistSchema = new mongoose.Schema(
   {
     tokenId: { type: String, required: true, unique: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "UserAccount", required: true, index: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     reason: { type: String, default: "logout" }
   },
   { timestamps: true }
