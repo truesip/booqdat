@@ -883,6 +883,7 @@ function createApiRouter(env) {
           eventId,
           status: gatewayResult.status || 502,
           error: gatewayResult.error || "",
+          gatewayResponseInfo: gatewayResult.payloadInfo || null,
           gatewayPayloadSummary: {
             amount: gatewayPayload.amount,
             currency: gatewayPayload.currency,
