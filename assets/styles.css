@@ -314,6 +314,13 @@ textarea:focus {
   position: relative;
 }
 
+.event-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .event-badge {
   position: absolute;
   top: 0.7rem;
@@ -1092,6 +1099,23 @@ blockquote cite {
   background: #fff;
 }
 
+.promoter-event-image {
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(110deg, rgba(249, 115, 22, 0.95), rgba(234, 88, 12, 0.84)),
+    #d0d5eb;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 0.65rem;
+}
+
+.promoter-event-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .promoter-event-head {
   display: flex;
   justify-content: space-between;
@@ -1235,6 +1259,28 @@ blockquote cite {
 
 .ticket-type-card h4 {
   margin: 0 0 0.6rem;
+}
+
+.wizard-image-preview {
+  border: 1px dashed #f4c9aa;
+  border-radius: 10px;
+  background: #fff8f2;
+  padding: 0.65rem;
+}
+
+.wizard-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.wizard-image-grid img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #f3dfce;
+  background: #fff;
 }
 
 .wizard-review {

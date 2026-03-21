@@ -660,6 +660,7 @@ function mapPromoterEventToMarketplaceEvent(event) {
     capacity,
     description: String(event.description || ""),
     banner: String(event.banner || ""),
+    imageGallery: Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [],
     promoterEmail: normalizeEmail(event.promoterEmail || "")
   };
 }
@@ -702,12 +703,21 @@ function formatLocationLine(placeLike) {
   const country = String(placeLike?.country || "").trim();
   return [city, state, country].filter(Boolean).join(", ");
 }
+function getEventImageUrl(event) {
+  const banner = String(event?.banner || "").trim();
+  if (banner) return banner;
+  const gallery = Array.isArray(event?.imageGallery) ? event.imageGallery : [];
+  const firstImage = gallery.find((item) => typeof item === "string" && item.trim());
+  return firstImage ? String(firstImage).trim() : "";
+}
 
 function createEventCard(event) {
   const location = formatLocationLine(event) || "Location TBA";
+  const imageUrl = getEventImageUrl(event);
   return `
     <article class="event-card">
       <div class="event-banner">
+        ${imageUrl ? `<img src="${imageUrl}" alt="${event.title} event banner" loading="lazy">` : ""}
         <span class="event-badge">${event.category}</span>
       </div>
       <div class="event-body">
@@ -1545,6 +1555,10 @@ function setupPromoterDashboard() {
   let currentStep = 1;
   let currentTab = "upcoming";
   let editingEventId = null;
+  const MAX_WIZARD_IMAGE_UPLOADS = 3;
+  const MAX_WIZARD_IMAGE_BYTES = 2 * 1024 * 1024;
+  const wizardImagePreview = root.querySelector("#wizard-image-preview");
+  let wizardPreviewObjectUrls = [];
 
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -1619,6 +1633,7 @@ function setupPromoterDashboard() {
   function mapPromoterEventToMarketplace(event) {
     const prices = (event.ticketTypes || []).map((ticket) => toNumber(ticket.price)).filter((price) => price > 0);
     const minPrice = prices.length ? Math.min(...prices) : 25;
+    const imageGallery = Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [];
     return {
       id: event.id,
       title: event.title,
@@ -1632,7 +1647,8 @@ function setupPromoterDashboard() {
       price: minPrice,
       capacity: totalInventory(event),
       description: event.description || "",
-      banner: event.banner || "",
+      banner: event.banner || imageGallery[0] || "",
+      imageGallery,
       promoterEmail: normalizeEmail(event.promoterEmail || currentPromoterEmail())
     };
   }
@@ -1650,6 +1666,58 @@ function setupPromoterDashboard() {
     if (!feedback) return;
     feedback.classList.remove("hidden");
     feedback.innerHTML = message;
+  }
+
+  function clearWizardPreviewObjectUrls() {
+    wizardPreviewObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    wizardPreviewObjectUrls = [];
+  }
+
+  function renderWizardImagePreview(imageUrls = []) {
+    if (!wizardImagePreview) return;
+    const urls = (Array.isArray(imageUrls) ? imageUrls : [])
+      .map((url) => String(url || "").trim())
+      .filter(Boolean)
+      .slice(0, MAX_WIZARD_IMAGE_UPLOADS);
+    if (!urls.length) {
+      wizardImagePreview.innerHTML = `<p class="muted">No image selected yet. Upload up to 3 images to preview them here.</p>`;
+      return;
+    }
+    wizardImagePreview.innerHTML = `
+      <div class="wizard-image-grid">
+        ${urls.map((url, index) => `<img src="${url}" alt="Event preview image ${index + 1}" loading="lazy">`).join("")}
+      </div>
+    `;
+  }
+
+  function previewFromBannerValue() {
+    const bannerInput = wizardForm?.elements?.namedItem("banner");
+    const bannerUrl = String(("value" in (bannerInput || {}) ? bannerInput.value : "") || "").trim();
+    renderWizardImagePreview(bannerUrl ? [bannerUrl] : []);
+  }
+
+  function updateWizardImagePreviewFromUploads() {
+    const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
+    if (!imageUploads || !("files" in imageUploads)) {
+      previewFromBannerValue();
+      return;
+    }
+    const files = Array.from(imageUploads.files || [])
+      .filter((file) => String(file?.type || "").toLowerCase().startsWith("image/"))
+      .slice(0, MAX_WIZARD_IMAGE_UPLOADS);
+    if (!files.length) {
+      clearWizardPreviewObjectUrls();
+      previewFromBannerValue();
+      return;
+    }
+    const oversized = files.find((file) => Number(file?.size || 0) > MAX_WIZARD_IMAGE_BYTES);
+    if (oversized) {
+      showFeedback(`"${oversized.name}" exceeds 2MB. Please upload a smaller image.`);
+    }
+    const validFiles = files.filter((file) => Number(file?.size || 0) <= MAX_WIZARD_IMAGE_BYTES);
+    clearWizardPreviewObjectUrls();
+    wizardPreviewObjectUrls = validFiles.map((file) => URL.createObjectURL(file));
+    renderWizardImagePreview(wizardPreviewObjectUrls);
   }
 
   function canAccessPromoterEvent(event) {
@@ -1684,6 +1752,7 @@ function setupPromoterDashboard() {
       capacity: inventory,
       ticketTypes,
       banner: String(event.banner || ""),
+      imageGallery: Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [],
       promoCodes: Array.isArray(event.promoCodes) ? event.promoCodes : [],
       status: String(event.status || "Live"),
       ticketsSold,
@@ -1795,8 +1864,12 @@ function setupPromoterDashboard() {
       const soldPct = Math.min(100, Math.round((sold / inventory) * 100));
       const revenue = Math.max(0, toNumber(orderTotalsByEvent[event.id]?.revenue, 0) || computeRevenue(event));
       const pauseLabel = status === "Paused" ? "Resume Sales" : "Pause Sales";
+      const previewImage = getEventImageUrl(event);
       return `
         <article class="promoter-event-card">
+          <div class="promoter-event-image">
+            ${previewImage ? `<img src="${previewImage}" alt="${event.title} banner" loading="lazy">` : ""}
+          </div>
           <div class="promoter-event-head">
             <h3>${event.title}</h3>
             <span class="promoter-status-pill ${statusClass}">${status}</span>
@@ -2171,16 +2244,24 @@ function setupPromoterDashboard() {
     setWizardInput("promoCodes", (event.promoCodes || []).join(", "));
     const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
     if (imageUploads && "value" in imageUploads) imageUploads.value = "";
+    const existingImages = Array.isArray(event.imageGallery)
+      ? event.imageGallery.filter((item) => typeof item === "string" && item.trim())
+      : [];
+    if (!existingImages.length && String(event.banner || "").trim()) {
+      existingImages.push(String(event.banner).trim());
+    }
+    clearWizardPreviewObjectUrls();
+    renderWizardImagePreview(existingImages);
   }
 
   function resetWizardState() {
     if (wizardForm) wizardForm.reset();
     editingEventId = null;
     if (wizardOutput) wizardOutput.classList.add("hidden");
+    clearWizardPreviewObjectUrls();
+    renderWizardImagePreview([]);
     setWizardStep(1);
   }
-  const MAX_WIZARD_IMAGE_UPLOADS = 3;
-  const MAX_WIZARD_IMAGE_BYTES = 2 * 1024 * 1024;
 
   function readImageFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -2361,6 +2442,20 @@ function setupPromoterDashboard() {
       void saveWizardEvent(false);
     });
   }
+  const wizardImageUploads = wizardForm?.elements?.namedItem("imageUploads");
+  if (wizardImageUploads && "addEventListener" in wizardImageUploads) {
+    wizardImageUploads.addEventListener("change", () => {
+      updateWizardImagePreviewFromUploads();
+    });
+  }
+  const wizardBannerInput = wizardForm?.elements?.namedItem("banner");
+  if (wizardBannerInput && "addEventListener" in wizardBannerInput) {
+    wizardBannerInput.addEventListener("input", () => {
+      const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
+      const hasSelectedFiles = Boolean(imageUploads && "files" in imageUploads && imageUploads.files?.length);
+      if (!hasSelectedFiles) previewFromBannerValue();
+    });
+  }
 
   root.querySelectorAll("[data-scroll-create]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2478,6 +2573,7 @@ function setupPromoterDashboard() {
   renderEventCards();
   renderAnalytics();
   renderPayoutHistory();
+  renderWizardImagePreview([]);
   setWizardStep(1);
 }
 
