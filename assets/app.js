@@ -421,7 +421,15 @@ function readStoredEvents() {
 function writeStoredEvents(events) {
   const filtered = filterLegacyDemoEvents(events);
   localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filtered));
-  queueApiSync("events", "/sync/events", { events: filtered });
+  if (!filtered.length) {
+    queueApiSync("events-empty", "/sync/events", { events: [] }, 150);
+    return;
+  }
+  filtered.forEach((event) => {
+    const eventId = String(event?.id || "").trim();
+    if (!eventId) return;
+    queueApiSync(`events-${eventId}`, "/sync/events", { events: [event] }, 150);
+  });
 }
 
 function upsertStoredEvent(event) {
@@ -459,7 +467,15 @@ function readPromoterDashboardEvents() {
 function writePromoterDashboardEvents(events) {
   const filtered = filterLegacyDemoEvents(events);
   localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filtered));
-  queueApiSync("promoter-events", "/sync/promoter-events", { promoterEvents: filtered });
+  if (!filtered.length) {
+    queueApiSync("promoter-events-empty", "/sync/promoter-events", { promoterEvents: [] }, 150);
+    return;
+  }
+  filtered.forEach((event) => {
+    const eventId = String(event?.id || "").trim();
+    if (!eventId) return;
+    queueApiSync(`promoter-events-${eventId}`, "/sync/promoter-events", { promoterEvents: [event] }, 150);
+  });
 }
 
 function readBuyerOrders() {
@@ -645,7 +661,7 @@ function mapPromoterEventToMarketplaceEvent(event) {
   const imageGallery = normalizeImageList(event.imageGallery).length
     ? normalizeImageList(event.imageGallery)
     : normalizeImageList(event.images);
-  const banner = extractImageUrl(event.banner || event.bannerUrl || imageGallery[0] || "");
+  const banner = extractImageUrl(event.banner || event.bannerUrl || event.bannerURL || "");
   const price = ticketTypeAveragePrice(ticketTypes, toFiniteNumber(event.price, 0));
   const capacityFromTickets = ticketTypes.reduce((sum, ticket) => sum + toFiniteNumber(ticket?.quantity, 0), 0);
   const capacity = Math.max(1, capacityFromTickets || toFiniteNumber(event.capacity, 1));
@@ -671,15 +687,15 @@ function mapPromoterEventToMarketplaceEvent(event) {
 
 function getAllEvents() {
   const merged = new Map();
-  readPromoterDashboardEvents().forEach((event) => {
-    const mapped = mapPromoterEventToMarketplaceEvent(event);
-    if (mapped?.id) merged.set(mapped.id, mapped);
-  });
   readStoredEvents().forEach((event) => {
     if (!event || typeof event !== "object") return;
     const id = String(event.id || "").trim();
     if (!id) return;
     merged.set(id, event);
+  });
+  readPromoterDashboardEvents().forEach((event) => {
+    const mapped = mapPromoterEventToMarketplaceEvent(event);
+    if (mapped?.id) merged.set(mapped.id, mapped);
   });
   return [...merged.values()].sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
 }
@@ -1659,7 +1675,7 @@ function setupPromoterDashboard() {
     const imageGallery = normalizeImageList(event.imageGallery).length
       ? normalizeImageList(event.imageGallery)
       : normalizeImageList(event.images);
-    const banner = extractImageUrl(event.banner || event.bannerUrl || imageGallery[0] || "");
+    const banner = extractImageUrl(event.banner || event.bannerUrl || event.bannerURL || "");
     return {
       id: event.id,
       title: event.title,
@@ -2348,7 +2364,7 @@ function setupPromoterDashboard() {
       ? normalizeImageList(existing?.imageGallery)
       : normalizeImageList(existing?.images);
     const imageGallery = uploadedImages.length ? uploadedImages : previousImageGallery;
-    const resolvedBanner = extractImageUrl(data.banner || existing?.banner || existing?.bannerUrl || "") || imageGallery[0] || "";
+    const resolvedBanner = extractImageUrl(data.banner || existing?.banner || existing?.bannerUrl || existing?.bannerURL || "");
 
     const finalEvent = {
       ...(existing || {}),
