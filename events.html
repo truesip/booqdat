@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse Events | BOOQDAT</title>
+  <meta name="description" content="Find upcoming music, comedy, sports, and community events on BOOQDAT.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="events.html" class="active">Browse Events</a>
+        <a href="promoters.html">For Promoters</a>
+        <a href="login.html">Log In</a>
+        <a href="promoters.html" class="btn btn-primary">Sign Up</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <p class="eyebrow">Discover Events</p>
+        <h1>Find your next live experience</h1>
+        <p>Search by city, category, and title. Book in seconds with secure checkout.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="filter-bar">
+          <input id="search-input" type="text" placeholder="Search by event name or venue">
+          <select id="city-filter">
+            <option value="">All Cities</option>
+          </select>
+          <select id="category-filter">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+        <div id="events-grid" class="grid cards-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

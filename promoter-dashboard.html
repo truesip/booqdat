@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Promoter Dashboard | BOOQDAT</title>
+  <meta name="description" content="BOOQDAT promoter dashboard for event creation, analytics, earnings, and support.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="promoter-dashboard.html" class="active">Promoter Dashboard</a>
+        <a href="events.html">Browse Events</a>
+        <a href="support.html">Support</a>
+        <a href="index.html" class="btn btn-primary">Public Site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="promoter-shell" id="promoter-dashboard">
+    <button class="promoter-sidebar-toggle" type="button" data-promoter-sidebar-toggle>Menu</button>
+    <aside class="promoter-sidebar">
+      <h2>Promoter Console</h2>
+      <nav class="promoter-sidebar-nav">
+        <a href="#promoter-home">Dashboard</a>
+        <a href="#promoter-events">My Events</a>
+        <a href="#promoter-create">Create Event</a>
+        <a href="#promoter-analytics">Analytics</a>
+        <a href="#promoter-payouts">Payouts & Earnings</a>
+        <a href="#promoter-settings">Profile & Settings</a>
+        <a href="#promoter-support">Support</a>
+      </nav>
+    </aside>
+
+    <section class="promoter-main">
+      <section class="promoter-section" id="promoter-home">
+        <div class="promoter-section-head">
+          <div>
+            <p class="eyebrow">Promoter Dashboard</p>
+            <h1>Track Events, Sales, and Earnings in Real Time</h1>
+            <p>Manage your event operations from publishing to payouts in one workflow.</p>
+          </div>
+          <button class="btn btn-primary promoter-cta-btn" type="button" data-scroll-create>+ Create New Event</button>
+        </div>
+        <div class="promoter-kpi-grid">
+          <article class="promoter-kpi-card">
+            <span>Upcoming Events</span>
+            <strong data-promoter-kpi="upcoming-events">0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Total Tickets Sold</span>
+            <strong data-promoter-kpi="total-tickets-sold">0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Total Earnings (Net)</span>
+            <strong data-promoter-kpi="total-earnings">$0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Pending Payouts</span>
+            <strong data-promoter-kpi="pending-payouts">$0</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-events">
+        <div class="promoter-section-head">
+          <h2>My Events</h2>
+          <button class="btn btn-secondary" type="button" data-scroll-create>Create Event</button>
+        </div>
+        <div class="promoter-tabs" role="tablist" aria-label="Event views">
+          <button class="is-active" type="button" data-event-tab="upcoming">Upcoming</button>
+          <button type="button" data-event-tab="past">Past</button>
+          <button type="button" data-event-tab="drafts">Drafts</button>
+        </div>
+        <div id="promoter-events-list" class="promoter-events-grid"></div>
+        <div id="promoter-action-feedback" class="result-box hidden"></div>
+      </section>
+
+      <section class="promoter-section" id="promoter-create">
+        <div class="promoter-section-head">
+          <h2>Create / Edit Event</h2>
+          <p>Use the guided flow to configure tickets, schedule, and publishing options.</p>
+        </div>
+
+        <article class="promoter-card wizard-wrap">
+          <div class="wizard-progress">
+            <span class="wizard-indicator is-active" data-wizard-indicator="1">1. Basic Info</span>
+            <span class="wizard-indicator" data-wizard-indicator="2">2. Date & Venue</span>
+            <span class="wizard-indicator" data-wizard-indicator="3">3. Ticket Types</span>
+            <span class="wizard-indicator" data-wizard-indicator="4">4. Assets & Promo</span>
+            <span class="wizard-indicator" data-wizard-indicator="5">5. Review & Publish</span>
+          </div>
+
+          <form id="promoter-wizard-form" class="stack">
+            <section class="wizard-step is-active" data-step="1">
+              <h3>Step 1: Basic Info</h3>
+              <label>
+                Event Title
+                <input name="title" type="text" required placeholder="Desert Skyline Friday Sessions">
+              </label>
+              <label>
+                Description
+                <textarea name="description" rows="4" required placeholder="Describe your event experience, lineup, and key details."></textarea>
+              </label>
+              <div class="split">
+                <label>
+                  Category
+                  <select name="category" required>
+                    <option value="">Select category</option>
+                    <option>Music</option>
+                    <option>Comedy</option>
+                    <option>Sports</option>
+                    <option>Business</option>
+                    <option>Community</option>
+                  </select>
+                </label>
+                <label>
+                  Tags (comma-separated)
+                  <input name="tags" type="text" placeholder="festival, rooftop, nightlife">
+                </label>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="2">
+              <h3>Step 2: Date, Time, Venue</h3>
+              <div class="split">
+                <label>
+                  Event Date
+                  <input name="date" type="date" required>
+                </label>
+                <label>
+                  Start Time
+                  <input name="time" type="time" required>
+                </label>
+              </div>
+              <div class="split">
+                <label>
+                  Venue Type
+                  <select name="venueType" required>
+                    <option value="">Select type</option>
+                    <option value="Physical">Physical Venue</option>
+                    <option value="Online">Online Event</option>
+                  </select>
+                </label>
+                <label>
+                  Venue / Online URL
+                  <input name="venue" type="text" required placeholder="Venue name or stream URL">
+                </label>
+              </div>
+              <div class="split">
+                <label>
+                  City
+                  <input name="city" type="text" required placeholder="Albuquerque">
+                </label>
+                <label>
+                  State
+                  <input name="state" type="text" required placeholder="NM">
+                </label>
+              </div>
+              <label>
+                Capacity
+                <input name="capacity" type="number" min="1" step="1" required placeholder="450">
+              </label>
+            </section>
+
+            <section class="wizard-step" data-step="3">
+              <h3>Step 3: Ticket Types</h3>
+              <div class="ticket-type-grid">
+                <article class="ticket-type-card">
+                  <h4>General Admission</h4>
+                  <div class="split">
+                    <label>
+                      Price (USD)
+                      <input name="gaPrice" type="number" min="0" step="1" required value="35">
+                    </label>
+                    <label>
+                      Quantity
+                      <input name="gaQty" type="number" min="0" step="1" required value="300">
+                    </label>
+                  </div>
+                  <div class="split">
+                    <label>
+                      Sales Start
+                      <input name="gaStart" type="date" required>
+                    </label>
+                    <label>
+                      Sales End
+                      <input name="gaEnd" type="date" required>
+                    </label>
+                  </div>
+                </article>
+                <article class="ticket-type-card">
+                  <h4>VIP</h4>
+                  <div class="split">
+                    <label>
+                      Price (USD)
+                      <input name="vipPrice" type="number" min="0" step="1" value="75">
+                    </label>
+                    <label>
+                      Quantity
+                      <input name="vipQty" type="number" min="0" step="1" value="80">
+                    </label>
+                  </div>
+                  <div class="split">
+                    <label>
+                      Sales Start
+                      <input name="vipStart" type="date">
+                    </label>
+                    <label>
+                      Sales End
+                      <input name="vipEnd" type="date">
+                    </label>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="4">
+              <h3>Step 4: Image/Banner + Promo Codes</h3>
+              <label>
+                Banner Image URL
+                <input name="banner" type="url" placeholder="https://example.com/event-banner.jpg">
+              </label>
+              <label>
+                Promo Codes (comma-separated)
+                <input name="promoCodes" type="text" placeholder="EARLY10,VIP20">
+              </label>
+              <p class="muted">Tip: Leave banner empty to use BOOQDAT default event styling.</p>
+            </section>
+
+            <section class="wizard-step" data-step="5">
+              <h3>Step 5: Review & Publish</h3>
+              <div id="wizard-review" class="wizard-review"></div>
+              <div id="wizard-publish-output" class="result-box hidden"></div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-secondary" data-wizard-prev>Back</button>
+              <button type="button" class="btn btn-primary" data-wizard-next>Next</button>
+              <button type="button" class="btn btn-secondary hidden" data-wizard-draft>Save as Draft</button>
+              <button type="button" class="btn btn-primary hidden" data-wizard-publish>Review & Publish</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="promoter-section" id="promoter-analytics">
+        <h2>Analytics</h2>
+        <div class="promoter-analytics-grid">
+          <article class="promoter-card">
+            <h3>Ticket Sales Over Time</h3>
+            <canvas id="promoter-sales-chart" width="760" height="260"></canvas>
+          </article>
+          <article class="promoter-card">
+            <h3>Revenue Trend</h3>
+            <canvas id="promoter-revenue-chart" width="760" height="260"></canvas>
+          </article>
+          <article class="promoter-card">
+            <h3>Buyer Demographics</h3>
+            <div id="promoter-demographics" class="bar-list"></div>
+          </article>
+          <article class="promoter-card">
+            <h3>Peak Purchase Times (Heatmap)</h3>
+            <div id="purchase-heatmap" class="heatmap-grid"></div>
+          </article>
+          <article class="promoter-card">
+            <h3>Top Referrers</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Visits</th>
+                    <th>Conversions</th>
+                  </tr>
+                </thead>
+                <tbody id="top-referrers-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-payouts">
+        <h2>Payouts & Earnings</h2>
+        <div class="promoter-analytics-grid">
+          <article class="promoter-card">
+            <h3>Payout Schedule</h3>
+            <label>
+              Schedule
+              <select id="payout-schedule-select">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <p id="payout-schedule-info" class="muted">Weekly payouts are issued every Friday for cleared transactions.</p>
+          </article>
+          <article class="promoter-card">
+            <h3>Connect Bank Account</h3>
+            <form id="bank-connect-form" class="stack">
+              <label>
+                Provider
+                <select name="provider" required>
+                  <option value="">Select provider</option>
+                  <option>NYVAPAY</option>
+                </select>
+              </label>
+              <label>
+                Account Holder Name
+                <input name="holder" type="text" required placeholder="Business account holder">
+              </label>
+              <label>
+                Payout Email
+                <input name="email" type="email" required placeholder="billing@company.com">
+              </label>
+              <button class="btn btn-primary" type="submit">Connect Account</button>
+            </form>
+            <p id="bank-connect-status" class="status"></p>
+          </article>
+          <article class="promoter-card">
+            <h3>Transaction History</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Event</th>
+                    <th>Gross</th>
+                    <th>Net</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="payout-history-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-settings">
+        <h2>Profile & Settings</h2>
+        <article class="promoter-card">
+          <form id="promoter-settings-form" class="stack">
+            <div class="split">
+              <label>
+                Promoter Name
+                <input name="name" type="text" required>
+              </label>
+              <label>
+                Contact Email
+                <input name="email" type="email" required>
+              </label>
+            </div>
+            <div class="split">
+              <label>
+                Phone
+                <input name="phone" type="tel">
+              </label>
+              <label>
+                Location
+                <input name="location" type="text">
+              </label>
+            </div>
+            <label class="checkbox-line"><input type="checkbox" name="notifySales" checked> Email me daily sales summaries</label>
+            <label class="checkbox-line"><input type="checkbox" name="notifyPayouts" checked> Notify me on payout updates</label>
+            <button class="btn btn-primary" type="submit">Save Profile Settings</button>
+          </form>
+          <p id="promoter-settings-status" class="status"></p>
+        </article>
+      </section>
+
+      <section class="promoter-section" id="promoter-support">
+        <h2>Support</h2>
+        <div class="promoter-support-grid">
+          <article class="promoter-card">
+            <h3>Promoter Support</h3>
+            <p>Need help with event setup, links, or payouts?</p>
+            <p>Email <a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a> with your event ID and issue details.</p>
+          </article>
+          <article class="promoter-card">
+            <h3>Resources</h3>
+            <ul class="admin-link-list">
+              <li><a href="support.html">Support Center</a></li>
+              <li><a href="terms.html">Terms of Service</a></li>
+              <li><a href="privacy.html">Privacy Policy</a></li>
+              <li><a href="refund-policy.html">Refund Policy</a></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

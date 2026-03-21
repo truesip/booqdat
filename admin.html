@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | BOOQDAT</title>
+  <meta name="description" content="BOOQDAT platform operations dashboard for admins.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="admin-page">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="admin.html" class="active">Dashboard</a>
+        <a href="events.html">Events</a>
+        <a href="support.html">Support</a>
+        <a href="index.html" class="btn btn-primary">Public Site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="admin-shell" id="admin-dashboard">
+    <button class="admin-sidebar-toggle" type="button" data-admin-sidebar-toggle>Menu</button>
+    <aside class="admin-sidebar" data-admin-sidebar>
+      <h2>Platform Ops</h2>
+      <nav class="admin-sidebar-nav">
+        <a href="#dashboard-home">Dashboard</a>
+        <a href="#promoters-section">Promoters</a>
+        <a href="#attendees-section">Attendees / Users</a>
+        <a href="#events-section">Events</a>
+        <a href="#tickets-sales-section">Tickets & Sales</a>
+        <a href="#payments-section">Payments & Payouts</a>
+        <a href="#reports-section">Reports & Analytics</a>
+        <a href="#disputes-section">Disputes / Support Tickets</a>
+        <a href="#settings-section">Settings</a>
+      </nav>
+    </aside>
+
+    <section class="admin-main">
+      <section class="admin-section" id="dashboard-home">
+        <div class="admin-section-head">
+          <div>
+            <p class="eyebrow">Operators Only</p>
+            <h1>Admin Dashboard Overview</h1>
+            <p>Monitor revenue, approvals, events, and support operations in one place.</p>
+          </div>
+          <div class="admin-quick-actions">
+            <button class="btn btn-primary" data-quick-action="approve-all">Approve Pending</button>
+            <button class="btn btn-secondary" data-quick-action="export-csv">Export CSV</button>
+            <button class="btn btn-secondary" data-quick-action="export-pdf">Export PDF</button>
+          </div>
+        </div>
+
+        <div class="admin-kpi-grid">
+          <article class="admin-kpi-card">
+            <span>Total Revenue</span>
+            <strong data-kpi="revenue-all">$0</strong>
+            <small data-kpi-detail="revenue-split">Today $0 • Month $0</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Tickets Sold</span>
+            <strong data-kpi="tickets-month">0</strong>
+            <small data-kpi-detail="tickets-split">Today 0 • This month 0</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Active Events</span>
+            <strong data-kpi="active-events">0</strong>
+            <small>Published and available for purchase</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>New Promoters (30d)</span>
+            <strong data-kpi="new-promoters">0</strong>
+            <small>Recently onboarded organizer accounts</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Pending Approvals</span>
+            <strong data-kpi="pending-approvals">0</strong>
+            <small data-kpi-detail="pending-breakdown">Promoters 0 • Events 0</small>
+          </article>
+        </div>
+
+        <div class="admin-chart-grid">
+          <article class="admin-card">
+            <div class="card-head">
+              <h3>Revenue Over Time</h3>
+              <div class="range-switch">
+                <button class="is-active" data-revenue-range="week">Week</button>
+                <button data-revenue-range="month">Month</button>
+                <button data-revenue-range="quarter">Quarter</button>
+              </div>
+            </div>
+            <canvas id="revenue-chart" width="840" height="260"></canvas>
+          </article>
+          <article class="admin-card">
+            <h3>Top Categories</h3>
+            <div id="top-categories" class="bar-list"></div>
+          </article>
+          <article class="admin-card">
+            <h3>Top Cities</h3>
+            <div id="top-cities" class="bar-list"></div>
+          </article>
+          <article class="admin-card">
+            <h3>Ticket Sales by Day</h3>
+            <div id="ticket-sales-bars" class="bar-list"></div>
+          </article>
+        </div>
+
+        <article class="admin-card">
+          <h3>Recent Activity Feed</h3>
+          <ul id="admin-activity-feed" class="activity-feed"></ul>
+        </article>
+      </section>
+
+      <section class="admin-section" id="promoters-section">
+        <h2>Promoters</h2>
+        <article class="admin-card">
+          <h3>Approval Queue</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Promoter</th>
+                  <th>City</th>
+                  <th>Submitted</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-pending" data-approval-row data-kind="promoter">
+                  <td>Neon Mesa Events</td>
+                  <td>Albuquerque, NM</td>
+                  <td>2 hours ago</td>
+                  <td><span class="status-pill pending" data-status>Pending</span></td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
+                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
+                  </td>
+                </tr>
+                <tr class="is-pending" data-approval-row data-kind="promoter">
+                  <td>Rio Sound Collective</td>
+                  <td>Santa Fe, NM</td>
+                  <td>5 hours ago</td>
+                  <td><span class="status-pill pending" data-status>Pending</span></td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
+                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
+                  </td>
+                </tr>
+                <tr data-approval-row data-kind="promoter">
+                  <td>Canyon Arts Group</td>
+                  <td>Phoenix, AZ</td>
+                  <td>1 day ago</td>
+                  <td><span class="status-pill approved" data-status>Approved</span></td>
+                  <td><span class="muted">No action required</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="attendees-section">
+        <h2>Attendees / Users</h2>
+        <article class="admin-card">
+          <h3>Recent Attendee Records</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Orders</th>
+                  <th>Last Purchase</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Jasmine Reynolds</td>
+                  <td>jreynolds@example.com</td>
+                  <td>4</td>
+                  <td>Today</td>
+                </tr>
+                <tr>
+                  <td>Marco Diaz</td>
+                  <td>mdiaz@example.com</td>
+                  <td>2</td>
+                  <td>Yesterday</td>
+                </tr>
+                <tr>
+                  <td>Nia Collins</td>
+                  <td>nia.collins@example.com</td>
+                  <td>6</td>
+                  <td>2 days ago</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="events-section">
+        <h2>Events</h2>
+        <article class="admin-card">
+          <h3>Pending / Flagged Events</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Promoter</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-pending" data-approval-row data-kind="event">
+                  <td>Friday Night Warehouse Session</td>
+                  <td>Neon Mesa Events</td>
+                  <td>Music</td>
+                  <td><span class="status-pill pending" data-status>Pending</span></td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
+                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
+                  </td>
+                </tr>
+                <tr class="is-pending" data-approval-row data-kind="event">
+                  <td>Comedy Open Mic Downtown</td>
+                  <td>Rio Sound Collective</td>
+                  <td>Comedy</td>
+                  <td><span class="status-pill pending" data-status>Pending</span></td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
+                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
+                  </td>
+                </tr>
+                <tr class="is-flagged" data-approval-row data-kind="event">
+                  <td>Flash Ticket Drop</td>
+                  <td>Unknown Promoter</td>
+                  <td>Community</td>
+                  <td><span class="status-pill flagged" data-status>Flagged</span></td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
+                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="tickets-sales-section">
+        <h2>Tickets & Sales</h2>
+        <article class="admin-card">
+          <h3>Sales Snapshot</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Tickets Sold</th>
+                  <th>Gross Sales</th>
+                  <th>Sell-through</th>
+                </tr>
+              </thead>
+              <tbody id="sales-snapshot-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="payments-section">
+        <h2>Payments & Payouts</h2>
+        <article class="admin-card">
+          <h3>Upcoming Payout Queue</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Promoter</th>
+                  <th>Amount</th>
+                  <th>Payout Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Neon Mesa Events</td>
+                  <td>$14,380</td>
+                  <td>Mar 24, 2026</td>
+                  <td><span class="status-pill pending">Scheduled</span></td>
+                </tr>
+                <tr>
+                  <td>Canyon Arts Group</td>
+                  <td>$7,920</td>
+                  <td>Mar 25, 2026</td>
+                  <td><span class="status-pill approved">Ready</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="reports-section">
+        <h2>Reports & Analytics</h2>
+        <article class="admin-card">
+          <h3>Export Center</h3>
+          <p>Download ticket sales, promoter performance, and payout data for finance and compliance workflows.</p>
+          <div class="admin-quick-actions">
+            <button class="btn btn-primary" data-quick-action="export-csv">Export Reports (CSV)</button>
+            <button class="btn btn-secondary" data-quick-action="export-pdf">Export Summary (PDF)</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="disputes-section">
+        <h2>Disputes / Support Tickets</h2>
+        <article class="admin-card">
+          <h3>Open Cases</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Case #</th>
+                  <th>Type</th>
+                  <th>Related Event</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>DSP-3018</td>
+                  <td>Duplicate Charge</td>
+                  <td>Sunset Rooftop Sessions</td>
+                  <td>High</td>
+                  <td><span class="status-pill pending">Investigating</span></td>
+                </tr>
+                <tr>
+                  <td>DSP-3024</td>
+                  <td>Ticket Delivery</td>
+                  <td>Southwest Comedy Night</td>
+                  <td>Medium</td>
+                  <td><span class="status-pill pending">Open</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="settings-section">
+        <h2>Settings</h2>
+        <div class="admin-settings-grid">
+          <article class="admin-card">
+            <h3>Fee Configuration</h3>
+            <form class="stack">
+              <label>
+                Platform Fee (%)
+                <input type="number" value="8" min="0" max="30">
+              </label>
+              <label>
+                Fixed Processing Fee (USD)
+                <input type="number" value="2" min="0" max="100">
+              </label>
+              <button type="button" class="btn btn-primary">Save Fee Settings</button>
+            </form>
+          </article>
+          <article class="admin-card">
+            <h3>Payment Gateways</h3>
+            <form class="stack">
+              <label class="checkbox-line"><input type="checkbox" checked> NYVAPAY</label>
+              <label class="checkbox-line"><input type="checkbox"> ACH (Manual Review)</label>
+              <button type="button" class="btn btn-primary">Update Gateways</button>
+            </form>
+          </article>
+          <article class="admin-card">
+            <h3>Legal & Site Content</h3>
+            <ul class="admin-link-list">
+              <li><a href="terms.html">Terms of Service</a></li>
+              <li><a href="privacy.html">Privacy Policy</a></li>
+              <li><a href="refund-policy.html">Refund Policy</a></li>
+              <li><a href="support.html">Support Content</a></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

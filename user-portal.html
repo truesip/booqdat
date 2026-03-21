@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Portal | BOOQDAT</title>
+  <meta name="description" content="Manage your BOOQDAT tickets, purchase history, profile, payment methods, and favorite events.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="events.html">Browse Events</a>
+        <a href="user-portal.html" class="active">My Tickets</a>
+        <a href="login.html">Log In</a>
+        <a href="promoters.html" class="btn btn-primary">For Promoters</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="user-portal-shell" id="user-portal">
+    <button class="user-sidebar-toggle" type="button" data-user-sidebar-toggle>Menu</button>
+    <aside class="user-sidebar">
+      <h2>My Account</h2>
+      <nav class="user-sidebar-nav">
+        <button type="button" data-user-tab="tickets" class="is-active">My Tickets</button>
+        <button type="button" data-user-tab="history">Purchase History</button>
+        <button type="button" data-user-tab="profile">Profile</button>
+        <button type="button" data-user-tab="payments">Payment Methods</button>
+        <button type="button" data-user-tab="favorites">Favorites / Saved Events</button>
+        <button type="button" data-user-tab="logout">Log Out</button>
+      </nav>
+    </aside>
+
+    <section class="user-main">
+      <section id="portal-auth-gate" class="user-auth-gate">
+        <p class="eyebrow">Attendee Access</p>
+        <h1>Access My Tickets</h1>
+        <p>Sign in with your user account to manage tickets, receipts, and profile settings securely.</p>
+        <form id="portal-login-form" class="stack">
+          <label>
+            Email Used at Checkout
+            <input id="portal-login-email" type="email" required placeholder="you@example.com">
+          </label>
+          <label>
+            Password
+            <input id="portal-login-password" type="password" required minlength="8" placeholder="••••••••">
+          </label>
+          <label>
+            Full Name (optional)
+            <input id="portal-login-name" type="text" placeholder="Jane Doe">
+          </label>
+          <button class="btn btn-primary" type="submit">Sign In & Access Portal</button>
+        </form>
+        <p class="auth-foot">Need an account? <a href="login.html?role=user">Create user account</a>.</p>
+      </section>
+
+      <section id="portal-main" class="hidden">
+        <article class="user-section">
+          <div class="promoter-section-head">
+            <div>
+              <p class="eyebrow">User Portal</p>
+              <h1>Tickets, Orders, and Account Settings</h1>
+              <p class="portal-account-chip">Logged in as <strong id="portal-account-label"></strong></p>
+            </div>
+          </div>
+          <div id="portal-feedback" class="result-box hidden"></div>
+        </article>
+
+        <section class="user-section" data-user-section="tickets">
+          <h2>My Tickets</h2>
+          <div id="portal-upcoming-tickets" class="user-tickets-grid"></div>
+          <details class="collapse-box">
+            <summary>Past Tickets</summary>
+            <div id="portal-past-tickets" class="user-tickets-grid"></div>
+          </details>
+        </section>
+
+        <section class="user-section hidden" data-user-section="history">
+          <h2>Purchase History</h2>
+          <div class="purchase-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Purchase Date</th>
+                  <th>Event</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Receipt</th>
+                </tr>
+              </thead>
+              <tbody id="portal-history-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="user-section hidden" data-user-section="profile">
+          <h2>Profile</h2>
+          <form id="portal-profile-form" class="stack">
+            <div class="split">
+              <label>
+                Full Name
+                <input name="name" type="text" required>
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" required>
+              </label>
+            </div>
+            <label>
+              Phone
+              <input name="phone" type="tel" placeholder="(555) 555-5555">
+            </label>
+            <label class="checkbox-line"><input type="checkbox" name="reminders" checked> Event reminders and ticket updates</label>
+            <label class="checkbox-line"><input type="checkbox" name="promotions"> Promotional offers and recommendations</label>
+            <button class="btn btn-primary" type="submit">Save Profile</button>
+          </form>
+          <p id="portal-profile-status" class="status"></p>
+        </section>
+
+        <section class="user-section hidden" data-user-section="payments">
+          <h2>Payment Methods</h2>
+          <form id="portal-payment-form" class="stack">
+            <div class="split">
+              <label>
+                Provider
+                <select name="provider" required>
+                  <option value="">Select provider</option>
+                  <option>NYVAPAY</option>
+                </select>
+              </label>
+              <label>
+                Last 4 Digits
+                <input name="last4" type="text" inputmode="numeric" maxlength="4" required placeholder="1234">
+              </label>
+            </div>
+            <label>
+              Expiration (MM/YY)
+              <input name="exp" type="text" required placeholder="08/28">
+            </label>
+            <button class="btn btn-primary" type="submit">Save Payment Method</button>
+          </form>
+          <p id="portal-payment-status" class="status"></p>
+          <div id="portal-payment-list" class="payment-list"></div>
+        </section>
+
+        <section class="user-section hidden" data-user-section="favorites">
+          <h2>Favorites / Saved Events</h2>
+          <h3>Saved Events</h3>
+          <div id="portal-saved-favorites" class="favorites-grid"></div>
+          <h3>Discover More</h3>
+          <div id="portal-discover-events" class="discover-grid"></div>
+        </section>
+
+        <section class="user-section">
+          <h2>Security & Compliance Notes</h2>
+          <div class="portal-security-note">
+            <ul>
+              <li>Use HTTPS in production for all checkout and portal routes.</li>
+              <li>Use PCI-compliant payment processing via NYVAPAY for checkout handling.</li>
+              <li>Email verification and optional 2FA are recommended for account protection.</li>
+              <li>Ticket QR codes are rendered high contrast for mobile scan reliability.</li>
+              <li>Review Terms, Refund Policy, and applicable New Mexico event regulations.</li>
+            </ul>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

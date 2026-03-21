@@ -1,0 +1,59 @@
+BOOQDAT deployment checklist
+
+1) Local setup
+- Copy .env.example to .env
+- Set MONGODB_URI in .env
+- Set JWT_SECRET in .env
+- Set REFRESH_TOKEN_SECRET in .env
+- Set NYVAPAY_MERCHANT_EMAIL and NYVAPAY_API_KEY in .env
+- Set SMTP2GO_USERNAME and SMTP2GO_PASSWORD in .env
+- Install dependencies: npm install
+- Start server: npm run dev
+- Open: http://localhost:3000
+
+2) Initialize git and push to GitHub
+- git init
+- git add .
+- git commit -m "Initial BOOQDAT full-stack platform setup"
+- git branch -M main
+- git remote add origin <your-github-repo-url>
+- git push -u origin main
+
+3) Deploy on DigitalOcean App Platform
+- In DigitalOcean App Platform, create app from GitHub repo
+- Confirm build command: npm ci
+- Confirm run command: npm start
+- Set environment variables:
+  - NODE_ENV=production
+  - PORT=3000
+  - MONGODB_URI=<your-mongodb-uri>
+  - CORS_ORIGIN=<your-app-url>
+  - JWT_SECRET=<long-random-secret>
+  - JWT_EXPIRES_IN=8h
+  - REFRESH_TOKEN_SECRET=<different-long-random-secret>
+  - REFRESH_TOKEN_EXPIRES_IN=30d
+  - NYVAPAY_BASE_URL=https://nyvapay.com
+  - NYVAPAY_MERCHANT_EMAIL=<nyvapay-merchant-email>
+  - NYVAPAY_API_KEY=<nyvapay-api-key>
+  - NYVAPAY_WEBHOOK_URL=<optional-public-webhook-url>
+  - NYVAPAY_SUCCESS_REDIRECT_URL=<optional-checkout-return-url>
+  - NYVAPAY_WEBHOOK_TOKEN=<optional-random-webhook-token>
+  - SMTP2GO_HOST=mail.smtp2go.com
+  - SMTP2GO_PORT=2525
+  - SMTP2GO_USERNAME=<smtp2go-username>
+  - SMTP2GO_PASSWORD=<smtp2go-password>
+  - MAIL_FROM=<no-reply@your-domain>
+  - MAIL_FROM_NAME=BOOQDAT
+  - MAIL_REPLY_TO=<support@your-domain>
+  - SUPPORT_EMAIL=<support@your-domain>
+  - COMPANY_NAME=BOOQDAT
+  - ADMIN_REGISTRATION_KEY=<optional-for-admin-signups>
+  - SEED_ADMIN_EMAIL=<optional-seeded-admin-email>
+  - SEED_ADMIN_PASSWORD=<optional-seeded-admin-password>
+- Deploy app
+
+4) Post-deploy checks
+- Verify health endpoint: /healthz
+- Verify API health endpoint: /api/health
+- Create promoter event, start checkout, and confirm redirect to NYVAPAY payment link
+- Verify NYVAPAY webhook /api/payments/nyvapay/webhook marks order as Confirmed after payment.succeeded

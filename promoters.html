@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>For Promoters | BOOQDAT</title>
+  <meta name="description" content="Create your promoter account, publish events, and generate ticket links on BOOQDAT.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="events.html">Browse Events</a>
+        <a href="promoters.html" class="active">For Promoters</a>
+        <a href="login.html">Log In</a>
+        <a href="promoters.html" class="btn btn-primary">Sign Up</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <p class="eyebrow">Promoter Console</p>
+        <h1>Create Events and Launch Ticket Links Fast</h1>
+        <p>From local showcases to large festivals, BOOQDAT helps you publish, promote, and track every sale.</p>
+        <div class="cta-row">
+          <a href="promoter-dashboard.html" class="btn btn-primary">Open Promoter Dashboard</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container feature-chips">
+        <span>Real-time sales tracking</span>
+        <span>Mobile-first checkout links</span>
+        <span>Payout insights</span>
+        <span>Fraud safeguards</span>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container form-layout">
+        <article class="form-card">
+          <h2>Create Promoter Account</h2>
+          <p class="muted">Set up your promoter profile to start publishing events.</p>
+          <form id="promoter-account-form" class="stack">
+            <label>
+              Business / Promoter Name
+              <input name="name" type="text" required placeholder="Example: Desert Nights Collective">
+            </label>
+            <label>
+              Contact Email
+              <input name="email" type="email" required placeholder="you@company.com">
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" required minlength="8" placeholder="At least 8 characters">
+            </label>
+            <label>
+              Contact Phone
+              <input name="phone" type="tel" required placeholder="(555) 555-5555">
+            </label>
+            <label>
+              City / State
+              <input name="location" type="text" required placeholder="Albuquerque, NM">
+            </label>
+            <button type="submit" class="btn btn-primary">Save Account</button>
+          </form>
+          <p id="promoter-account-status" class="status"></p>
+        </article>
+
+        <article class="form-card">
+          <h2>Create Event Link</h2>
+          <p class="muted">Publish your event details and generate a shareable ticket link.</p>
+          <form id="event-create-form" class="stack">
+            <label>
+              Event Title
+              <input name="title" type="text" required placeholder="Friday Night Rooftop Sessions">
+            </label>
+            <div class="split">
+              <label>
+                Category
+                <select name="category" required>
+                  <option value="">Select category</option>
+                  <option>Music</option>
+                  <option>Comedy</option>
+                  <option>Sports</option>
+                  <option>Business</option>
+                  <option>Community</option>
+                </select>
+              </label>
+              <label>
+                Ticket Price (USD)
+                <input name="price" type="number" min="1" step="1" required placeholder="35">
+              </label>
+            </div>
+            <label>
+              Venue
+              <input name="venue" type="text" required placeholder="Skyline Roof Lounge">
+            </label>
+            <div class="split">
+              <label>
+                City
+                <input name="city" type="text" required placeholder="Albuquerque">
+              </label>
+              <label>
+                State
+                <input name="state" type="text" required placeholder="NM">
+              </label>
+            </div>
+            <div class="split">
+              <label>
+                Event Date
+                <input name="date" type="date" required>
+              </label>
+              <label>
+                Start Time
+                <input name="time" type="time" required>
+              </label>
+            </div>
+            <label>
+              Ticket Capacity
+              <input name="capacity" type="number" min="1" step="1" required placeholder="300">
+            </label>
+            <label>
+              Event Description
+              <textarea name="description" rows="4" required placeholder="Tell attendees what to expect..."></textarea>
+            </label>
+            <button type="submit" class="btn btn-primary">Publish Event</button>
+          </form>
+          <div id="event-link-output" class="result-box hidden"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container metrics-strip">
+        <article>
+          <h3>Dashboard Insights</h3>
+          <p>Track ticket velocity and conversion in real time.</p>
+        </article>
+        <article>
+          <h3>Buyer Data</h3>
+          <p>Access purchase records to manage check-in and planning.</p>
+        </article>
+        <article>
+          <h3>Campaign Ready</h3>
+          <p>Share one event link across social, email, and SMS campaigns.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
