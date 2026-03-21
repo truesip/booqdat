@@ -142,6 +142,19 @@ function normalizeLifecycleStatus(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function isLiveEventStatus(value) {
+  const status = normalizeLifecycleStatus(value);
+  return status === "live" || status === "approved" || status === "active";
+}
+
+function isPendingReviewEventStatus(value) {
+  const status = normalizeLifecycleStatus(value);
+  return status.includes("pending")
+    || status.includes("review")
+    || status.includes("submitted")
+    || status.includes("flag");
+}
+
 function isSettledOrderData(order) {
   const status = normalizeLifecycleStatus(order?.status);
   const paymentStatus = normalizeLifecycleStatus(order?.paymentStatus);
@@ -1181,9 +1194,31 @@ function createApiRouter(env) {
   router.put("/sync/events", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
       const incoming = filterLegacyDemoEvents(ensureArray(req.body?.events).filter((item) => item && typeof item.id === "string"));
-      const rows = incoming.map((item) => ({ eventId: item.id, data: item }));
+      const rows = [];
+      const removeIds = [];
+      incoming.forEach((item) => {
+        const eventId = truncateText(item?.id, 120);
+        if (!eventId) return;
+        if (isLiveEventStatus(item?.status || "live")) {
+          rows.push({
+            eventId,
+            data: {
+              ...item,
+              id: eventId,
+              status: "Live"
+            }
+          });
+          return;
+        }
+        removeIds.push(eventId);
+      });
       const count = await upsertRows(AppEvent, rows, "eventId", (item) => ({ data: item.data }));
-      res.status(200).json({ ok: true, synced: count });
+      let removed = 0;
+      if (removeIds.length) {
+        const removeResult = await AppEvent.deleteMany({ eventId: { $in: removeIds } });
+        removed = Number(removeResult?.deletedCount || 0);
+      }
+      res.status(200).json({ ok: true, synced: count, removed });
     } catch (error) {
       next(error);
     }
@@ -1632,7 +1667,7 @@ function createApiRouter(env) {
       const pendingEvents = events
         .filter((event) => {
           const status = normalizeLifecycleStatus(event?.status);
-          return ["draft", "paused", "flagged", "pending"].includes(status);
+          return isPendingReviewEventStatus(status);
         })
         .map((event) => ({
           eventId: truncateText(event?.id, 120),
@@ -1756,7 +1791,14 @@ function createApiRouter(env) {
   router.post("/admin/events/:eventId/status", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
       const eventId = truncateText(req.params?.eventId, 120);
-      const nextStatus = truncateText(req.body?.status, 40);
+      const requestedStatus = normalizeLifecycleStatus(req.body?.status);
+      let nextStatus = "";
+      if (isLiveEventStatus(requestedStatus)) nextStatus = "Live";
+      else if (requestedStatus === "paused") nextStatus = "Paused";
+      else if (requestedStatus === "draft") nextStatus = "Draft";
+      else if (requestedStatus.includes("reject")) nextStatus = "Rejected";
+      else if (requestedStatus.includes("flag")) nextStatus = "Flagged";
+      else if (isPendingReviewEventStatus(requestedStatus)) nextStatus = "Pending Approval";
       if (!eventId || !nextStatus) {
         res.status(400).json({ ok: false, error: "eventId and status are required" });
         return;
@@ -1774,9 +1816,30 @@ function createApiRouter(env) {
         promoterRow.data.status = nextStatus;
         await promoterRow.save();
       }
-      if (appRow?.data && typeof appRow.data === "object") {
-        appRow.data.status = nextStatus;
-        await appRow.save();
+      if (nextStatus === "Live") {
+        const sourceData = promoterRow?.data && typeof promoterRow.data === "object"
+          ? promoterRow.data
+          : appRow?.data && typeof appRow.data === "object"
+            ? appRow.data
+            : null;
+        if (sourceData) {
+          await AppEvent.updateOne(
+            { eventId },
+            {
+              $set: {
+                eventId,
+                data: {
+                  ...sourceData,
+                  id: truncateText(sourceData?.id || eventId, 120) || eventId,
+                  status: "Live"
+                }
+              }
+            },
+            { upsert: true }
+          );
+        }
+      } else {
+        await AppEvent.deleteOne({ eventId });
       }
 
       res.status(200).json({ ok: true, eventId, status: nextStatus });
@@ -1884,14 +1947,20 @@ function createApiRouter(env) {
         const data = row?.data && typeof row.data === "object" ? row.data : null;
         if (!data) continue;
         const status = normalizeLifecycleStatus(data.status);
-        if (["draft", "paused", "pending", "flagged"].includes(status)) {
+        if (isPendingReviewEventStatus(status)) {
+          const liveData = {
+            ...data,
+            id: truncateText(data?.id || row.eventId, 120) || row.eventId,
+            status: "Live"
+          };
           await PromoterEvent.updateOne(
             { _id: row._id },
-            { $set: { "data.status": "Live" } }
+            { $set: { data: liveData } }
           );
           await AppEvent.updateOne(
             { eventId: row.eventId },
-            { $set: { "data.status": "Live" } }
+            { $set: { eventId: row.eventId, data: liveData } },
+            { upsert: true }
           );
           eventsUpdated += 1;
         }

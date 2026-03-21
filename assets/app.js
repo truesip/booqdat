@@ -608,7 +608,7 @@ function upsertPromoterDashboardEventFromSimple(event) {
     ],
     banner: event.banner || "",
     promoCodes: [],
-    status: "Live",
+    status: String(event.status || "Pending Approval"),
     ticketsSold: sold,
     revenue: sold * gaPrice,
     promoterEmail: normalizeEmail(event.promoterEmail || getActivePromoterEmail()),
@@ -625,6 +625,11 @@ function toFiniteNumber(value, fallback = 0) {
 
 function normalizeLifecycleStatus(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function isMarketplaceLiveEventStatus(value) {
+  const status = normalizeLifecycleStatus(value);
+  return status === "live" || status === "approved" || status === "active";
 }
 
 function isSettledOrderForMetrics(order) {
@@ -655,7 +660,7 @@ function mapPromoterEventToMarketplaceEvent(event) {
   const id = String(event.id || "").trim();
   const title = String(event.title || "").trim();
   const status = String(event.status || "").trim().toLowerCase();
-  if (!id || !title || status === "draft" || status === "paused") return null;
+  if (!id || !title || !isMarketplaceLiveEventStatus(status)) return null;
 
   const ticketTypes = Array.isArray(event.ticketTypes) ? event.ticketTypes : [];
   const imageGallery = normalizeImageList(event.imageGallery).length
@@ -689,6 +694,7 @@ function getAllEvents() {
   const merged = new Map();
   readStoredEvents().forEach((event) => {
     if (!event || typeof event !== "object") return;
+    if (!isMarketplaceLiveEventStatus(event?.status || "Live")) return;
     const id = String(event.id || "").trim();
     if (!id) return;
     merged.set(id, event);
@@ -1636,8 +1642,14 @@ function setupPromoterDashboard() {
   }
 
   function eventStatus(event) {
-    if (event.status === "Draft") return "Draft";
-    if (event.status === "Paused") return "Paused";
+    const normalizedStatus = normalizeLifecycleStatus(event?.status);
+    if (normalizedStatus === "draft") return "Draft";
+    if (normalizedStatus === "paused") return "Paused";
+    if (normalizedStatus.includes("reject")) return "Rejected";
+    if (normalizedStatus.includes("flag")) return "Flagged";
+    if (normalizedStatus.includes("pending") || normalizedStatus.includes("review") || normalizedStatus.includes("submitted")) {
+      return "Pending Approval";
+    }
     if (toNumber(event.ticketsSold) >= totalInventory(event)) return "Sold Out";
     if (event.date && event.date < todayKey) return "Past";
     return "Live";
@@ -1697,7 +1709,7 @@ function setupPromoterDashboard() {
 
   function syncMarketplace(event) {
     const status = eventStatus(event);
-    if (status === "Draft") {
+    if (status !== "Live") {
       removeStoredEventById(event.id);
       return;
     }
@@ -1907,7 +1919,8 @@ function setupPromoterDashboard() {
       const sold = Math.min(inventory, soldFromOrders || toNumber(event.ticketsSold));
       const soldPct = Math.min(100, Math.round((sold / inventory) * 100));
       const revenue = Math.max(0, toNumber(orderTotalsByEvent[event.id]?.revenue, 0) || computeRevenue(event));
-      const pauseLabel = status === "Paused" ? "Resume Sales" : "Pause Sales";
+      const canTogglePause = status === "Live" || status === "Paused";
+      const pauseLabel = status === "Paused" ? "Resume Sales" : status === "Live" ? "Pause Sales" : "Not Live Yet";
       const previewImage = getEventImageUrl(event);
       return `
         <article class="promoter-event-card">
@@ -1929,7 +1942,7 @@ function setupPromoterDashboard() {
             <button class="btn btn-secondary" type="button" data-event-action="view" data-event-id="${event.id}">View Tickets</button>
             <button class="btn btn-secondary" type="button" data-event-action="csv" data-event-id="${event.id}">Download CSV</button>
             <button class="btn btn-secondary" type="button" data-event-action="share" data-event-id="${event.id}">Share Link</button>
-            <button class="btn btn-secondary" type="button" data-event-action="pause" data-event-id="${event.id}">${pauseLabel}</button>
+            <button class="btn btn-secondary" type="button" data-event-action="pause" data-event-id="${event.id}" ${canTogglePause ? "" : "disabled"}>${pauseLabel}</button>
           </div>
         </article>
       `;
@@ -2372,7 +2385,7 @@ function setupPromoterDashboard() {
       banner: resolvedBanner,
       imageGallery,
       id: existing?.id || `evt-pr-${Date.now()}`,
-      status: asDraft ? "Draft" : "Live",
+      status: asDraft ? "Draft" : "Pending Approval",
       ticketsSold: sold,
       revenue,
       promoterEmail: normalizeEmail(existing?.promoterEmail || currentPromoterEmail()),
@@ -2390,18 +2403,15 @@ function setupPromoterDashboard() {
     renderAnalytics();
     renderPayoutHistory();
 
-    const shareLink = getShareLink(finalEvent.id);
     if (wizardOutput) {
       wizardOutput.classList.remove("hidden");
       wizardOutput.innerHTML = asDraft
         ? `<strong>Draft saved.</strong><br>Finish and publish when ready.`
-        : `<strong>Event published successfully.</strong><br>Share link: <a href="${shareLink}" target="_blank" rel="noopener">${shareLink}</a>`;
+        : `<strong>Event submitted for admin approval.</strong><br>It will go live after review.`;
     }
-
-    showFeedback(`<strong>${finalEvent.title}</strong> ${asDraft ? "saved as draft" : "published"} successfully.`);
+    showFeedback(`<strong>${finalEvent.title}</strong> ${asDraft ? "saved as draft" : "submitted for admin approval"} successfully.`);
     resetWizardState();
     if (!asDraft) {
-      notifyPromoterEventPublished(finalEvent, shareLink);
       const createSection = root.querySelector("#promoter-events");
       if (createSection) createSection.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -2456,6 +2466,18 @@ function setupPromoterDashboard() {
         const status = eventStatus(targetEvent);
         if (status === "Sold Out") {
           showFeedback(`<strong>${targetEvent.title}</strong> is sold out and cannot be paused.`);
+          return;
+        }
+        if (status === "Pending Approval" || status === "Flagged") {
+          showFeedback(`<strong>${targetEvent.title}</strong> is awaiting admin review and cannot be toggled yet.`);
+          return;
+        }
+        if (status === "Rejected") {
+          showFeedback(`<strong>${targetEvent.title}</strong> was rejected. Edit and re-submit for review.`);
+          return;
+        }
+        if (status !== "Live" && status !== "Paused") {
+          showFeedback(`<strong>${targetEvent.title}</strong> is not currently live.`);
           return;
         }
         targetEvent.status = status === "Paused" ? "Live" : "Paused";
@@ -2835,7 +2857,7 @@ function setupAdminDashboard() {
           <td>
             <div class="event-action-row">
               <button class="btn btn-secondary btn-sm" type="button" data-admin-event-action="Live" data-event-id="${escapeHtml(item?.eventId || "")}" ${normalizedStatus === "live" ? "disabled" : ""}>Approve</button>
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-event-action="Paused" data-event-id="${escapeHtml(item?.eventId || "")}" ${normalizedStatus === "paused" ? "disabled" : ""}>Pause</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-event-action="Rejected" data-event-id="${escapeHtml(item?.eventId || "")}" ${normalizedStatus.includes("reject") ? "disabled" : ""}>Reject</button>
             </div>
           </td>
         </tr>
@@ -3450,20 +3472,17 @@ function setupPromoterAccount() {
       price: Number(raw.price),
       capacity: Number(raw.capacity),
       description: raw.description,
-      promoterEmail: normalizeEmail(getActivePromoterEmail())
+      promoterEmail: normalizeEmail(getActivePromoterEmail()),
+      status: "Pending Approval"
     };
 
-    upsertStoredEvent(newEvent);
     upsertPromoterDashboardEventFromSimple(newEvent);
-
-    const shareLink = `${window.location.origin}${window.location.pathname.replace("promoters.html", "checkout.html")}?event=${encodeURIComponent(eventId)}`;
+    removeStoredEventById(eventId);
     output.classList.remove("hidden");
     output.innerHTML = `
-      <strong>Event published successfully.</strong><br>
-      Share link: <a href="${shareLink}" target="_blank" rel="noopener">${shareLink}</a><br>
-      <a href="events.html">View live on event marketplace</a>
+      <strong>Event submitted for admin approval.</strong><br>
+      You can edit this event in the promoter dashboard while it is under review.
     `;
-    notifyPromoterEventPublished(newEvent, shareLink);
 
     eventForm.reset();
   });

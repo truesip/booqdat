@@ -1158,6 +1158,17 @@ blockquote cite {
   color: #78350f;
 }
 
+.promoter-status-pill.pendingapproval,
+.promoter-status-pill.flagged {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.promoter-status-pill.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .promoter-status-pill.past {
   background: #e5e7eb;
   color: #374151;
