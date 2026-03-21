@@ -16,8 +16,7 @@ const syncTimers = {};
 let refreshRequestPromise = null;
 const ROLE_GUARDS_BY_PAGE = {
   "admin.html": ["admin"],
-  "promoter-dashboard.html": ["promoter", "admin"],
-  "user-portal.html": ["user", "admin"]
+  "promoter-dashboard.html": ["promoter", "admin"]
 };
 const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
 const LEGACY_DEMO_EVENT_TITLES = new Set([
@@ -333,19 +332,44 @@ function queueApiSync(key, path, payload, delayMs = 450) {
 }
 
 let didHydrateFromApi = false;
+function applyBootstrapPayloadToLocalState(data) {
+  if (!data || typeof data !== "object") return;
+  const role = normalizeRole(data?.auth?.role);
+  const canHydrateOrderScope = role === "admin" || role === "user" || role === "promoter";
+  const canHydrateProfileScope = role === "admin" || role === "user";
+
+  if (Array.isArray(data.events)) {
+    localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filterLegacyDemoEvents(data.events)));
+  }
+  if (Array.isArray(data.promoterEvents)) {
+    localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filterLegacyDemoEvents(data.promoterEvents)));
+  }
+  if (canHydrateOrderScope && Array.isArray(data.orders)) {
+    localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filterLegacyDemoOrders(data.orders)));
+  }
+  if (canHydrateProfileScope && data.userProfiles && typeof data.userProfiles === "object") {
+    localStorage.setItem(STORAGE_KEYS.userProfiles, JSON.stringify(data.userProfiles));
+  }
+  if (canHydrateProfileScope && data.userPaymentMethods && typeof data.userPaymentMethods === "object") {
+    localStorage.setItem(STORAGE_KEYS.userPaymentMethods, JSON.stringify(data.userPaymentMethods));
+  }
+  if (canHydrateProfileScope && data.userFavorites && typeof data.userFavorites === "object") {
+    localStorage.setItem(STORAGE_KEYS.userFavorites, JSON.stringify(data.userFavorites));
+  }
+}
+
+async function refreshStateFromApi() {
+  if (!canUseApi()) return null;
+  const data = await apiRequest("/bootstrap", { includeErrorResponse: true, suppressAuthRedirect: true });
+  if (!data?.ok) return null;
+  applyBootstrapPayloadToLocalState(data);
+  return data;
+}
 async function hydrateStateFromApi() {
   if (!canUseApi() || didHydrateFromApi) return;
   const data = await apiRequest("/bootstrap");
   if (!data) return;
-  const role = normalizeRole(data?.auth?.role);
-  const canHydrateUserScope = role === "admin" || role === "user";
-
-  if (Array.isArray(data.events)) localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filterLegacyDemoEvents(data.events)));
-  if (Array.isArray(data.promoterEvents)) localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filterLegacyDemoEvents(data.promoterEvents)));
-  if (canHydrateUserScope && Array.isArray(data.orders)) localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filterLegacyDemoOrders(data.orders)));
-  if (canHydrateUserScope && data.userProfiles && typeof data.userProfiles === "object") localStorage.setItem(STORAGE_KEYS.userProfiles, JSON.stringify(data.userProfiles));
-  if (canHydrateUserScope && data.userPaymentMethods && typeof data.userPaymentMethods === "object") localStorage.setItem(STORAGE_KEYS.userPaymentMethods, JSON.stringify(data.userPaymentMethods));
-  if (canHydrateUserScope && data.userFavorites && typeof data.userFavorites === "object") localStorage.setItem(STORAGE_KEYS.userFavorites, JSON.stringify(data.userFavorites));
+  applyBootstrapPayloadToLocalState(data);
 
   didHydrateFromApi = true;
 }
@@ -1229,7 +1253,7 @@ function setupUserPortal() {
     });
   }
 
-  function loginToPortal(email, name = "") {
+  async function loginToPortal(email, name = "") {
     const normalized = normalizeEmail(email);
     if (!normalized) return;
     activeEmail = normalized;
@@ -1238,6 +1262,7 @@ function setupUserPortal() {
     profile.email = normalized;
     writeProfile(normalized, profile);
     writeUserPortalSession({ email: normalized });
+    await refreshStateFromApi();
     showPortal();
     switchTab("tickets");
     renderAllPortalData();
@@ -1306,7 +1331,7 @@ function setupUserPortal() {
         refreshToken: tokens.refreshToken,
         user: response.user
       });
-      loginToPortal(response.user.email, loginNameInput?.value || response.user.name || "");
+      await loginToPortal(response.user.email, loginNameInput?.value || response.user.name || "");
       loginPasswordInput.value = "";
       if (loginNameInput) loginNameInput.value = "";
     });
@@ -1343,7 +1368,7 @@ function setupUserPortal() {
   }
 
   if (paymentForm && paymentStatus) {
-    paymentForm.addEventListener("submit", (event) => {
+    paymentForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(paymentForm);
       const provider = String(formData.get("provider") || "");
@@ -1353,9 +1378,17 @@ function setupUserPortal() {
         paymentStatus.textContent = "Enter provider, last 4 digits, and expiration.";
         return;
       }
-      const methods = readMethods(activeEmail);
-      methods.unshift({ provider, last4, exp });
-      writeMethods(activeEmail, methods);
+      const response = await apiRequest("/user/payment-methods", {
+        method: "POST",
+        body: { provider, last4, exp },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        paymentStatus.textContent = response?.error || "Unable to save payment method.";
+        return;
+      }
+      writeMethods(activeEmail, Array.isArray(response.methods) ? response.methods : []);
       paymentStatus.textContent = "Payment method saved.";
       paymentForm.reset();
       renderPaymentMethods();
@@ -1379,7 +1412,20 @@ function setupUserPortal() {
       if (action === "transfer") {
         const recipient = prompt("Transfer ticket to email:");
         if (!recipient) return;
-        showFeedback(`Transfer initiated from <strong>${order.attendee.email}</strong> to <strong>${recipient}</strong>.`);
+        const response = await apiRequest(`/orders/${encodeURIComponent(order.id)}/transfer-request`, {
+          method: "POST",
+          body: { recipientEmail: recipient },
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok || !response?.order) {
+          showFeedback(response?.error || "Unable to submit transfer request.");
+          return;
+        }
+        upsertBuyerOrder(response.order);
+        renderTickets();
+        renderHistory();
+        showFeedback(`Transfer requested from <strong>${order.attendee.email}</strong> to <strong>${recipient}</strong>.`);
       }
 
       if (action === "refund") {
@@ -1387,8 +1433,16 @@ function setupUserPortal() {
           showFeedback(`Refund is not available for <strong>${order.eventTitle}</strong> under current policy.`);
           return;
         }
-        order.status = "Refund Requested";
-        saveOrders(orders);
+        const response = await apiRequest(`/orders/${encodeURIComponent(order.id)}/refund-request`, {
+          method: "POST",
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok || !response?.order) {
+          showFeedback(response?.error || "Unable to submit refund request.");
+          return;
+        }
+        upsertBuyerOrder(response.order);
         renderTickets();
         renderHistory();
         showFeedback(`Refund requested for <strong>${order.eventTitle}</strong>.`);
@@ -1419,9 +1473,16 @@ function setupUserPortal() {
     const paymentButton = event.target.closest("[data-payment-action='remove']");
     if (paymentButton) {
       const idx = Number(paymentButton.dataset.methodIndex);
-      const methods = readMethods(activeEmail);
-      methods.splice(idx, 1);
-      writeMethods(activeEmail, methods);
+      const response = await apiRequest(`/user/payment-methods/${encodeURIComponent(idx)}`, {
+        method: "DELETE",
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        showFeedback(response?.error || "Unable to remove payment method right now.");
+        return;
+      }
+      writeMethods(activeEmail, Array.isArray(response.methods) ? response.methods : []);
       renderPaymentMethods();
       showFeedback("Payment method removed.");
       return;
@@ -1451,7 +1512,7 @@ function setupUserPortal() {
   const authRole = normalizeRole(authSession?.user?.role);
 
   if ((authRole === "user" || authRole === "admin") && authEmail) {
-    loginToPortal(authEmail, authSession?.user?.name || "");
+    void loginToPortal(authEmail, authSession?.user?.name || "");
   } else {
     showAuth();
     if (loginEmailInput) {
@@ -2310,25 +2371,68 @@ function setupPromoterDashboard() {
 
   const payoutScheduleSelect = root.querySelector("#payout-schedule-select");
   const payoutScheduleInfo = root.querySelector("#payout-schedule-info");
+  function updatePayoutScheduleInfo() {
+    if (!payoutScheduleSelect || !payoutScheduleInfo) return;
+    payoutScheduleInfo.textContent = payoutScheduleSelect.value === "monthly"
+      ? "Monthly payouts are issued on the 5th business day of each month."
+      : "Weekly payouts are issued every Friday for cleared transactions.";
+  }
   if (payoutScheduleSelect && payoutScheduleInfo) {
-    payoutScheduleSelect.addEventListener("change", () => {
-      payoutScheduleInfo.textContent = payoutScheduleSelect.value === "monthly"
-        ? "Monthly payouts are issued on the 5th business day of each month."
-        : "Weekly payouts are issued every Friday for cleared transactions.";
-    });
+    payoutScheduleSelect.addEventListener("change", updatePayoutScheduleInfo);
+    updatePayoutScheduleInfo();
   }
 
   const bankConnectForm = root.querySelector("#bank-connect-form");
   const bankConnectStatus = root.querySelector("#bank-connect-status");
+  async function loadPayoutAccount() {
+    if (!bankConnectForm || !bankConnectStatus) return;
+    const response = await apiRequest("/promoter/payout-account", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok || !response?.payoutAccount) return;
+    const payoutAccount = response.payoutAccount;
+    if (bankConnectForm.elements?.provider) {
+      bankConnectForm.elements.provider.value = payoutAccount.provider || "NYVAPAY";
+    }
+    if (bankConnectForm.elements?.holder) {
+      bankConnectForm.elements.holder.value = payoutAccount.holder || "";
+    }
+    if (bankConnectForm.elements?.email) {
+      bankConnectForm.elements.email.value = payoutAccount.payoutEmail || "";
+    }
+    if (payoutScheduleSelect) {
+      payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
+      updatePayoutScheduleInfo();
+    }
+    bankConnectStatus.textContent = `${payoutAccount.provider || "NYVAPAY"} account linked for ${payoutAccount.payoutEmail || "payout destination"}.`;
+  }
   if (bankConnectForm && bankConnectStatus) {
-    bankConnectForm.addEventListener("submit", (event) => {
+    bankConnectForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(bankConnectForm);
-      const provider = formData.get("provider");
-      const email = formData.get("email");
-      bankConnectStatus.textContent = `${provider} account connected for ${email}. Verification is in progress.`;
-      bankConnectForm.reset();
+      const provider = String(formData.get("provider") || "").trim();
+      const holder = String(formData.get("holder") || "").trim();
+      const email = String(formData.get("email") || "").trim().toLowerCase();
+      const schedule = payoutScheduleSelect?.value === "monthly" ? "monthly" : "weekly";
+      const response = await apiRequest("/promoter/payout-account", {
+        method: "POST",
+        body: { provider, holder, email, schedule },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.payoutAccount) {
+        bankConnectStatus.textContent = response?.error || "Unable to connect payout account right now.";
+        return;
+      }
+      const payoutAccount = response.payoutAccount;
+      bankConnectStatus.textContent = `${payoutAccount.provider || provider} account connected for ${payoutAccount.payoutEmail || email}. Verification is in progress.`;
+      if (payoutScheduleSelect) {
+        payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
+        updatePayoutScheduleInfo();
+      }
     });
+    void loadPayoutAccount();
   }
 
   const profileForm = root.querySelector("#promoter-settings-form");
@@ -2381,6 +2485,13 @@ function setupAdminDashboard() {
   const dashboardRoot = document.querySelector("#admin-dashboard");
   if (!dashboardRoot) return;
   const adminLogoutButton = dashboardRoot.querySelector("[data-admin-logout]");
+  const promoterApprovalsBody = dashboardRoot.querySelector("#admin-promoter-approvals-body");
+  const attendeeRecordsBody = dashboardRoot.querySelector("#admin-attendee-records-body");
+  const pendingEventsBody = dashboardRoot.querySelector("#admin-pending-events-body");
+  const payoutQueueBody = dashboardRoot.querySelector("#admin-payout-queue-body");
+  const disputesBody = dashboardRoot.querySelector("#admin-disputes-body");
+  const activityFeed = dashboardRoot.querySelector("#admin-activity-feed");
+  let currentRevenueRange = "week";
   let revenueSeries = {
     week: Array(7).fill(0),
     month: Array(12).fill(0),
@@ -2392,6 +2503,43 @@ function setupAdminDashboard() {
     promoter: 0,
     event: 0
   };
+  let opsState = {
+    promoterApprovals: [],
+    attendeeRecords: [],
+    pendingEvents: [],
+    payoutQueue: [],
+    disputes: [],
+    counts: {
+      pendingPromoters: 0,
+      pendingEvents: 0
+    }
+  };
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function statusPillClass(status) {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized.includes("approved") || normalized.includes("processed") || normalized.includes("paid") || normalized.includes("confirmed")) {
+      return "approved";
+    }
+    if (normalized.includes("rejected") || normalized.includes("suspended")) {
+      return "rejected";
+    }
+    return "pending";
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value || "");
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString();
+  }
 
   function startOfDay(input) {
     const date = new Date(input);
@@ -2407,8 +2555,9 @@ function setupAdminDashboard() {
   }
 
   function countPendingApprovals() {
-    const pendingPromoters = dashboardRoot.querySelectorAll('[data-kind="promoter"].is-pending').length;
-    const pendingEvents = dashboardRoot.querySelectorAll('[data-kind="event"].is-pending').length;
+    const pendingPromotersFromRows = opsState.promoterApprovals.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const pendingPromoters = Math.max(0, toFiniteNumber(opsState.counts?.pendingPromoters, pendingPromotersFromRows));
+    const pendingEvents = Math.max(0, toFiniteNumber(opsState.counts?.pendingEvents, opsState.pendingEvents.length));
     approvals.promoter = pendingPromoters;
     approvals.event = pendingEvents;
     return pendingPromoters + pendingEvents;
@@ -2463,14 +2612,12 @@ function setupAdminDashboard() {
         weekdayTickets[weekdayIndex] += qty;
       }
     });
-
-    const promoterEmails = new Set();
-    readPromoterDashboardEvents().forEach((event) => {
-      const email = normalizeEmail(event?.promoterEmail || "");
-      if (email) promoterEmails.add(email);
-    });
-    const profileEmail = normalizeEmail(getPromoterProfileEmail());
-    if (profileEmail) promoterEmails.add(profileEmail);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const newPromoters = opsState.promoterApprovals.filter((item) => {
+      const submitted = new Date(item?.submittedAt || "");
+      return !Number.isNaN(submitted.getTime()) && submitted >= thirtyDaysAgo;
+    }).length;
 
     return {
       revenueAll,
@@ -2478,12 +2625,167 @@ function setupAdminDashboard() {
       revenueMonth,
       ticketsToday,
       ticketsMonth,
-      newPromoters: promoterEmails.size,
+      newPromoters,
       weekRevenue: weekRevenue.map((value) => Math.round(value)),
       monthRevenue: monthRevenue.map((value) => Math.round(value)),
       quarterRevenue: quarterRevenue.map((value) => Math.round(value)),
       weekdayTickets: weekdayTickets.map((value) => Math.round(value))
     };
+  }
+
+  function renderPromoterApprovalsTable() {
+    if (!promoterApprovalsBody) return;
+    const rows = Array.isArray(opsState.promoterApprovals) ? opsState.promoterApprovals : [];
+    if (!rows.length) {
+      promoterApprovalsBody.innerHTML = `<tr><td colspan="5">No promoter approvals pending.</td></tr>`;
+      return;
+    }
+    promoterApprovalsBody.innerHTML = rows.map((item) => {
+      const status = String(item?.status || "Pending");
+      const isApproved = status.toLowerCase().includes("approved");
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
+          <td>${escapeHtml(item?.location || "—")}</td>
+          <td>${escapeHtml(formatDateTime(item?.submittedAt))}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>
+            <div class="event-action-row">
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}" ${isApproved ? "disabled" : ""}>Approve</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}">Reject</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderAttendeeRecordsTable() {
+    if (!attendeeRecordsBody) return;
+    const rows = Array.isArray(opsState.attendeeRecords) ? opsState.attendeeRecords : [];
+    attendeeRecordsBody.innerHTML = rows.length
+      ? rows.map((item) => `
+          <tr>
+            <td>${escapeHtml(item?.name || "Attendee")}</td>
+            <td>${escapeHtml(item?.email || "—")}</td>
+            <td>${Math.max(0, toFiniteNumber(item?.orders, 0)).toLocaleString()}</td>
+            <td>${escapeHtml(formatDateTime(item?.lastPurchase))}</td>
+          </tr>
+        `).join("")
+      : `<tr><td colspan="4">No attendee records available yet.</td></tr>`;
+  }
+
+  function renderPendingEventsTable() {
+    if (!pendingEventsBody) return;
+    const rows = Array.isArray(opsState.pendingEvents) ? opsState.pendingEvents : [];
+    if (!rows.length) {
+      pendingEventsBody.innerHTML = `<tr><td colspan="5">No pending or flagged events.</td></tr>`;
+      return;
+    }
+    pendingEventsBody.innerHTML = rows.map((item) => {
+      const status = String(item?.status || "Pending");
+      const normalizedStatus = status.toLowerCase();
+      return `
+        <tr>
+          <td>${escapeHtml(item?.title || "Untitled Event")}</td>
+          <td>${escapeHtml(item?.promoterEmail || "—")}</td>
+          <td>${escapeHtml(item?.category || "—")}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>
+            <div class="event-action-row">
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-event-action="Live" data-event-id="${escapeHtml(item?.eventId || "")}" ${normalizedStatus === "live" ? "disabled" : ""}>Approve</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-event-action="Paused" data-event-id="${escapeHtml(item?.eventId || "")}" ${normalizedStatus === "paused" ? "disabled" : ""}>Pause</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderPayoutQueueTable() {
+    if (!payoutQueueBody) return;
+    const rows = Array.isArray(opsState.payoutQueue) ? opsState.payoutQueue : [];
+    if (!rows.length) {
+      payoutQueueBody.innerHTML = `<tr><td colspan="5">No payout items in queue.</td></tr>`;
+      return;
+    }
+    payoutQueueBody.innerHTML = rows.map((item) => {
+      const status = String(item?.status || "Scheduled");
+      const isProcessed = status.toLowerCase().includes("processed");
+      return `
+        <tr>
+          <td>${escapeHtml(item?.promoterName || item?.promoterEmail || "Unknown promoter")}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(item?.amount, 0)))}</td>
+          <td>${escapeHtml(formatDateTime(item?.payoutDate))}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>
+            <button class="btn btn-secondary btn-sm" type="button" data-admin-payout-action="process" data-order-id="${escapeHtml(item?.orderId || "")}" ${isProcessed ? "disabled" : ""}>Mark Processed</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderDisputesTable() {
+    if (!disputesBody) return;
+    const rows = Array.isArray(opsState.disputes) ? opsState.disputes : [];
+    if (!rows.length) {
+      disputesBody.innerHTML = `<tr><td colspan="6">No open dispute cases.</td></tr>`;
+      return;
+    }
+    disputesBody.innerHTML = rows.map((item) => `
+      <tr>
+        <td>${escapeHtml(item?.caseId || `DSP-${item?.orderId || ""}`)}</td>
+        <td>${escapeHtml(item?.type || "Case")}</td>
+        <td>${escapeHtml(item?.relatedEvent || "Unknown event")}</td>
+        <td>${escapeHtml(item?.priority || "Medium")}</td>
+        <td><span class="status-pill ${statusPillClass(item?.status || "Open")}">${escapeHtml(item?.status || "Open")}</span></td>
+        <td>
+          <div class="event-action-row">
+            <button class="btn btn-secondary btn-sm" type="button" data-admin-dispute-action="approved" data-order-id="${escapeHtml(item?.orderId || "")}" data-recipient-email="${escapeHtml(item?.recipientEmail || "")}">Approve</button>
+            <button class="btn btn-secondary btn-sm" type="button" data-admin-dispute-action="rejected" data-order-id="${escapeHtml(item?.orderId || "")}">Reject</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  function renderOpsTables() {
+    renderPromoterApprovalsTable();
+    renderAttendeeRecordsTable();
+    renderPendingEventsTable();
+    renderPayoutQueueTable();
+    renderDisputesTable();
+  }
+
+  async function loadOpsDashboard() {
+    const response = await apiRequest("/admin/ops/dashboard", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) return false;
+    opsState = {
+      promoterApprovals: Array.isArray(response.promoterApprovals) ? response.promoterApprovals : [],
+      attendeeRecords: Array.isArray(response.attendeeRecords) ? response.attendeeRecords : [],
+      pendingEvents: Array.isArray(response.pendingEvents) ? response.pendingEvents : [],
+      payoutQueue: Array.isArray(response.payoutQueue) ? response.payoutQueue : [],
+      disputes: Array.isArray(response.disputes) ? response.disputes : [],
+      counts: response.counts && typeof response.counts === "object"
+        ? response.counts
+        : { pendingPromoters: 0, pendingEvents: 0 }
+    };
+    renderOpsTables();
+    return true;
+  }
+
+  async function reloadAdminData() {
+    await refreshStateFromApi();
+    await loadOpsDashboard();
+    updateKpis();
+    renderSalesSnapshot();
+    renderTopBreakdowns();
+    renderTicketSalesBars();
+    drawRevenueChart(currentRevenueRange);
   }
 
   function updateKpis() {
@@ -2651,7 +2953,6 @@ function setupAdminDashboard() {
     return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  const activityFeed = dashboardRoot.querySelector("#admin-activity-feed");
   function addActivity(message) {
     if (!activityFeed) return;
     const item = document.createElement("li");
@@ -2663,41 +2964,6 @@ function setupAdminDashboard() {
   }
 
 
-  function setApprovalState(row, state) {
-    const statusEl = row.querySelector("[data-status]");
-    if (!statusEl) return;
-    row.classList.remove("is-pending", "is-flagged");
-    statusEl.className = "status-pill";
-    if (state === "approved") {
-      statusEl.classList.add("approved");
-      statusEl.textContent = "Approved";
-    } else {
-      statusEl.classList.add("rejected");
-      statusEl.textContent = "Rejected";
-    }
-
-    const actions = row.querySelectorAll("[data-approval-action]");
-    actions.forEach((button) => {
-      button.disabled = true;
-      button.style.opacity = "0.5";
-      button.style.pointerEvents = "none";
-    });
-
-    const kind = row.dataset.kind || "item";
-    const label = row.children[0]?.textContent?.trim() || "Unknown";
-    addActivity(`${kind === "event" ? "Event" : "Promoter"} ${state}: ${label}`);
-    updateKpis();
-  }
-
-  function setupApprovalActions() {
-    const rows = dashboardRoot.querySelectorAll("[data-approval-row]");
-    rows.forEach((row) => {
-      const approve = row.querySelector('[data-approval-action="approve"]');
-      const reject = row.querySelector('[data-approval-action="reject"]');
-      if (approve) approve.addEventListener("click", () => setApprovalState(row, "approved"));
-      if (reject) reject.addEventListener("click", () => setApprovalState(row, "rejected"));
-    });
-  }
 
   function exportCsv() {
     const events = getAllEvents();
@@ -2741,12 +3007,20 @@ function setupAdminDashboard() {
   function setupQuickActions() {
     const actions = dashboardRoot.querySelectorAll("[data-quick-action]");
     actions.forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const action = button.dataset.quickAction;
         if (action === "approve-all") {
-          const rows = dashboardRoot.querySelectorAll("[data-approval-row].is-pending");
-          rows.forEach((row) => setApprovalState(row, "approved"));
-          addActivity("Bulk approval executed for all pending items");
+          const response = await apiRequest("/admin/ops/approve-all", {
+            method: "POST",
+            includeErrorResponse: true,
+            suppressAuthRedirect: true
+          });
+          if (!response?.ok) {
+            addActivity(`Bulk approval failed: ${escapeHtml(response?.error || "Unknown error")}`);
+            return;
+          }
+          addActivity(`Bulk approval executed. Promoters: ${toFiniteNumber(response.promotersApproved, 0)} • Events: ${toFiniteNumber(response.eventsApproved, 0)}`);
+          await reloadAdminData();
         }
         if (action === "export-csv") exportCsv();
         if (action === "export-pdf") exportPdf();
@@ -2760,8 +3034,102 @@ function setupAdminDashboard() {
       button.addEventListener("click", () => {
         buttons.forEach((item) => item.classList.remove("is-active"));
         button.classList.add("is-active");
-        drawRevenueChart(button.dataset.revenueRange);
+        currentRevenueRange = button.dataset.revenueRange || "week";
+        drawRevenueChart(currentRevenueRange);
       });
+    });
+  }
+
+  function setupAdminTableActions() {
+    dashboardRoot.addEventListener("click", async (event) => {
+      const promoterActionButton = event.target.closest("[data-admin-promoter-action]");
+      if (promoterActionButton) {
+        const accountId = String(promoterActionButton.dataset.accountId || "").trim();
+        const status = String(promoterActionButton.dataset.adminPromoterAction || "").trim().toLowerCase();
+        const email = String(promoterActionButton.dataset.email || "").trim();
+        if (!accountId || !status) return;
+        promoterActionButton.disabled = true;
+        const response = await apiRequest(`/admin/promoters/${encodeURIComponent(accountId)}/status`, {
+          method: "POST",
+          body: { status },
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok) {
+          addActivity(`Promoter action failed for ${escapeHtml(email || accountId)}: ${escapeHtml(response?.error || "Unknown error")}`);
+          promoterActionButton.disabled = false;
+          return;
+        }
+        addActivity(`Promoter ${status === "approved" ? "approved" : "updated"}: ${escapeHtml(email || accountId)}`);
+        await reloadAdminData();
+        return;
+      }
+
+      const eventActionButton = event.target.closest("[data-admin-event-action]");
+      if (eventActionButton) {
+        const eventId = String(eventActionButton.dataset.eventId || "").trim();
+        const nextStatus = String(eventActionButton.dataset.adminEventAction || "").trim();
+        if (!eventId || !nextStatus) return;
+        eventActionButton.disabled = true;
+        const response = await apiRequest(`/admin/events/${encodeURIComponent(eventId)}/status`, {
+          method: "POST",
+          body: { status: nextStatus },
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok) {
+          addActivity(`Event status update failed for ${escapeHtml(eventId)}: ${escapeHtml(response?.error || "Unknown error")}`);
+          eventActionButton.disabled = false;
+          return;
+        }
+        addActivity(`Event ${escapeHtml(eventId)} set to ${escapeHtml(nextStatus)}.`);
+        await reloadAdminData();
+        return;
+      }
+
+      const payoutActionButton = event.target.closest("[data-admin-payout-action='process']");
+      if (payoutActionButton) {
+        const orderId = String(payoutActionButton.dataset.orderId || "").trim();
+        if (!orderId) return;
+        payoutActionButton.disabled = true;
+        const response = await apiRequest(`/admin/payouts/${encodeURIComponent(orderId)}/process`, {
+          method: "POST",
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok) {
+          addActivity(`Payout processing failed for ${escapeHtml(orderId)}: ${escapeHtml(response?.error || "Unknown error")}`);
+          payoutActionButton.disabled = false;
+          return;
+        }
+        addActivity(`Payout processed for order ${escapeHtml(orderId)}.`);
+        await reloadAdminData();
+        return;
+      }
+
+      const disputeActionButton = event.target.closest("[data-admin-dispute-action]");
+      if (disputeActionButton) {
+        const orderId = String(disputeActionButton.dataset.orderId || "").trim();
+        const resolution = String(disputeActionButton.dataset.adminDisputeAction || "").trim().toLowerCase();
+        const recipientEmail = String(disputeActionButton.dataset.recipientEmail || "").trim();
+        if (!orderId || !resolution) return;
+        disputeActionButton.disabled = true;
+        const body = { resolution };
+        if (recipientEmail) body.recipientEmail = recipientEmail;
+        const response = await apiRequest(`/admin/disputes/${encodeURIComponent(orderId)}/resolve`, {
+          method: "POST",
+          body,
+          includeErrorResponse: true,
+          suppressAuthRedirect: true
+        });
+        if (!response?.ok) {
+          addActivity(`Dispute resolution failed for ${escapeHtml(orderId)}: ${escapeHtml(response?.error || "Unknown error")}`);
+          disputeActionButton.disabled = false;
+          return;
+        }
+        addActivity(`Dispute ${resolution === "approved" ? "approved" : "rejected"} for order ${escapeHtml(orderId)}.`);
+        await reloadAdminData();
+      }
     });
   }
 
@@ -2785,12 +3153,24 @@ function setupAdminDashboard() {
   renderSalesSnapshot();
   renderTopBreakdowns();
   renderTicketSalesBars();
-  drawRevenueChart("week");
-  setupApprovalActions();
+  drawRevenueChart(currentRevenueRange);
+  renderOpsTables();
   setupQuickActions();
   setupRangeSwitch();
+  setupAdminTableActions();
   setupSidebarToggle();
   addActivity("Admin dashboard loaded.");
+  void (async () => {
+    const loaded = await loadOpsDashboard();
+    if (loaded) {
+      updateKpis();
+      renderSalesSnapshot();
+      renderTopBreakdowns();
+      renderTicketSalesBars();
+      drawRevenueChart(currentRevenueRange);
+      addActivity("Operational queues synced from server.");
+    }
+  })();
 }
 
 function setupMobileNav() {

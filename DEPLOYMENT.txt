@@ -28,6 +28,7 @@ BOOQDAT deployment checklist
   - PORT=3000
   - MONGODB_URI=<your-mongodb-uri>
   - CORS_ORIGIN=<your-app-url>
+  - REQUEST_BODY_LIMIT=12mb
   - JWT_SECRET=<long-random-secret>
   - JWT_EXPIRES_IN=8h
   - REFRESH_TOKEN_SECRET=<different-long-random-secret>

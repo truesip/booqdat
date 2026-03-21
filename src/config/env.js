@@ -32,6 +32,7 @@ function loadEnvironment() {
   const mongoUri = process.env.MONGODB_URI || mongoFromTxt || "";
   const port = Number(process.env.PORT || 3000);
   const corsOrigin = process.env.CORS_ORIGIN || "*";
+  const requestBodyLimit = process.env.REQUEST_BODY_LIMIT || "12mb";
   const jwtSecret = process.env.JWT_SECRET || (nodeEnv === "production" ? "" : "dev-local-jwt-secret-change-me");
   const jwtExpiresIn = process.env.JWT_EXPIRES_IN || "8h";
   const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET || (nodeEnv === "production" ? "" : "dev-local-refresh-secret-change-me");
@@ -69,6 +70,7 @@ function loadEnvironment() {
     port: Number.isFinite(port) ? port : 3000,
     nodeEnv,
     corsOrigin,
+    requestBodyLimit,
     jwtSecret,
     jwtExpiresIn,
     refreshTokenSecret,

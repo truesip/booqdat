@@ -8,6 +8,7 @@ const OrderRecord = require("../models/OrderRecord");
 const UserProfile = require("../models/UserProfile");
 const UserPaymentMethods = require("../models/UserPaymentMethods");
 const UserFavorites = require("../models/UserFavorites");
+const PromoterPayoutAccount = require("../models/PromoterPayoutAccount");
 const UserAccount = require("../models/UserAccount");
 const RefreshToken = require("../models/RefreshToken");
 const AccessTokenBlocklist = require("../models/AccessTokenBlocklist");
@@ -135,6 +136,23 @@ function toFavoritesMap(rows) {
     acc[item.email] = ensureArray(item.eventIds);
     return acc;
   }, {});
+}
+
+function normalizeLifecycleStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isSettledOrderData(order) {
+  const status = normalizeLifecycleStatus(order?.status);
+  const paymentStatus = normalizeLifecycleStatus(order?.paymentStatus);
+  if (status.includes("refund") || paymentStatus.includes("refund")) return false;
+  if (["paid", "completed", "confirmed", "succeeded", "successful", "settled", "captured"].includes(paymentStatus)) {
+    return true;
+  }
+  if (["paid", "completed", "confirmed"].includes(status)) {
+    return true;
+  }
+  return false;
 }
 
 function createApiRouter(env) {
@@ -277,6 +295,41 @@ function createApiRouter(env) {
       if (value) return value;
     }
     return "";
+  }
+
+  function orderBelongsToPromoter(order, promoterEmail, ownedEventIds = new Set()) {
+    const orderPromoterEmail = normalizeEmail(order?.promoterEmail);
+    const orderEventId = truncateText(order?.eventId, 120);
+    if (orderPromoterEmail && orderPromoterEmail === promoterEmail) return true;
+    if (orderEventId && ownedEventIds.has(orderEventId)) return true;
+    return false;
+  }
+
+  function toDateOrNull(value) {
+    const date = new Date(value || "");
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  function addDays(inputDate, days) {
+    const base = toDateOrNull(inputDate) || new Date();
+    const next = new Date(base);
+    next.setDate(next.getDate() + days);
+    return next.toISOString();
+  }
+
+  async function getPromoterOwnedEventIds(promoterEmail) {
+    if (!promoterEmail) return new Set();
+    const rows = await PromoterEvent.find({}).lean();
+    const ids = new Set();
+    rows.forEach((row) => {
+      const event = row?.data && typeof row.data === "object" ? row.data : {};
+      if (normalizeEmail(event?.promoterEmail) === promoterEmail) {
+        const id = truncateText(event?.id || row?.eventId, 120);
+        if (id) ids.add(id);
+      }
+    });
+    return ids;
   }
 
   function extractWebhookTransactionId(payload, body) {
@@ -1101,6 +1154,24 @@ function createApiRouter(env) {
         return;
       }
 
+      if (role === "promoter") {
+        const promoterEmail = normalizeEmail(req.auth.email);
+        const ownedEventIds = new Set(
+          filterLegacyDemoEvents(basePayload.promoterEvents)
+            .filter((event) => normalizeEmail(event?.promoterEmail) === promoterEmail)
+            .map((event) => String(event?.id || "").trim())
+            .filter(Boolean)
+        );
+        const orders = await OrderRecord.find({}).sort({ updatedAt: -1 }).lean();
+        const promoterOrders = filterLegacyDemoOrders(orders.map((item) => item.data))
+          .filter((order) => orderBelongsToPromoter(order, promoterEmail, ownedEventIds));
+        res.status(200).json({
+          ...basePayload,
+          orders: promoterOrders
+        });
+        return;
+      }
+
       res.status(200).json(basePayload);
     } catch (error) {
       next(error);
@@ -1144,13 +1215,16 @@ function createApiRouter(env) {
     }
   });
 
-  router.put("/sync/orders", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
+  router.put("/sync/orders", requireAuth, requireRoles("admin", "user", "promoter"), async (req, res, next) => {
     try {
       const role = normalizeRole(req.auth?.role);
       const sessionEmail = normalizeEmail(req.auth?.email);
       let incoming = filterLegacyDemoOrders(ensureArray(req.body?.orders).filter((item) => item && typeof item.id === "string"));
       if (role === "user") {
         incoming = incoming.filter((item) => normalizeEmail(item?.attendee?.email) === sessionEmail);
+      } else if (role === "promoter") {
+        const ownedEventIds = await getPromoterOwnedEventIds(sessionEmail);
+        incoming = incoming.filter((item) => orderBelongsToPromoter(item, sessionEmail, ownedEventIds));
       }
       const rows = incoming.map((item) => ({
         orderId: item.id,
@@ -1237,6 +1311,597 @@ function createApiRouter(env) {
 
       const count = await upsertRows(UserFavorites, entries, "email", (item) => ({ eventIds: item.eventIds }));
       res.status(200).json({ ok: true, synced: count });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/promoter/orders", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetPromoterEmail = role === "admin"
+        ? normalizeEmail(req.query?.promoterEmail || sessionEmail)
+        : sessionEmail;
+
+      const ownedEventIds = await getPromoterOwnedEventIds(targetPromoterEmail);
+      const orderRows = await OrderRecord.find({}).sort({ updatedAt: -1 }).lean();
+      const orders = filterLegacyDemoOrders(orderRows.map((item) => item.data))
+        .filter((order) => orderBelongsToPromoter(order, targetPromoterEmail, ownedEventIds));
+      res.status(200).json({ ok: true, promoterEmail: targetPromoterEmail, orders });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/promoter/payout-account", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.query?.promoterEmail || sessionEmail)
+        : sessionEmail;
+      const row = await PromoterPayoutAccount.findOne({ email: targetEmail }).lean();
+      res.status(200).json({
+        ok: true,
+        promoterEmail: targetEmail,
+        payoutAccount: row?.data || null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/promoter/payout-account", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.body?.promoterEmail || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid promoter email is required" });
+        return;
+      }
+
+      const provider = truncateText(req.body?.provider, 80) || "NYVAPAY";
+      const holder = truncateText(req.body?.holder || req.body?.accountHolder, 200);
+      const payoutEmail = normalizeEmail(req.body?.email || req.body?.payoutEmail || targetEmail);
+      const schedule = ["weekly", "monthly"].includes(normalizeText(req.body?.schedule).toLowerCase())
+        ? normalizeText(req.body?.schedule).toLowerCase()
+        : "weekly";
+
+      if (!holder || !isValidEmail(payoutEmail)) {
+        res.status(400).json({ ok: false, error: "Provider, account holder, and valid payout email are required" });
+        return;
+      }
+
+      const payload = {
+        provider,
+        holder,
+        payoutEmail,
+        schedule,
+        updatedAt: new Date().toISOString()
+      };
+
+      await PromoterPayoutAccount.updateOne(
+        { email: targetEmail },
+        {
+          $set: {
+            email: targetEmail,
+            data: payload
+          }
+        },
+        { upsert: true }
+      );
+
+      res.status(200).json({
+        ok: true,
+        promoterEmail: targetEmail,
+        payoutAccount: payload
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/user/payment-methods", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.body?.email || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid user email is required" });
+        return;
+      }
+
+      const provider = truncateText(req.body?.provider, 80);
+      const last4 = String(req.body?.last4 || "").replace(/\D/g, "").slice(-4);
+      const exp = truncateText(req.body?.exp, 16);
+      if (!provider || last4.length !== 4 || !exp) {
+        res.status(400).json({ ok: false, error: "provider, last4, and exp are required" });
+        return;
+      }
+
+      const existing = await UserPaymentMethods.findOne({ email: targetEmail });
+      const methods = ensureArray(existing?.methods);
+      methods.unshift({
+        provider,
+        last4,
+        exp,
+        addedAt: new Date().toISOString()
+      });
+
+      await UserPaymentMethods.updateOne(
+        { email: targetEmail },
+        { $set: { email: targetEmail, methods: methods.slice(0, 12) } },
+        { upsert: true }
+      );
+
+      res.status(200).json({
+        ok: true,
+        email: targetEmail,
+        methods: methods.slice(0, 12)
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/user/payment-methods/:methodIndex", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.query?.email || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid user email is required" });
+        return;
+      }
+      const parsedIndex = Number.parseInt(String(req.params?.methodIndex || ""), 10);
+      if (!Number.isInteger(parsedIndex) || parsedIndex < 0) {
+        res.status(400).json({ ok: false, error: "Valid methodIndex is required" });
+        return;
+      }
+      const methodIndex = parsedIndex;
+      const existing = await UserPaymentMethods.findOne({ email: targetEmail });
+      const methods = ensureArray(existing?.methods);
+      if (methodIndex >= methods.length) {
+        res.status(404).json({ ok: false, error: "Payment method not found" });
+        return;
+      }
+      methods.splice(methodIndex, 1);
+      await UserPaymentMethods.updateOne(
+        { email: targetEmail },
+        { $set: { email: targetEmail, methods } },
+        { upsert: true }
+      );
+      res.status(200).json({ ok: true, email: targetEmail, methods });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/orders/:orderId/refund-request", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const orderId = truncateText(req.params?.orderId, 120);
+      if (!orderId) {
+        res.status(400).json({ ok: false, error: "orderId is required" });
+        return;
+      }
+
+      const row = await OrderRecord.findOne({ orderId });
+      if (!row || !row.data || typeof row.data !== "object") {
+        res.status(404).json({ ok: false, error: "Order not found" });
+        return;
+      }
+
+      const order = row.data;
+      const attendeeEmail = normalizeEmail(order?.attendee?.email);
+      if (role === "user" && attendeeEmail !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "You can only request refunds for your own orders" });
+        return;
+      }
+      if (!isSettledOrderData(order)) {
+        res.status(400).json({ ok: false, error: "Refund request requires a paid order" });
+        return;
+      }
+
+      order.status = "Refund Requested";
+      order.paymentStatus = "Refund Requested";
+      order.dispute = {
+        ...(order.dispute && typeof order.dispute === "object" ? order.dispute : {}),
+        type: "refund",
+        status: "Open",
+        requestedAt: new Date().toISOString(),
+        requestedBy: sessionEmail || attendeeEmail
+      };
+      row.data = order;
+      await row.save();
+
+      res.status(200).json({ ok: true, order });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/orders/:orderId/transfer-request", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const orderId = truncateText(req.params?.orderId, 120);
+      const recipientEmail = normalizeEmail(req.body?.recipientEmail || req.body?.recipient);
+      if (!orderId || !isValidEmail(recipientEmail)) {
+        res.status(400).json({ ok: false, error: "orderId and valid recipientEmail are required" });
+        return;
+      }
+
+      const row = await OrderRecord.findOne({ orderId });
+      if (!row || !row.data || typeof row.data !== "object") {
+        res.status(404).json({ ok: false, error: "Order not found" });
+        return;
+      }
+
+      const order = row.data;
+      const attendeeEmail = normalizeEmail(order?.attendee?.email);
+      if (role === "user" && attendeeEmail !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "You can only request transfers for your own orders" });
+        return;
+      }
+      if (!isSettledOrderData(order)) {
+        res.status(400).json({ ok: false, error: "Transfer request requires a paid order" });
+        return;
+      }
+      if (attendeeEmail === recipientEmail) {
+        res.status(400).json({ ok: false, error: "Recipient email must be different from current attendee email" });
+        return;
+      }
+
+      order.status = "Transfer Requested";
+      order.transferRequest = {
+        recipientEmail,
+        status: "Pending",
+        requestedAt: new Date().toISOString(),
+        requestedBy: sessionEmail || attendeeEmail
+      };
+      order.dispute = {
+        ...(order.dispute && typeof order.dispute === "object" ? order.dispute : {}),
+        type: "transfer",
+        status: "Open",
+        requestedAt: new Date().toISOString(),
+        requestedBy: sessionEmail || attendeeEmail
+      };
+      row.data = order;
+      await row.save();
+
+      res.status(200).json({ ok: true, order });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/ops/dashboard", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const [promoterAccounts, promoterEvents, orderRows, profileRows, payoutAccountRows] = await Promise.all([
+        UserAccount.find({ role: "promoter" }).sort({ createdAt: -1 }).lean(),
+        PromoterEvent.find({}).sort({ updatedAt: -1 }).lean(),
+        OrderRecord.find({}).sort({ updatedAt: -1 }).lean(),
+        UserProfile.find({}).lean(),
+        PromoterPayoutAccount.find({}).lean()
+      ]);
+
+      const events = filterLegacyDemoEvents(promoterEvents.map((item) => item.data));
+      const orders = filterLegacyDemoOrders(orderRows.map((item) => item.data));
+      const profileMap = toProfileMap(profileRows);
+      const payoutAccountMap = payoutAccountRows.reduce((acc, item) => {
+        acc[item.email] = item.data || {};
+        return acc;
+      }, {});
+
+      const latestEventByPromoter = {};
+      events.forEach((event) => {
+        const email = normalizeEmail(event?.promoterEmail);
+        if (!email) return;
+        const current = latestEventByPromoter[email];
+        const eventDate = toDateOrNull(event?.createdAt || event?.date);
+        const currentDate = toDateOrNull(current?.createdAt || current?.date);
+        if (!current || (eventDate && (!currentDate || eventDate > currentDate))) {
+          latestEventByPromoter[email] = event;
+        }
+      });
+
+      const promoterApprovals = promoterAccounts.map((account) => {
+        const email = normalizeEmail(account.email);
+        const relatedEvent = latestEventByPromoter[email] || {};
+        const location = truncateText(relatedEvent?.city || relatedEvent?.state || relatedEvent?.country, 120) || "—";
+        return {
+          id: String(account._id),
+          name: account.name,
+          email,
+          location,
+          submittedAt: account.createdAt,
+          status: account.isActive ? "Approved" : "Pending"
+        };
+      });
+
+      const pendingEvents = events
+        .filter((event) => {
+          const status = normalizeLifecycleStatus(event?.status);
+          return ["draft", "paused", "flagged", "pending"].includes(status);
+        })
+        .map((event) => ({
+          eventId: truncateText(event?.id, 120),
+          title: truncateText(event?.title, 200) || "Untitled Event",
+          promoterEmail: normalizeEmail(event?.promoterEmail),
+          category: truncateText(event?.category, 120) || "—",
+          status: truncateText(event?.status, 40) || "Pending"
+        }))
+        .filter((event) => event.eventId);
+
+      const attendeesByEmail = {};
+      orders.forEach((order) => {
+        const email = normalizeEmail(order?.attendee?.email);
+        if (!email) return;
+        const current = attendeesByEmail[email] || {
+          name: truncateText(order?.attendee?.name, 200) || truncateText(profileMap[email]?.name, 200) || "Attendee",
+          email,
+          orders: 0,
+          lastPurchase: ""
+        };
+        current.orders += Math.max(1, Math.floor(toFiniteNumber(order?.quantity, 1)));
+        const purchaseDate = truncateText(order?.purchaseDate, 60) || "";
+        if (!current.lastPurchase || purchaseDate > current.lastPurchase) {
+          current.lastPurchase = purchaseDate;
+        }
+        attendeesByEmail[email] = current;
+      });
+      const attendeeRecords = Object.values(attendeesByEmail)
+        .sort((a, b) => String(b.lastPurchase || "").localeCompare(String(a.lastPurchase || "")))
+        .slice(0, 20);
+
+      const payoutQueue = orders
+        .filter((order) => {
+          if (!isSettledOrderData(order)) return false;
+          const payoutStatus = normalizeLifecycleStatus(order?.payoutStatus);
+          return payoutStatus !== "processed";
+        })
+        .map((order) => {
+          const promoterEmail = normalizeEmail(order?.promoterEmail);
+          const payoutAccount = payoutAccountMap[promoterEmail] || {};
+          return {
+            orderId: truncateText(order?.id, 120),
+            promoterEmail,
+            promoterName: truncateText(payoutAccount?.holder, 200) || promoterEmail || "Unknown promoter",
+            amount: toPositiveAmount(order?.total),
+            payoutDate: addDays(order?.paidAt || order?.purchaseDate, 7),
+            status: truncateText(order?.payoutStatus, 40) || "Scheduled"
+          };
+        })
+        .filter((item) => item.orderId)
+        .sort((a, b) => String(a.payoutDate || "").localeCompare(String(b.payoutDate || "")))
+        .slice(0, 30);
+
+      const disputes = orders
+        .filter((order) => {
+          const orderStatus = normalizeLifecycleStatus(order?.status);
+          const paymentStatus = normalizeLifecycleStatus(order?.paymentStatus);
+          const disputeStatus = normalizeLifecycleStatus(order?.dispute?.status);
+          const transferStatus = normalizeLifecycleStatus(order?.transferRequest?.status);
+          return orderStatus.includes("refund requested")
+            || orderStatus.includes("transfer requested")
+            || paymentStatus.includes("refund requested")
+            || disputeStatus === "open"
+            || transferStatus === "pending";
+        })
+        .map((order) => {
+          const isTransfer = normalizeLifecycleStatus(order?.status).includes("transfer")
+            || normalizeLifecycleStatus(order?.dispute?.type).includes("transfer");
+          return {
+            orderId: truncateText(order?.id, 120),
+            caseId: `DSP-${truncateText(order?.id, 120)}`,
+            type: isTransfer ? "Ticket Transfer" : "Refund",
+            relatedEvent: truncateText(order?.eventTitle, 200) || "Unknown event",
+            priority: isTransfer ? "Medium" : "High",
+            status: "Open",
+            requestedAt: truncateText(order?.dispute?.requestedAt || order?.purchaseDate, 60) || new Date().toISOString(),
+            recipientEmail: normalizeEmail(order?.transferRequest?.recipientEmail),
+            attendeeEmail: normalizeEmail(order?.attendee?.email)
+          };
+        })
+        .slice(0, 30);
+
+      res.status(200).json({
+        ok: true,
+        promoterApprovals,
+        attendeeRecords,
+        pendingEvents,
+        payoutQueue,
+        disputes,
+        counts: {
+          pendingPromoters: promoterApprovals.filter((item) => item.status === "Pending").length,
+          pendingEvents: pendingEvents.length
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/promoters/:accountId/status", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const accountId = truncateText(req.params?.accountId, 120);
+      const desired = normalizeLifecycleStatus(req.body?.status);
+      if (!accountId || !["approved", "rejected", "suspended", "pending"].includes(desired)) {
+        res.status(400).json({ ok: false, error: "Valid accountId and status are required" });
+        return;
+      }
+      const account = await UserAccount.findOne({ _id: accountId, role: "promoter" });
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Promoter account not found" });
+        return;
+      }
+      account.isActive = desired === "approved";
+      await account.save();
+      res.status(200).json({ ok: true, accountId, status: account.isActive ? "Approved" : "Pending" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/events/:eventId/status", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const eventId = truncateText(req.params?.eventId, 120);
+      const nextStatus = truncateText(req.body?.status, 40);
+      if (!eventId || !nextStatus) {
+        res.status(400).json({ ok: false, error: "eventId and status are required" });
+        return;
+      }
+
+      const [promoterRow, appRow] = await Promise.all([
+        PromoterEvent.findOne({ eventId }),
+        AppEvent.findOne({ eventId })
+      ]);
+      if (!promoterRow && !appRow) {
+        res.status(404).json({ ok: false, error: "Event not found" });
+        return;
+      }
+      if (promoterRow?.data && typeof promoterRow.data === "object") {
+        promoterRow.data.status = nextStatus;
+        await promoterRow.save();
+      }
+      if (appRow?.data && typeof appRow.data === "object") {
+        appRow.data.status = nextStatus;
+        await appRow.save();
+      }
+
+      res.status(200).json({ ok: true, eventId, status: nextStatus });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/payouts/:orderId/process", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const orderId = truncateText(req.params?.orderId, 120);
+      if (!orderId) {
+        res.status(400).json({ ok: false, error: "orderId is required" });
+        return;
+      }
+      const row = await OrderRecord.findOne({ orderId });
+      if (!row || !row.data || typeof row.data !== "object") {
+        res.status(404).json({ ok: false, error: "Order not found" });
+        return;
+      }
+      row.data.payoutStatus = "Processed";
+      row.data.payoutProcessedAt = new Date().toISOString();
+      await row.save();
+      res.status(200).json({ ok: true, order: row.data });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/disputes/:orderId/resolve", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const orderId = truncateText(req.params?.orderId, 120);
+      const resolution = normalizeLifecycleStatus(req.body?.resolution || "rejected");
+      const recipientEmail = normalizeEmail(req.body?.recipientEmail);
+      if (!orderId) {
+        res.status(400).json({ ok: false, error: "orderId is required" });
+        return;
+      }
+      const row = await OrderRecord.findOne({ orderId });
+      if (!row || !row.data || typeof row.data !== "object") {
+        res.status(404).json({ ok: false, error: "Order not found" });
+        return;
+      }
+
+      const order = row.data;
+      const isTransfer = normalizeLifecycleStatus(order?.status).includes("transfer")
+        || normalizeLifecycleStatus(order?.dispute?.type).includes("transfer");
+      if (resolution === "approved") {
+        if (isTransfer) {
+          const nextRecipient = recipientEmail || normalizeEmail(order?.transferRequest?.recipientEmail);
+          if (!isValidEmail(nextRecipient)) {
+            res.status(400).json({ ok: false, error: "Valid recipientEmail is required to approve transfer requests" });
+            return;
+          }
+          order.attendee = {
+            ...(order.attendee && typeof order.attendee === "object" ? order.attendee : {}),
+            email: nextRecipient
+          };
+          order.transferRequest = {
+            ...(order.transferRequest && typeof order.transferRequest === "object" ? order.transferRequest : {}),
+            recipientEmail: nextRecipient,
+            status: "Completed",
+            resolvedAt: new Date().toISOString()
+          };
+          row.attendeeEmail = nextRecipient;
+          order.status = "Confirmed";
+          order.paymentStatus = "Paid";
+        } else {
+          order.status = "Refunded";
+          order.paymentStatus = "Refunded";
+          order.refundedAt = new Date().toISOString();
+        }
+      } else {
+        order.status = "Confirmed";
+        order.paymentStatus = "Paid";
+        if (order.transferRequest && typeof order.transferRequest === "object") {
+          order.transferRequest.status = "Rejected";
+          order.transferRequest.resolvedAt = new Date().toISOString();
+        }
+      }
+      order.dispute = {
+        ...(order.dispute && typeof order.dispute === "object" ? order.dispute : {}),
+        status: "Resolved",
+        resolution: resolution === "approved" ? "Approved" : "Rejected",
+        resolvedAt: new Date().toISOString()
+      };
+      row.data = order;
+      await row.save();
+      res.status(200).json({ ok: true, order });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/ops/approve-all", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const promoterResult = await UserAccount.updateMany(
+        { role: "promoter", isActive: false },
+        { $set: { isActive: true } }
+      );
+
+      const eventRows = await PromoterEvent.find({}).lean();
+      let eventsUpdated = 0;
+      for (const row of eventRows) {
+        const data = row?.data && typeof row.data === "object" ? row.data : null;
+        if (!data) continue;
+        const status = normalizeLifecycleStatus(data.status);
+        if (["draft", "paused", "pending", "flagged"].includes(status)) {
+          await PromoterEvent.updateOne(
+            { _id: row._id },
+            { $set: { "data.status": "Live" } }
+          );
+          await AppEvent.updateOne(
+            { eventId: row.eventId },
+            { $set: { "data.status": "Live" } }
+          );
+          eventsUpdated += 1;
+        }
+      }
+
+      res.status(200).json({
+        ok: true,
+        promotersApproved: Number(promoterResult.modifiedCount || 0),
+        eventsApproved: eventsUpdated
+      });
     } catch (error) {
       next(error);
     }

@@ -23,6 +23,9 @@ services:
       - key: CORS_ORIGIN
         scope: RUN_TIME
         value: REPLACE_WITH_APP_URL
+      - key: REQUEST_BODY_LIMIT
+        scope: RUN_TIME
+        value: 12mb
       - key: JWT_SECRET
         scope: RUN_TIME
         type: SECRET
