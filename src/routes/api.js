@@ -566,13 +566,13 @@ function createApiRouter(env) {
 
       const account = await UserAccount.findOne({ email });
       if (!account || !account.isActive) {
-        res.status(401).json({ ok: false, error: "Invalid credentials" });
+        res.status(401).json({ ok: false, error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
         return;
       }
 
       const matches = await bcrypt.compare(password, account.passwordHash);
       if (!matches) {
-        res.status(401).json({ ok: false, error: "Invalid credentials" });
+        res.status(401).json({ ok: false, error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
         return;
       }
 
@@ -878,9 +878,25 @@ function createApiRouter(env) {
 
       const gatewayResult = await createNyvapayPaymentLink(env, gatewayPayload);
       if (!gatewayResult.ok) {
-        res.status(gatewayResult.status || 502).json({
+        console.error("NYVAPAY payment link creation failed", {
+          orderId,
+          eventId,
+          status: gatewayResult.status || 502,
+          error: gatewayResult.error || "",
+          gatewayPayloadSummary: {
+            amount: gatewayPayload.amount,
+            currency: gatewayPayload.currency,
+            hasWebhookUrl: Boolean(gatewayPayload.webhook_url),
+            hasSuccessRedirectUrl: Boolean(gatewayPayload.success_redirect_url),
+            customerEmail: gatewayPayload.customer_email
+          }
+        });
+        const statusCode = Number.isInteger(gatewayResult.status) ? gatewayResult.status : 502;
+        res.status(statusCode).json({
           ok: false,
-          error: gatewayResult.error || "Failed to create NYVAPAY payment link"
+          error: gatewayResult.error || "Failed to create NYVAPAY payment link",
+          errorCode: "NYVAPAY_GATEWAY_ERROR",
+          gatewayStatus: statusCode
         });
         return;
       }

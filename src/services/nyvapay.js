@@ -1,7 +1,23 @@
-const KNOWN_FAILURE_STATUSES = new Set([400, 401, 403, 404, 500, 502, 503]);
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function isHttpUrl(value) {
+  const text = normalizeText(value);
+  if (!text) return false;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function gatewayStatusOrDefault(status) {
+  const parsed = Number(status);
+  if (Number.isInteger(parsed) && parsed >= 400 && parsed <= 599) return parsed;
+  return 502;
 }
 
 function normalizedBaseUrl(env) {
@@ -25,13 +41,21 @@ function resolveGatewayErrorMessage(payload) {
 }
 
 function extractPaymentUrl(payload) {
-  if (!payload || typeof payload !== "object") return "";
+  if (!payload) return "";
+  if (typeof payload === "string" && isHttpUrl(payload)) return payload;
+  if (typeof payload !== "object") return "";
   const directKeys = [
     "payment_url",
     "paymentUrl",
+    "payment_link",
+    "paymentLink",
+    "payment_page_url",
+    "paymentPageUrl",
     "checkout_url",
     "checkoutUrl",
     "url",
+    "link_url",
+    "linkUrl",
     "short_url",
     "shortUrl"
   ];
@@ -40,9 +64,15 @@ function extractPaymentUrl(payload) {
     if (value) return value;
   }
 
+  if (typeof payload.link === "string" && isHttpUrl(payload.link)) {
+    return payload.link;
+  }
   if (payload.link && typeof payload.link === "object") {
     const nested = extractPaymentUrl(payload.link);
     if (nested) return nested;
+  }
+  if (typeof payload.data === "string" && isHttpUrl(payload.data)) {
+    return payload.data;
   }
   if (payload.data && typeof payload.data === "object") {
     const nested = extractPaymentUrl(payload.data);
@@ -106,8 +136,17 @@ async function createNyvapayPaymentLink(env, paymentLinkPayload) {
     payload = await response.json().catch(() => null);
   } else {
     const textBody = await response.text().catch(() => "");
-    if (normalizeText(textBody)) {
-      payload = { error: normalizeText(textBody) };
+    const normalizedTextBody = normalizeText(textBody);
+    if (normalizedTextBody) {
+      const embeddedUrlMatch = normalizedTextBody.match(/https?:\/\/[^\s"'<>]+/i);
+      const embeddedUrl = normalizeText(embeddedUrlMatch?.[0]);
+      if (isHttpUrl(normalizedTextBody)) {
+        payload = { payment_url: normalizedTextBody };
+      } else if (isHttpUrl(embeddedUrl)) {
+        payload = { payment_url: embeddedUrl };
+      } else {
+        payload = { error: normalizedTextBody };
+      }
     }
   }
 
@@ -115,8 +154,9 @@ async function createNyvapayPaymentLink(env, paymentLinkPayload) {
     const gatewayMessage = resolveGatewayErrorMessage(payload);
     return {
       ok: false,
-      status: KNOWN_FAILURE_STATUSES.has(response.status) ? response.status : 502,
-      error: gatewayMessage || `NYVAPAY request failed (${response.status})`
+      status: gatewayStatusOrDefault(response.status),
+      error: gatewayMessage || `NYVAPAY request failed (${response.status})`,
+      payload
     };
   }
 

@@ -781,8 +781,13 @@ function setupAuthPage() {
         suppressAuthRedirect: true
       });
       const tokens = extractAuthTokens(response);
+      const invalidCredentials = response?.errorCode === "INVALID_CREDENTIALS"
+        || String(response?.error || "").toLowerCase().includes("invalid credentials");
       if (!response?.ok || !tokens.accessToken || !tokens.refreshToken || !response?.user) {
-        setStatus(loginStatus, response?.error || "Unable to sign in with those credentials.", true);
+        const fallbackMessage = requiredRole
+          ? `Invalid email or password. Use your ${requiredRole} account credentials for this page.`
+          : "Invalid email or password. Check your credentials or create an account on Sign Up.";
+        setStatus(loginStatus, invalidCredentials ? fallbackMessage : (response?.error || "Unable to sign in with those credentials."), true);
         return;
       }
       if (requiredRole && !hasAnyRole(response.user, [requiredRole])) {
@@ -1253,8 +1258,14 @@ function setupUserPortal() {
         suppressAuthRedirect: true
       });
       const tokens = extractAuthTokens(response);
+      const invalidCredentials = response?.errorCode === "INVALID_CREDENTIALS"
+        || String(response?.error || "").toLowerCase().includes("invalid credentials");
       if (!response?.ok || !tokens.accessToken || !tokens.refreshToken || !response?.user) {
-        showFeedback(response?.error || "Unable to sign in.");
+        showFeedback(
+          invalidCredentials
+            ? "Invalid email or password. Use your User account credentials to access this portal."
+            : (response?.error || "Unable to sign in.")
+        );
         return;
       }
       if (!hasAnyRole(response.user, ["user", "admin"])) {
