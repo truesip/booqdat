@@ -466,7 +466,6 @@ function createApiRouter(env) {
       const email = normalizeEmail(req.body?.email);
       const password = String(req.body?.password || "");
       const role = normalizeRole(req.body?.role || "user");
-      const adminRegistrationKey = String(req.body?.adminRegistrationKey || "");
 
       if (!email || !password || !role) {
         res.status(400).json({ ok: false, error: "email, password, and role are required" });
@@ -477,10 +476,8 @@ function createApiRouter(env) {
         return;
       }
       if (role === "admin") {
-        if (!env.adminRegistrationKey || adminRegistrationKey !== env.adminRegistrationKey) {
-          res.status(403).json({ ok: false, error: "Admin registration is restricted" });
-          return;
-        }
+        res.status(403).json({ ok: false, error: "Admin accounts can only be created by platform owners" });
+        return;
       }
 
       const existing = await UserAccount.findOne({ email }).lean();

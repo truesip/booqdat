@@ -80,10 +80,6 @@ services:
       - key: COMPANY_NAME
         scope: RUN_TIME
         value: BOOQDAT
-      - key: ADMIN_REGISTRATION_KEY
-        scope: RUN_TIME
-        type: SECRET
-        value: OPTIONAL_ADMIN_REGISTRATION_KEY
       - key: SEED_ADMIN_EMAIL
         scope: RUN_TIME
         value: OPTIONAL_ADMIN_EMAIL

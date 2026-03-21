@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Support | BOOQDAT</title>
-  <meta name="description" content="BOOQDAT help center and support expectations for promoters and attendees.">
+  <title>Sign Up | BOOQDAT</title>
+  <meta name="description" content="Create your BOOQDAT account to buy tickets or manage events as a promoter.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -21,39 +21,45 @@
         <a href="events.html">Browse Events</a>
         <a href="promoters.html">For Promoters</a>
         <a href="login.html">Log In</a>
-        <a href="signup.html" class="btn btn-primary">Sign Up</a>
+        <a href="signup.html" class="active">Sign Up</a>
       </nav>
     </div>
   </header>
-
   <main>
     <section class="section">
-      <div class="container prose">
-        <h1>Support</h1>
-        <p>BOOQDAT support is available for both event promoters and ticket buyers.</p>
-
-        <h2>For promoters</h2>
-        <ul>
-          <li>Event setup and publishing assistance</li>
-          <li>Ticket link troubleshooting</li>
-          <li>Order issue resolution and reporting support</li>
-          <li>General account and payout questions</li>
-        </ul>
-
-        <h2>For attendees</h2>
-        <ul>
-          <li>Order confirmation and ticket delivery checks</li>
-          <li>Duplicate purchase review</li>
-          <li>Event information clarification requests</li>
-          <li>General ticketing support</li>
-        </ul>
-
-        <h2>How to contact support</h2>
-        <p>Email <a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a> and include your event name, order reference (if available), and a short description of the issue.</p>
+      <div class="container auth-wrap">
+        <article class="form-card auth-card">
+          <h1>Create Your Account</h1>
+          <p class="muted" id="auth-role-hint">Create an account to access your dashboard.</p>
+          <form id="auth-register-form" class="stack">
+            <label>
+              Full Name
+              <input name="name" type="text" required placeholder="Jane Doe">
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" required placeholder="you@example.com">
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" required minlength="8" placeholder="At least 8 characters">
+            </label>
+            <label>
+              Account Role
+              <select name="role" required>
+                <option value="">Select role</option>
+                <option value="user">User / Ticket Buyer</option>
+                <option value="promoter">Promoter</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" type="submit">Create Account</button>
+          </form>
+          <p id="auth-register-status" class="status"></p>
+          <p class="auth-foot">Already have an account? <a href="login.html">Log in here</a>.</p>
+        </article>
       </div>
     </section>
   </main>
-
   <footer class="site-footer">
     <div class="container footer-grid">
       <div>
@@ -74,7 +80,6 @@
       <small>© <span data-year></span> BOOQDAT USA LLC</small>
     </div>
   </footer>
-
   <script src="assets/app.js"></script>
 </body>
 </html>

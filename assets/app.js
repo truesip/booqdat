@@ -1,83 +1,3 @@
-const DEMO_EVENTS = [
-  {
-    id: "evt-1001",
-    title: "Sunset Rooftop Sessions",
-    category: "Music",
-    venue: "Skyline Roof Lounge",
-    city: "Albuquerque",
-    state: "NM",
-    date: "2026-05-04",
-    time: "19:00",
-    price: 35,
-    capacity: 320,
-    description: "Open-air evening set featuring regional DJs and special guests."
-  },
-  {
-    id: "evt-1002",
-    title: "Southwest Comedy Night",
-    category: "Comedy",
-    venue: "Mesa Stage Hall",
-    city: "Albuquerque",
-    state: "NM",
-    date: "2026-05-11",
-    time: "20:30",
-    price: 28,
-    capacity: 220,
-    description: "A curated lineup of touring and local comedians."
-  },
-  {
-    id: "evt-1003",
-    title: "High Desert Boxing Showcase",
-    category: "Sports",
-    venue: "Rio Grande Arena",
-    city: "Santa Fe",
-    state: "NM",
-    date: "2026-05-18",
-    time: "18:00",
-    price: 55,
-    capacity: 860,
-    description: "Championship-card evening featuring regional contenders."
-  },
-  {
-    id: "evt-1004",
-    title: "Creative Founder Meetup",
-    category: "Business",
-    venue: "Innovate Hub Downtown",
-    city: "Phoenix",
-    state: "AZ",
-    date: "2026-05-21",
-    time: "17:30",
-    price: 20,
-    capacity: 180,
-    description: "Networking and panel sessions for creators and founders."
-  },
-  {
-    id: "evt-1005",
-    title: "City Food & Culture Fest",
-    category: "Community",
-    venue: "Old Town Plaza",
-    city: "Albuquerque",
-    state: "NM",
-    date: "2026-05-26",
-    time: "13:00",
-    price: 15,
-    capacity: 1200,
-    description: "Family-friendly market with food, arts, and live performances."
-  },
-  {
-    id: "evt-1006",
-    title: "Desert Bass Weekender",
-    category: "Music",
-    venue: "Canyon Yard",
-    city: "Las Vegas",
-    state: "NV",
-    date: "2026-06-06",
-    time: "21:00",
-    price: 65,
-    capacity: 950,
-    description: "Two-night electronic experience with national headliners."
-  }
-];
 
 const STORAGE_KEYS = {
   promoter: "booqdat_promoter",
@@ -564,7 +484,7 @@ function upsertPromoterDashboardEventFromSimple(event) {
   const idx = current.findIndex((item) => item.id === event.id);
   const ticketQty = Number(event.capacity) || 300;
   const gaPrice = Number(event.price) || 25;
-  const sold = Math.min(ticketQty, Math.round(ticketQty * 0.28));
+  const sold = 0;
   const mapped = {
     id: event.id,
     title: event.title,
@@ -599,9 +519,61 @@ function upsertPromoterDashboardEventFromSimple(event) {
   else current.unshift(mapped);
   writePromoterDashboardEvents(current);
 }
+function toFiniteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function ticketTypeAveragePrice(ticketTypes = [], fallback = 25) {
+  const prices = ticketTypes
+    .map((ticket) => toFiniteNumber(ticket?.price, 0))
+    .filter((price) => price > 0);
+  if (!prices.length) return fallback;
+  return Math.min(...prices);
+}
+
+function mapPromoterEventToMarketplaceEvent(event) {
+  if (!event || typeof event !== "object") return null;
+  const id = String(event.id || "").trim();
+  const title = String(event.title || "").trim();
+  const status = String(event.status || "").trim().toLowerCase();
+  if (!id || !title || status === "draft" || status === "paused") return null;
+
+  const ticketTypes = Array.isArray(event.ticketTypes) ? event.ticketTypes : [];
+  const price = ticketTypeAveragePrice(ticketTypes, toFiniteNumber(event.price, 0));
+  const capacityFromTickets = ticketTypes.reduce((sum, ticket) => sum + toFiniteNumber(ticket?.quantity, 0), 0);
+  const capacity = Math.max(1, capacityFromTickets || toFiniteNumber(event.capacity, 1));
+
+  return {
+    id,
+    title,
+    category: String(event.category || "Community"),
+    venue: String(event.venue || "Venue TBA"),
+    city: String(event.city || "Albuquerque"),
+    state: String(event.state || "NM"),
+    date: String(event.date || ""),
+    time: String(event.time || "19:00"),
+    price,
+    capacity,
+    description: String(event.description || ""),
+    banner: String(event.banner || ""),
+    promoterEmail: normalizeEmail(event.promoterEmail || "")
+  };
+}
 
 function getAllEvents() {
-  return [...DEMO_EVENTS, ...readStoredEvents()];
+  const merged = new Map();
+  readPromoterDashboardEvents().forEach((event) => {
+    const mapped = mapPromoterEventToMarketplaceEvent(event);
+    if (mapped?.id) merged.set(mapped.id, mapped);
+  });
+  readStoredEvents().forEach((event) => {
+    if (!event || typeof event !== "object") return;
+    const id = String(event.id || "").trim();
+    if (!id) return;
+    merged.set(id, event);
+  });
+  return [...merged.values()].sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
 }
 
 function formatDate(inputDate) {
@@ -644,6 +616,10 @@ function renderFeaturedEvents() {
   const target = document.querySelector("#featured-events");
   if (!target) return;
   const featured = getAllEvents().slice(0, 6);
+  if (!featured.length) {
+    target.innerHTML = `<article class="form-card"><h3>No events published yet</h3><p>Promoters can publish events from their dashboard. Check back soon.</p></article>`;
+    return;
+  }
   target.innerHTML = featured.map(createEventCard).join("");
 }
 
@@ -655,6 +631,12 @@ function renderBrowseEvents() {
   if (!grid || !searchInput || !citySelect || !categorySelect) return;
 
   const events = getAllEvents();
+  if (!events.length) {
+    citySelect.innerHTML = `<option value="">All Cities</option>`;
+    categorySelect.innerHTML = `<option value="">All Categories</option>`;
+    grid.innerHTML = `<article class="form-card"><h3>No events available</h3><p>There are no live events right now.</p></article>`;
+    return;
+  }
   const cities = [...new Set(events.map((event) => event.city))].sort();
   const categories = [...new Set(events.map((event) => event.category))].sort();
 
@@ -701,11 +683,19 @@ function setupAuthPage() {
   const url = new URL(window.location.href);
   const redirectPath = sanitizeRedirectPath(url.searchParams.get("redirect"));
   const requiredRole = normalizeRole(url.searchParams.get("role"));
+  const isSignupPage = currentPageName() === "signup.html";
+  const preferredSignupRole = ["user", "promoter"].includes(requiredRole) ? requiredRole : "";
 
   if (roleHintLabel) {
-    roleHintLabel.textContent = requiredRole
-      ? `Sign in with a ${requiredRole} account to continue.`
-      : "Sign in to access your dashboard.";
+    if (isSignupPage) {
+      roleHintLabel.textContent = preferredSignupRole
+        ? `Create a ${preferredSignupRole} account to continue.`
+        : "Create an account to access your dashboard.";
+    } else {
+      roleHintLabel.textContent = requiredRole
+        ? `Sign in with a ${requiredRole} account to continue.`
+        : "Sign in to access your dashboard.";
+    }
   }
 
   function setStatus(target, message, isError = false) {
@@ -752,6 +742,9 @@ function setupAuthPage() {
   }
 
   if (registerForm) {
+    if (preferredSignupRole && registerForm.elements?.role) {
+      registerForm.elements.role.value = preferredSignupRole;
+    }
     registerForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(registerForm);
@@ -759,8 +752,7 @@ function setupAuthPage() {
         name: String(formData.get("name") || "").trim(),
         email: String(formData.get("email") || "").trim().toLowerCase(),
         password: String(formData.get("password") || ""),
-        role: normalizeRole(formData.get("role")),
-        adminRegistrationKey: String(formData.get("adminRegistrationKey") || "").trim()
+        role: normalizeRole(formData.get("role"))
       };
 
       if (!payload.name || !payload.email || !payload.password || !payload.role) {
@@ -814,6 +806,7 @@ function setupUserPortal() {
   const savedFavorites = root.querySelector("#portal-saved-favorites");
   const discoverFavorites = root.querySelector("#portal-discover-events");
   const sidebarToggle = root.querySelector("[data-user-sidebar-toggle]");
+  const headerLogoutButton = root.querySelector("[data-user-logout]");
 
   let activeEmail = "";
   let activeTab = "tickets";
@@ -1160,6 +1153,7 @@ function setupUserPortal() {
 
   async function logoutPortal() {
     activeEmail = "";
+    if (accountLabel) accountLabel.textContent = "";
     writeUserPortalSession({ email: "" });
     await logoutCurrentSession();
     showAuth();
@@ -1175,6 +1169,13 @@ function setupUserPortal() {
       switchTab(tab);
     });
   });
+
+  if (headerLogoutButton) {
+    headerLogoutButton.addEventListener("click", async () => {
+      await logoutPortal();
+      switchTab("tickets");
+    });
+  }
 
   if (loginForm && loginEmailInput && loginPasswordInput) {
     loginForm.addEventListener("submit", async (event) => {
@@ -1380,6 +1381,7 @@ function setupPromoterDashboard() {
   const feedback = root.querySelector("#promoter-action-feedback");
   const topReferrersBody = root.querySelector("#top-referrers-body");
   const payoutHistoryBody = root.querySelector("#payout-history-body");
+  const promoterLogoutButton = root.querySelector("[data-promoter-logout]");
 
   let currentStep = 1;
   let currentTab = "upcoming";
@@ -1490,105 +1492,107 @@ function setupPromoterDashboard() {
     feedback.innerHTML = message;
   }
 
-  function seedPromoterEvents() {
-    const existing = readPromoterDashboardEvents();
-    if (existing.length) return existing;
-    const seeded = [
-      {
-        id: `evt-pr-${Date.now()}-1`,
-        title: "Skyline Bass Social",
-        description: "Open-air evening event with guest DJs and visual installations.",
-        category: "Music",
-        tags: ["nightlife", "electronic"],
-        date: dateOffset(10),
-        time: "20:00",
-        venueType: "Physical",
-        venue: "Skyline Roof Lounge",
-        city: "Albuquerque",
-        state: "NM",
-        capacity: 420,
-        ticketTypes: createDefaultTicketTypes(),
-        banner: "",
-        promoCodes: ["EARLY10"],
-        status: "Live",
-        ticketsSold: 226,
-        revenue: 9870,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: `evt-pr-${Date.now()}-2`,
-        title: "Founder Mixer: Creative Southwest",
-        description: "Founder networking meetup with panel sessions and live Q&A.",
-        category: "Business",
-        tags: ["networking", "founders"],
-        date: dateOffset(-14),
-        time: "17:30",
-        venueType: "Physical",
-        venue: "Innovate Hall",
-        city: "Phoenix",
-        state: "AZ",
-        capacity: 250,
-        ticketTypes: [
-          {
-            name: "General Admission",
-            price: 25,
-            quantity: 250,
-            salesStart: dateOffset(-32),
-            salesEnd: dateOffset(-14)
-          }
-        ],
-        banner: "",
-        promoCodes: [],
-        status: "Live",
-        ticketsSold: 190,
-        revenue: 4750,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: `evt-pr-${Date.now()}-3`,
-        title: "Downtown Comedy Trial Run",
-        description: "Draft event for pilot comedy format and open mic format testing.",
-        category: "Comedy",
-        tags: ["comedy", "open-mic"],
-        date: dateOffset(20),
-        time: "21:00",
-        venueType: "Physical",
-        venue: "Mesa Stage Hall",
-        city: "Albuquerque",
-        state: "NM",
-        capacity: 220,
-        ticketTypes: [
-          {
-            name: "General Admission",
-            price: 30,
-            quantity: 220,
-            salesStart: dateOffset(2),
-            salesEnd: dateOffset(19)
-          }
-        ],
-        banner: "",
-        promoCodes: ["LAUNCH15"],
-        status: "Draft",
-        ticketsSold: 0,
-        revenue: 0,
-        createdAt: new Date().toISOString()
-      }
-    ];
-    writePromoterDashboardEvents(seeded);
-    seeded.filter((event) => eventStatus(event) !== "Draft").forEach(syncMarketplace);
-    return seeded;
+  function canAccessPromoterEvent(event) {
+    const role = normalizeRole(readAuthSession()?.user?.role);
+    if (role === "admin") return true;
+    const currentEmail = currentPromoterEmail();
+    if (!currentEmail) return true;
+    const ownerEmail = normalizeEmail(event?.promoterEmail || "");
+    return !ownerEmail || ownerEmail === currentEmail;
   }
 
-  let promoterEvents = seedPromoterEvents();
+  function normalizePromoterEventRecord(event) {
+    const ticketTypes = Array.isArray(event.ticketTypes) && event.ticketTypes.length
+      ? event.ticketTypes
+      : createDefaultTicketTypes();
+    const inventory = Math.max(1, ticketTypes.reduce((sum, ticket) => sum + toNumber(ticket?.quantity), 0) || toNumber(event.capacity, 1));
+    const ticketsSold = Math.min(inventory, Math.max(0, toNumber(event.ticketsSold)));
+    const inferredRevenue = Math.round(ticketsSold * averagePrice({ ticketTypes }));
+    return {
+      ...event,
+      title: String(event.title || "").trim(),
+      description: String(event.description || "").trim(),
+      category: String(event.category || "Community"),
+      tags: Array.isArray(event.tags) ? event.tags : [],
+      date: String(event.date || ""),
+      time: String(event.time || "19:00"),
+      venueType: String(event.venueType || "Physical"),
+      venue: String(event.venue || ""),
+      city: String(event.city || ""),
+      state: String(event.state || ""),
+      capacity: inventory,
+      ticketTypes,
+      banner: String(event.banner || ""),
+      promoCodes: Array.isArray(event.promoCodes) ? event.promoCodes : [],
+      status: String(event.status || "Live"),
+      ticketsSold,
+      revenue: Math.max(0, toNumber(event.revenue, inferredRevenue)),
+      promoterEmail: normalizeEmail(event.promoterEmail || currentPromoterEmail()),
+      createdAt: event.createdAt || new Date().toISOString()
+    };
+  }
+
+  function loadPromoterEvents() {
+    return readPromoterDashboardEvents()
+      .filter((event) => event && typeof event === "object")
+      .filter(canAccessPromoterEvent)
+      .map(normalizePromoterEventRecord)
+      .filter((event) => String(event.id || "").trim() && event.title);
+  }
+
+  let promoterEvents = loadPromoterEvents();
 
   function persistEvents() {
     writePromoterDashboardEvents(promoterEvents);
   }
 
+  function promoterOrders() {
+    const eventIds = new Set(promoterEvents.map((event) => String(event.id || "")));
+    const promoterEmail = currentPromoterEmail();
+    return readBuyerOrders().filter((order) => {
+      const eventId = String(order?.eventId || "");
+      const ownerEmail = normalizeEmail(order?.promoterEmail || "");
+      if (eventId && eventIds.has(eventId)) return true;
+      if (promoterEmail && ownerEmail && ownerEmail === promoterEmail) return true;
+      return false;
+    });
+  }
+
+  function startOfMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+
+  function monthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function buildMonthlySeries(orders, valueSelector) {
+    const now = new Date();
+    const months = [];
+    for (let offset = 11; offset >= 0; offset -= 1) {
+      months.push(startOfMonth(new Date(now.getFullYear(), now.getMonth() - offset, 1)));
+    }
+    const valuesByKey = months.reduce((acc, date) => {
+      acc[monthKey(date)] = 0;
+      return acc;
+    }, {});
+
+    orders.forEach((order) => {
+      const purchaseDate = new Date(order?.purchaseDate || "");
+      if (Number.isNaN(purchaseDate.getTime())) return;
+      const key = monthKey(startOfMonth(purchaseDate));
+      if (!(key in valuesByKey)) return;
+      valuesByKey[key] += valueSelector(order);
+    });
+
+    return months.map((date) => Math.round(valuesByKey[monthKey(date)]));
+  }
+
   function updatePromoterKpis() {
+    const orders = promoterOrders();
     const upcomingEvents = promoterEvents.filter((event) => classifyEventTab(event) === "upcoming").length;
-    const ticketsSold = promoterEvents.reduce((sum, event) => sum + toNumber(event.ticketsSold), 0);
-    const totalRevenue = promoterEvents.reduce((sum, event) => sum + computeRevenue(event), 0);
+    const ticketsSold = orders.reduce((sum, order) => sum + Math.max(1, toNumber(order?.quantity, 1)), 0);
+    const totalRevenue = orders.reduce((sum, order) => sum + Math.max(0, toNumber(order?.total, 0)), 0);
     const totalNet = Math.round(totalRevenue * 0.92);
     const pendingPayout = Math.round(totalNet * 0.24);
 
@@ -1607,6 +1611,14 @@ function setupPromoterDashboard() {
   function renderEventCards() {
     if (!eventsList) return;
     const rows = promoterEvents.filter((event) => classifyEventTab(event) === currentTab);
+    const orderTotalsByEvent = promoterOrders().reduce((acc, order) => {
+      const eventId = String(order?.eventId || "");
+      if (!eventId) return acc;
+      if (!acc[eventId]) acc[eventId] = { sold: 0, revenue: 0 };
+      acc[eventId].sold += Math.max(1, toNumber(order?.quantity, 1));
+      acc[eventId].revenue += Math.max(0, toNumber(order?.total, 0));
+      return acc;
+    }, {});
     if (!rows.length) {
       eventsList.innerHTML = `<article class="promoter-card"><h3>No events in this tab</h3><p>Create a new event or switch tabs to view existing records.</p></article>`;
       return;
@@ -1616,9 +1628,10 @@ function setupPromoterDashboard() {
       const status = eventStatus(event);
       const statusClass = status.toLowerCase().replace(/\s+/g, "");
       const inventory = totalInventory(event);
-      const sold = Math.min(inventory, toNumber(event.ticketsSold));
+      const soldFromOrders = toNumber(orderTotalsByEvent[event.id]?.sold, 0);
+      const sold = Math.min(inventory, soldFromOrders || toNumber(event.ticketsSold));
       const soldPct = Math.min(100, Math.round((sold / inventory) * 100));
-      const revenue = computeRevenue(event);
+      const revenue = Math.max(0, toNumber(orderTotalsByEvent[event.id]?.revenue, 0) || computeRevenue(event));
       const pauseLabel = status === "Paused" ? "Resume Sales" : "Pause Sales";
       return `
         <article class="promoter-event-card">
@@ -1743,12 +1756,18 @@ function setupPromoterDashboard() {
   }
 
   function downloadCsvForEvent(event) {
-    const totalRows = Math.min(40, Math.max(8, toNumber(event.ticketsSold, 8)));
-    const rows = [];
-    for (let i = 1; i <= totalRows; i += 1) {
-      rows.push(`${event.id}-${String(i).padStart(4, "0")},attendee${i}@example.com,${event.title},${formatDate(event.date)}`);
-    }
-    const csv = ["ticket_id,email,event,date", ...rows].join("\n");
+    const rows = promoterOrders()
+      .filter((order) => String(order?.eventId || "") === String(event.id))
+      .map((order) => [
+        String(order?.id || ""),
+        String(order?.attendee?.email || ""),
+        String(order?.attendee?.name || ""),
+        String(order?.eventTitle || event.title || ""),
+        String(order?.purchaseDate || "").slice(0, 10),
+        Math.max(1, toNumber(order?.quantity, 1)),
+        Math.max(0, toNumber(order?.total, 0))
+      ].join(","));
+    const csv = ["order_id,email,name,event,purchase_date,quantity,total_usd", ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1816,59 +1835,119 @@ function setupPromoterDashboard() {
   function renderHeatmap() {
     const target = root.querySelector("#purchase-heatmap");
     if (!target) return;
-    const slots = ["6a", "9a", "12p", "3p", "6p", "9p"];
+    const orders = promoterOrders();
+    if (!orders.length) {
+      target.innerHTML = `<p class="muted">Purchase heatmap appears after ticket sales are recorded.</p>`;
+      return;
+    }
+    const slots = [
+      { label: "6a", start: 6 },
+      { label: "9a", start: 9 },
+      { label: "12p", start: 12 },
+      { label: "3p", start: 15 },
+      { label: "6p", start: 18 },
+      { label: "9p", start: 21 }
+    ];
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const cells = [];
-    days.forEach((day, dayIndex) => {
-      slots.forEach((slot, slotIndex) => {
-        const intensity = Math.min(1, 0.2 + ((dayIndex * 0.11 + slotIndex * 0.12) % 0.78));
-        const alpha = 0.12 + intensity * 0.58;
-        const volume = Math.round(18 + intensity * 92);
-        cells.push(`<div class="heat-cell" style="background: rgba(249, 115, 22, ${alpha});" title="${day} ${slot}: ${volume} purchases">${volume}</div>`);
-      });
+    const matrix = days.map(() => slots.map(() => 0));
+    orders.forEach((order) => {
+      const date = new Date(order?.purchaseDate || "");
+      if (Number.isNaN(date.getTime())) return;
+      const hour = date.getHours();
+      let slotIndex = 0;
+      for (let i = 0; i < slots.length; i += 1) {
+        if (hour >= slots[i].start) slotIndex = i;
+      }
+      const dayIndex = (date.getDay() + 6) % 7;
+      matrix[dayIndex][slotIndex] += Math.max(1, toNumber(order?.quantity, 1));
     });
-    target.innerHTML = cells.join("");
+    const maxVolume = Math.max(...matrix.flat(), 1);
+    target.innerHTML = matrix
+      .flatMap((row, dayIndex) => row.map((volume, slotIndex) => {
+        const alpha = 0.12 + (volume / maxVolume) * 0.58;
+        return `<div class="heat-cell" style="background: rgba(249, 115, 22, ${alpha});" title="${days[dayIndex]} ${slots[slotIndex].label}: ${volume} purchases">${volume}</div>`;
+      }))
+      .join("");
   }
 
   function renderReferrers() {
     if (!topReferrersBody) return;
-    const rows = [
-      { source: "Instagram", visits: 4820, conversions: 692 },
-      { source: "TikTok", visits: 3765, conversions: 488 },
-      { source: "Direct Link", visits: 2910, conversions: 615 },
-      { source: "Email Campaign", visits: 1980, conversions: 362 },
-      { source: "Partner Site", visits: 1120, conversions: 143 }
-    ];
-    topReferrersBody.innerHTML = rows.map((row) => `<tr><td>${row.source}</td><td>${row.visits.toLocaleString()}</td><td>${row.conversions.toLocaleString()}</td></tr>`).join("");
+    const orders = promoterOrders();
+    if (!orders.length) {
+      topReferrersBody.innerHTML = `<tr><td colspan="3">No referrer data yet.</td></tr>`;
+      return;
+    }
+    const grouped = orders.reduce((acc, order) => {
+      const source = String(order?.referrer || order?.source || "Direct / Unknown");
+      if (!acc[source]) acc[source] = { visits: 0, conversions: 0 };
+      acc[source].visits += 1;
+      acc[source].conversions += Math.max(1, toNumber(order?.quantity, 1));
+      return acc;
+    }, {});
+    const rows = Object.entries(grouped)
+      .map(([source, metrics]) => ({ source, ...metrics }))
+      .sort((a, b) => b.conversions - a.conversions)
+      .slice(0, 5);
+    topReferrersBody.innerHTML = rows
+      .map((row) => `<tr><td>${row.source}</td><td>${row.visits.toLocaleString()}</td><td>${row.conversions.toLocaleString()}</td></tr>`)
+      .join("");
   }
 
   function renderDemographics() {
     const target = root.querySelector("#promoter-demographics");
     if (!target) return;
-    const ranges = {
-      "18-24": 28,
-      "25-34": 41,
-      "35-44": 18,
-      "45-54": 9,
-      "55+": 4
+    const orders = promoterOrders();
+    if (!orders.length) {
+      target.innerHTML = `<p class="muted">Buyer segmentation appears after completed purchases.</p>`;
+      return;
+    }
+    const buyerTotals = orders.reduce((acc, order) => {
+      const email = normalizeEmail(order?.attendee?.email || "");
+      if (!email) return acc;
+      if (!acc[email]) acc[email] = 0;
+      acc[email] += Math.max(1, toNumber(order?.quantity, 1));
+      return acc;
+    }, {});
+    const totals = Object.values(buyerTotals);
+    const buyerCount = totals.length;
+    if (!buyerCount) {
+      target.innerHTML = `<p class="muted">Buyer segmentation appears after completed purchases.</p>`;
+      return;
+    }
+    const segments = {
+      "1 Ticket": totals.filter((qty) => qty === 1).length,
+      "2-4 Tickets": totals.filter((qty) => qty >= 2 && qty <= 4).length,
+      "5+ Tickets": totals.filter((qty) => qty >= 5).length
     };
-    const entries = Object.entries(ranges);
-    target.innerHTML = entries.map(([label, percent]) => `
-      <div class="bar-item">
-        <div class="bar-item-head"><span>${label}</span><strong>${percent}%</strong></div>
-        <div class="bar-track"><div class="bar-fill" style="width:${percent}%"></div></div>
-      </div>
-    `).join("");
+    target.innerHTML = Object.entries(segments)
+      .map(([label, count]) => {
+        const percent = Math.round((count / buyerCount) * 100);
+        return `
+          <div class="bar-item">
+            <div class="bar-item-head"><span>${label}</span><strong>${percent}%</strong></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.max(percent, 2)}%"></div></div>
+          </div>
+        `;
+      })
+      .join("");
   }
 
   function renderPayoutHistory() {
     if (!payoutHistoryBody) return;
+    const orderTotalsByEvent = promoterOrders().reduce((acc, order) => {
+      const eventId = String(order?.eventId || "");
+      if (!eventId) return acc;
+      if (!acc[eventId]) acc[eventId] = 0;
+      acc[eventId] += Math.max(0, toNumber(order?.total, 0));
+      return acc;
+    }, {});
+
     const rows = promoterEvents
       .filter((event) => eventStatus(event) !== "Draft")
       .sort((a, b) => (a.date < b.date ? 1 : -1))
       .slice(0, 8)
       .map((event) => {
-        const gross = computeRevenue(event);
+        const gross = Math.max(0, toNumber(orderTotalsByEvent[event.id], 0) || computeRevenue(event));
         const net = Math.round(gross * 0.92);
         const status = event.date < todayKey ? "Processed" : "Scheduled";
         const statusClass = status === "Processed" ? "approved" : "pending";
@@ -1882,17 +1961,17 @@ function setupPromoterDashboard() {
           </tr>
         `;
       });
-    payoutHistoryBody.innerHTML = rows.join("");
+    payoutHistoryBody.innerHTML = rows.length
+      ? rows.join("")
+      : `<tr><td colspan="5">No payout records available yet.</td></tr>`;
   }
 
   function renderAnalytics() {
     const salesCanvas = root.querySelector("#promoter-sales-chart");
     const revenueCanvas = root.querySelector("#promoter-revenue-chart");
-    const totalSold = promoterEvents.reduce((sum, event) => sum + toNumber(event.ticketsSold), 0);
-    const totalRevenue = promoterEvents.reduce((sum, event) => sum + computeRevenue(event), 0);
-
-    const salesSeries = [12, 18, 22, 26, 33, 38, 44, 51, 48, 56, 63, 70].map((value) => Math.round(value + totalSold * 0.01));
-    const revenueSeries = [1600, 2100, 2400, 2800, 3200, 3600, 3900, 4200, 4600, 5100, 5400, 5900].map((value) => Math.round(value + totalRevenue * 0.001));
+    const orders = promoterOrders();
+    const salesSeries = buildMonthlySeries(orders, (order) => Math.max(1, toNumber(order?.quantity, 1)));
+    const revenueSeries = buildMonthlySeries(orders, (order) => Math.max(0, toNumber(order?.total, 0)));
 
     drawLineChart(salesCanvas, salesSeries, "#f97316");
     drawLineChart(revenueCanvas, revenueSeries, "#ea580c");
@@ -1948,9 +2027,8 @@ function setupPromoterDashboard() {
 
     const existing = promoterEvents.find((event) => event.id === editingEventId);
     const inventory = Math.max(1, data.ticketTypes.reduce((sum, ticket) => sum + toNumber(ticket.quantity), 0) || toNumber(data.capacity, 1));
-    const preservedSold = existing ? Math.min(inventory, toNumber(existing.ticketsSold)) : 0;
-    const sold = asDraft ? 0 : Math.max(preservedSold, Math.round(inventory * 0.22));
-    const average = data.ticketTypes.filter((ticket) => toNumber(ticket.price) > 0).reduce((sum, ticket) => sum + toNumber(ticket.price), 0) / Math.max(1, data.ticketTypes.filter((ticket) => toNumber(ticket.price) > 0).length);
+    const sold = existing ? Math.min(inventory, Math.max(0, toNumber(existing.ticketsSold))) : 0;
+    const revenue = existing ? Math.max(0, toNumber(existing.revenue)) : 0;
 
     const finalEvent = {
       ...(existing || {}),
@@ -1958,7 +2036,7 @@ function setupPromoterDashboard() {
       id: existing?.id || `evt-pr-${Date.now()}`,
       status: asDraft ? "Draft" : "Live",
       ticketsSold: sold,
-      revenue: Math.round(sold * (average || 25)),
+      revenue,
       promoterEmail: normalizeEmail(existing?.promoterEmail || currentPromoterEmail()),
       createdAt: existing?.createdAt || new Date().toISOString()
     };
@@ -2129,6 +2207,13 @@ function setupPromoterDashboard() {
     });
   }
 
+  if (promoterLogoutButton) {
+    promoterLogoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=promoter";
+    });
+  }
+
   promoterEvents.forEach(syncMarketplace);
   updatePromoterKpis();
   renderEventCards();
@@ -2140,19 +2225,31 @@ function setupPromoterDashboard() {
 function setupAdminDashboard() {
   const dashboardRoot = document.querySelector("#admin-dashboard");
   if (!dashboardRoot) return;
-
-  const revenueSeries = {
-    week: [6200, 7100, 6800, 7900, 8200, 9100, 9650],
-    month: [5200, 5600, 6100, 6400, 7000, 7600, 7800, 8200, 8500, 9000, 9400, 9700],
-    quarter: [4800, 5100, 5400, 5900, 6200, 6700, 7200, 7600, 8100, 8500, 8900, 9400]
+  const adminLogoutButton = dashboardRoot.querySelector("[data-admin-logout]");
+  let revenueSeries = {
+    week: Array(7).fill(0),
+    month: Array(12).fill(0),
+    quarter: Array(12).fill(0)
   };
-
-  const ticketByDay = [76, 84, 92, 88, 101, 117, 130];
+  let ticketByDay = Array(7).fill(0);
 
   const approvals = {
     promoter: 0,
     event: 0
   };
+
+  function startOfDay(input) {
+    const date = new Date(input);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function quantityOf(order) {
+    return Math.max(1, toFiniteNumber(order?.quantity, 1));
+  }
+
+  function revenueOf(order) {
+    return Math.max(0, toFiniteNumber(order?.total, 0));
+  }
 
   function countPendingApprovals() {
     const pendingPromoters = dashboardRoot.querySelectorAll('[data-kind="promoter"].is-pending').length;
@@ -2161,23 +2258,96 @@ function setupAdminDashboard() {
     approvals.event = pendingEvents;
     return pendingPromoters + pendingEvents;
   }
+  function deriveMetrics() {
+    const now = new Date();
+    const today = startOfDay(now);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const orders = readBuyerOrders();
+
+    const weekRevenue = Array(7).fill(0);
+    const monthRevenue = Array(12).fill(0);
+    const quarterRevenue = Array(12).fill(0);
+    const weekdayTickets = Array(7).fill(0);
+
+    let revenueAll = 0;
+    let revenueToday = 0;
+    let revenueMonth = 0;
+    let ticketsToday = 0;
+    let ticketsMonth = 0;
+
+    orders.forEach((order) => {
+      const purchaseDate = new Date(order?.purchaseDate || "");
+      if (Number.isNaN(purchaseDate.getTime())) return;
+      const day = startOfDay(purchaseDate);
+      const diffDays = Math.floor((today - day) / (24 * 60 * 60 * 1000));
+      const diffMonths = (now.getFullYear() - purchaseDate.getFullYear()) * 12 + (now.getMonth() - purchaseDate.getMonth());
+      const qty = quantityOf(order);
+      const amount = revenueOf(order);
+
+      revenueAll += amount;
+      if (day.getTime() === today.getTime()) {
+        revenueToday += amount;
+        ticketsToday += qty;
+      }
+      if (purchaseDate >= monthStart) {
+        revenueMonth += amount;
+        ticketsMonth += qty;
+      }
+      if (diffDays >= 0 && diffDays < 7) {
+        weekRevenue[6 - diffDays] += amount;
+      }
+      if (diffDays >= 0 && diffDays < 84) {
+        const weekIndex = 11 - Math.floor(diffDays / 7);
+        monthRevenue[weekIndex] += amount;
+      }
+      if (diffMonths >= 0 && diffMonths < 12) {
+        quarterRevenue[11 - diffMonths] += amount;
+      }
+      if (diffDays >= 0 && diffDays < 30) {
+        const weekdayIndex = (purchaseDate.getDay() + 6) % 7;
+        weekdayTickets[weekdayIndex] += qty;
+      }
+    });
+
+    const promoterEmails = new Set();
+    readPromoterDashboardEvents().forEach((event) => {
+      const email = normalizeEmail(event?.promoterEmail || "");
+      if (email) promoterEmails.add(email);
+    });
+    const profileEmail = normalizeEmail(getPromoterProfileEmail());
+    if (profileEmail) promoterEmails.add(profileEmail);
+
+    return {
+      revenueAll,
+      revenueToday,
+      revenueMonth,
+      ticketsToday,
+      ticketsMonth,
+      newPromoters: promoterEmails.size,
+      weekRevenue: weekRevenue.map((value) => Math.round(value)),
+      monthRevenue: monthRevenue.map((value) => Math.round(value)),
+      quarterRevenue: quarterRevenue.map((value) => Math.round(value)),
+      weekdayTickets: weekdayTickets.map((value) => Math.round(value))
+    };
+  }
 
   function updateKpis() {
+    const metrics = deriveMetrics();
+    revenueSeries = {
+      week: metrics.weekRevenue,
+      month: metrics.monthRevenue,
+      quarter: metrics.quarterRevenue
+    };
+    ticketByDay = metrics.weekdayTickets;
     const events = getAllEvents();
     const activeEvents = events.length;
-    const revenueAll = 1845320;
-    const revenueToday = 12840;
-    const revenueMonth = 248930;
-    const ticketsToday = 512;
-    const ticketsMonth = 14328;
-    const newPromoters = 46;
     const pendingTotal = countPendingApprovals();
 
     const byKpi = {
-      "revenue-all": usd(revenueAll),
-      "tickets-month": ticketsMonth.toLocaleString(),
+      "revenue-all": usd(metrics.revenueAll),
+      "tickets-month": metrics.ticketsMonth.toLocaleString(),
       "active-events": activeEvents.toLocaleString(),
-      "new-promoters": newPromoters.toLocaleString(),
+      "new-promoters": metrics.newPromoters.toLocaleString(),
       "pending-approvals": pendingTotal.toLocaleString()
     };
 
@@ -2187,10 +2357,10 @@ function setupAdminDashboard() {
     });
 
     const revenueSplit = dashboardRoot.querySelector('[data-kpi-detail="revenue-split"]');
-    if (revenueSplit) revenueSplit.textContent = `Today ${usd(revenueToday)} • Month ${usd(revenueMonth)}`;
+    if (revenueSplit) revenueSplit.textContent = `Today ${usd(metrics.revenueToday)} • Month ${usd(metrics.revenueMonth)}`;
 
     const ticketSplit = dashboardRoot.querySelector('[data-kpi-detail="tickets-split"]');
-    if (ticketSplit) ticketSplit.textContent = `Today ${ticketsToday.toLocaleString()} • This month ${ticketsMonth.toLocaleString()}`;
+    if (ticketSplit) ticketSplit.textContent = `Today ${metrics.ticketsToday.toLocaleString()} • This month ${metrics.ticketsMonth.toLocaleString()}`;
 
     const pendingBreakdown = dashboardRoot.querySelector('[data-kpi-detail="pending-breakdown"]');
     if (pendingBreakdown) pendingBreakdown.textContent = `Promoters ${approvals.promoter} • Events ${approvals.event}`;
@@ -2199,26 +2369,43 @@ function setupAdminDashboard() {
   function renderSalesSnapshot() {
     const target = dashboardRoot.querySelector("#sales-snapshot-body");
     if (!target) return;
-    const rows = getAllEvents().slice(0, 6).map((event, index) => {
-      const sold = 180 + index * 42;
-      const gross = sold * event.price;
-      const sellThrough = Math.min(98, Math.round((sold / (event.capacity || 400)) * 100));
-      return `
+    const totalsByEvent = readBuyerOrders().reduce((acc, order) => {
+      const eventId = String(order?.eventId || "");
+      if (!eventId) return acc;
+      if (!acc[eventId]) acc[eventId] = { sold: 0, gross: 0 };
+      acc[eventId].sold += quantityOf(order);
+      acc[eventId].gross += revenueOf(order);
+      return acc;
+    }, {});
+    const rows = getAllEvents()
+      .map((event) => {
+        const totals = totalsByEvent[event.id] || { sold: 0, gross: 0 };
+        const sellThrough = Math.min(100, Math.round((totals.sold / Math.max(1, toFiniteNumber(event.capacity, 1))) * 100));
+        return { event, sold: totals.sold, gross: totals.gross, sellThrough };
+      })
+      .sort((a, b) => b.gross - a.gross)
+      .slice(0, 6)
+      .map((row) => `
         <tr>
-          <td>${event.title}</td>
-          <td>${sold.toLocaleString()}</td>
-          <td>${usd(gross)}</td>
-          <td>${sellThrough}%</td>
+          <td>${row.event.title}</td>
+          <td>${row.sold.toLocaleString()}</td>
+          <td>${usd(row.gross)}</td>
+          <td>${row.sellThrough}%</td>
         </tr>
-      `;
-    });
-    target.innerHTML = rows.join("");
+      `);
+    target.innerHTML = rows.length
+      ? rows.join("")
+      : `<tr><td colspan="4">No sales records available yet.</td></tr>`;
   }
 
   function renderBarList(targetId, mapData) {
     const target = dashboardRoot.querySelector(targetId);
     if (!target) return;
     const sorted = Object.entries(mapData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (!sorted.length) {
+      target.innerHTML = `<p class="muted">No data yet.</p>`;
+      return;
+    }
     const top = sorted[0]?.[1] || 1;
     target.innerHTML = sorted.map(([label, value]) => {
       const width = Math.max(12, Math.round((value / top) * 100));
@@ -2254,8 +2441,7 @@ function setupAdminDashboard() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    const values = revenueSeries[range] || revenueSeries.week;
+    const values = (revenueSeries[range] && revenueSeries[range].length ? revenueSeries[range] : revenueSeries.week) || [0];
     const width = canvas.width;
     const height = canvas.height;
     const padX = 44;
@@ -2321,15 +2507,6 @@ function setupAdminDashboard() {
     }
   }
 
-  function seedActivity() {
-    [
-      "New promoter submitted: Neon Mesa Events",
-      "Payout batch created for 2 promoters",
-      "Support case DSP-3024 moved to Open",
-      "Event flagged for review: Flash Ticket Drop",
-      "Revenue threshold exceeded for daily target"
-    ].reverse().forEach((entry) => addActivity(entry));
-  }
 
   function setApprovalState(row, state) {
     const statusEl = row.querySelector("[data-status]");
@@ -2369,14 +2546,24 @@ function setupAdminDashboard() {
 
   function exportCsv() {
     const events = getAllEvents();
-    const header = ["event_id", "title", "category", "city", "state", "ticket_price"];
+    const totalsByEvent = readBuyerOrders().reduce((acc, order) => {
+      const eventId = String(order?.eventId || "");
+      if (!eventId) return acc;
+      if (!acc[eventId]) acc[eventId] = { sold: 0, gross: 0 };
+      acc[eventId].sold += quantityOf(order);
+      acc[eventId].gross += revenueOf(order);
+      return acc;
+    }, {});
+    const header = ["event_id", "title", "category", "city", "state", "ticket_price", "tickets_sold", "gross_usd"];
     const lines = events.map((event) => [
       event.id,
       `"${String(event.title).replaceAll('"', '""')}"`,
       event.category,
       event.city,
       event.state,
-      event.price
+      event.price,
+      toFiniteNumber(totalsByEvent[event.id]?.sold, 0),
+      toFiniteNumber(totalsByEvent[event.id]?.gross, 0)
     ].join(","));
     const csv = [header.join(","), ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -2432,6 +2619,13 @@ function setupAdminDashboard() {
     });
   }
 
+  if (adminLogoutButton) {
+    adminLogoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=admin";
+    });
+  }
+
   updateKpis();
   renderSalesSnapshot();
   renderTopBreakdowns();
@@ -2441,7 +2635,7 @@ function setupAdminDashboard() {
   setupQuickActions();
   setupRangeSwitch();
   setupSidebarToggle();
-  seedActivity();
+  addActivity("Admin dashboard loaded.");
 }
 
 function setupMobileNav() {
@@ -2608,8 +2802,15 @@ function renderCheckout() {
   const eventId = url.searchParams.get("event");
   const returnedOrderId = String(url.searchParams.get("order") || "").trim();
   const nyvapayStatus = String(url.searchParams.get("nyvapay") || "").trim().toLowerCase();
-  const event = getAllEvents().find((item) => item.id === eventId) || getAllEvents()[0];
-  if (!event) return;
+  const events = getAllEvents();
+  const event = events.find((item) => item.id === eventId) || events[0];
+  if (!event) {
+    summaryEl.innerHTML = `<h2>No events available</h2><p>There are no live events to purchase right now.</p>`;
+    form.classList.add("hidden");
+    result.classList.remove("hidden");
+    result.innerHTML = `<p><a href="events.html">Browse events</a> to check for new listings.</p>`;
+    return;
+  }
 
   summaryEl.innerHTML = `
     <h2>${event.title}</h2>

@@ -30,7 +30,6 @@ function loadEnvironment() {
   const jwtExpiresIn = process.env.JWT_EXPIRES_IN || "8h";
   const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET || (nodeEnv === "production" ? "" : "dev-local-refresh-secret-change-me");
   const refreshTokenExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || "30d";
-  const adminRegistrationKey = process.env.ADMIN_REGISTRATION_KEY || "";
   const seedAdminEmail = process.env.SEED_ADMIN_EMAIL || "";
   const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD || "";
   const smtp2goApiBaseUrl = process.env.SMTP2GO_API_BASE_URL || "https://api.smtp2go.com/v3";
@@ -66,7 +65,6 @@ function loadEnvironment() {
     jwtExpiresIn,
     refreshTokenSecret,
     refreshTokenExpiresIn,
-    adminRegistrationKey,
     seedAdminEmail,
     seedAdminPassword,
     smtp2goApiBaseUrl,

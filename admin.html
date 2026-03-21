@@ -52,6 +52,7 @@
             <p>Monitor revenue, approvals, events, and support operations in one place.</p>
           </div>
           <div class="admin-quick-actions">
+            <button class="btn btn-secondary" type="button" data-admin-logout>Log Out</button>
             <button class="btn btn-primary" data-quick-action="approve-all">Approve Pending</button>
             <button class="btn btn-secondary" data-quick-action="export-csv">Export CSV</button>
             <button class="btn btn-secondary" data-quick-action="export-pdf">Export PDF</button>
@@ -134,32 +135,8 @@
                 </tr>
               </thead>
               <tbody>
-                <tr class="is-pending" data-approval-row data-kind="promoter">
-                  <td>Neon Mesa Events</td>
-                  <td>Albuquerque, NM</td>
-                  <td>2 hours ago</td>
-                  <td><span class="status-pill pending" data-status>Pending</span></td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
-                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
-                  </td>
-                </tr>
-                <tr class="is-pending" data-approval-row data-kind="promoter">
-                  <td>Rio Sound Collective</td>
-                  <td>Santa Fe, NM</td>
-                  <td>5 hours ago</td>
-                  <td><span class="status-pill pending" data-status>Pending</span></td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
-                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
-                  </td>
-                </tr>
-                <tr data-approval-row data-kind="promoter">
-                  <td>Canyon Arts Group</td>
-                  <td>Phoenix, AZ</td>
-                  <td>1 day ago</td>
-                  <td><span class="status-pill approved" data-status>Approved</span></td>
-                  <td><span class="muted">No action required</span></td>
+                <tr>
+                  <td colspan="5">No promoter approvals pending.</td>
                 </tr>
               </tbody>
             </table>
@@ -183,22 +160,7 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>Jasmine Reynolds</td>
-                  <td>jreynolds@example.com</td>
-                  <td>4</td>
-                  <td>Today</td>
-                </tr>
-                <tr>
-                  <td>Marco Diaz</td>
-                  <td>mdiaz@example.com</td>
-                  <td>2</td>
-                  <td>Yesterday</td>
-                </tr>
-                <tr>
-                  <td>Nia Collins</td>
-                  <td>nia.collins@example.com</td>
-                  <td>6</td>
-                  <td>2 days ago</td>
+                  <td colspan="4">No attendee records available yet.</td>
                 </tr>
               </tbody>
             </table>
@@ -222,35 +184,8 @@
                 </tr>
               </thead>
               <tbody>
-                <tr class="is-pending" data-approval-row data-kind="event">
-                  <td>Friday Night Warehouse Session</td>
-                  <td>Neon Mesa Events</td>
-                  <td>Music</td>
-                  <td><span class="status-pill pending" data-status>Pending</span></td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
-                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
-                  </td>
-                </tr>
-                <tr class="is-pending" data-approval-row data-kind="event">
-                  <td>Comedy Open Mic Downtown</td>
-                  <td>Rio Sound Collective</td>
-                  <td>Comedy</td>
-                  <td><span class="status-pill pending" data-status>Pending</span></td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
-                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
-                  </td>
-                </tr>
-                <tr class="is-flagged" data-approval-row data-kind="event">
-                  <td>Flash Ticket Drop</td>
-                  <td>Unknown Promoter</td>
-                  <td>Community</td>
-                  <td><span class="status-pill flagged" data-status>Flagged</span></td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" data-approval-action="approve">Approve</button>
-                    <button class="btn btn-secondary btn-sm" data-approval-action="reject">Reject</button>
-                  </td>
+                <tr>
+                  <td colspan="5">No pending or flagged events.</td>
                 </tr>
               </tbody>
             </table>
@@ -294,16 +229,7 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>Neon Mesa Events</td>
-                  <td>$14,380</td>
-                  <td>Mar 24, 2026</td>
-                  <td><span class="status-pill pending">Scheduled</span></td>
-                </tr>
-                <tr>
-                  <td>Canyon Arts Group</td>
-                  <td>$7,920</td>
-                  <td>Mar 25, 2026</td>
-                  <td><span class="status-pill approved">Ready</span></td>
+                  <td colspan="4">No payout items in queue.</td>
                 </tr>
               </tbody>
             </table>
@@ -340,18 +266,7 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>DSP-3018</td>
-                  <td>Duplicate Charge</td>
-                  <td>Sunset Rooftop Sessions</td>
-                  <td>High</td>
-                  <td><span class="status-pill pending">Investigating</span></td>
-                </tr>
-                <tr>
-                  <td>DSP-3024</td>
-                  <td>Ticket Delivery</td>
-                  <td>Southwest Comedy Night</td>
-                  <td>Medium</td>
-                  <td><span class="status-pill pending">Open</span></td>
+                  <td colspan="5">No open dispute cases.</td>
                 </tr>
               </tbody>
             </table>

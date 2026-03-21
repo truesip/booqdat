@@ -21,7 +21,7 @@
         <a href="events.html">Browse Events</a>
         <a href="promoters.html">For Promoters</a>
         <a href="login.html" class="active">Log In</a>
-        <a href="promoters.html" class="btn btn-primary">Sign Up</a>
+        <a href="signup.html" class="btn btn-primary">Sign Up</a>
       </nav>
     </div>
   </header>
@@ -44,38 +44,7 @@
             <button class="btn btn-primary" type="submit">Sign In</button>
           </form>
           <p id="auth-login-status" class="status"></p>
-          <hr>
-          <h2>Create Account</h2>
-          <form id="auth-register-form" class="stack">
-            <label>
-              Full Name
-              <input name="name" type="text" required placeholder="Jane Doe">
-            </label>
-            <label>
-              Email
-              <input name="email" type="email" required placeholder="you@example.com">
-            </label>
-            <label>
-              Password
-              <input name="password" type="password" required minlength="8" placeholder="At least 8 characters">
-            </label>
-            <label>
-              Account Role
-              <select name="role" required>
-                <option value="">Select role</option>
-                <option value="user">User / Ticket Buyer</option>
-                <option value="promoter">Promoter</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
-            <label>
-              Admin Registration Key (only for admin role)
-              <input name="adminRegistrationKey" type="password" placeholder="Optional unless registering admin">
-            </label>
-            <button class="btn btn-secondary" type="submit">Create Account</button>
-          </form>
-          <p id="auth-register-status" class="status"></p>
-          <p class="auth-foot">Need a promoter profile flow? <a href="promoters.html">Create promoter account</a>.</p>
+          <p class="auth-foot">Need an account? <a href="signup.html">Create one here</a>.</p>
           <p class="auth-foot">Already approved? <a href="promoter-dashboard.html">Go to promoter dashboard</a>.</p>
           <p class="auth-foot">Ticket buyer? <a href="user-portal.html">Open user portal</a>.</p>
           <p class="auth-foot">Platform operator? <a href="admin.html">Open admin dashboard</a>.</p>

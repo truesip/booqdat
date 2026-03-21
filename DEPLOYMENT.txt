@@ -45,7 +45,6 @@ BOOQDAT deployment checklist
   - MAIL_REPLY_TO=<support@your-domain>
   - SUPPORT_EMAIL=<support@your-domain>
   - COMPANY_NAME=BOOQDAT
-  - ADMIN_REGISTRATION_KEY=<optional-for-admin-signups>
   - SEED_ADMIN_EMAIL=<optional-seeded-admin-email>
   - SEED_ADMIN_PASSWORD=<optional-seeded-admin-password>
 - Deploy app
