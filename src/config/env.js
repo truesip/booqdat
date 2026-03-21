@@ -33,10 +33,8 @@ function loadEnvironment() {
   const adminRegistrationKey = process.env.ADMIN_REGISTRATION_KEY || "";
   const seedAdminEmail = process.env.SEED_ADMIN_EMAIL || "";
   const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD || "";
-  const smtp2goHost = process.env.SMTP2GO_HOST || "mail.smtp2go.com";
-  const smtp2goPort = Number(process.env.SMTP2GO_PORT || 2525);
-  const smtp2goUsername = process.env.SMTP2GO_USERNAME || "";
-  const smtp2goPassword = process.env.SMTP2GO_PASSWORD || "";
+  const smtp2goApiBaseUrl = process.env.SMTP2GO_API_BASE_URL || "https://api.smtp2go.com/v3";
+  const smtp2goApiKey = process.env.SMTP2GO_API_KEY || "";
   const mailFrom = process.env.MAIL_FROM || "no-reply@booqdat.com";
   const mailFromName = process.env.MAIL_FROM_NAME || "BOOQDAT";
   const mailReplyTo = process.env.MAIL_REPLY_TO || process.env.SUPPORT_EMAIL || "";
@@ -71,10 +69,8 @@ function loadEnvironment() {
     adminRegistrationKey,
     seedAdminEmail,
     seedAdminPassword,
-    smtp2goHost,
-    smtp2goPort: Number.isFinite(smtp2goPort) ? smtp2goPort : 2525,
-    smtp2goUsername,
-    smtp2goPassword,
+    smtp2goApiBaseUrl,
+    smtp2goApiKey,
     mailFrom,
     mailFromName,
     mailReplyTo,

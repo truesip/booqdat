@@ -1,10 +1,9 @@
-const nodemailer = require("nodemailer");
-
-let transporterCache = null;
-let cacheKey = "";
-
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
 }
 
 function resolveRecipients(value) {
@@ -15,37 +14,41 @@ function resolveRecipients(value) {
   return single ? [single] : [];
 }
 
+function normalizedApiBaseUrl(value) {
+  return normalizeText(value).replace(/\/+$/, "");
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+}
+
+function buildSender(env) {
+  const fromAddress = normalizeText(env.mailFrom);
+  const fromName = normalizeText(env.mailFromName);
+  return fromName ? `${fromName} <${fromAddress}>` : fromAddress;
+}
+
 function isMailerConfigured(env) {
   return Boolean(
-    String(env.smtp2goHost || "").trim() &&
-    Number(env.smtp2goPort) > 0 &&
-    String(env.smtp2goUsername || "").trim() &&
-    String(env.smtp2goPassword || "").trim() &&
-    String(env.mailFrom || "").trim()
+    normalizeText(env.smtp2goApiBaseUrl) &&
+    normalizeText(env.smtp2goApiKey) &&
+    normalizeText(env.mailFrom)
   );
 }
 
-function getTransporter(env) {
-  if (!isMailerConfigured(env)) return null;
-  const nextCacheKey = [
-    env.smtp2goHost,
-    env.smtp2goPort,
-    env.smtp2goUsername,
-    env.smtp2goPassword
-  ].join("|");
-  if (transporterCache && cacheKey === nextCacheKey) return transporterCache;
-
-  transporterCache = nodemailer.createTransport({
-    host: env.smtp2goHost,
-    port: Number(env.smtp2goPort),
-    secure: Number(env.smtp2goPort) === 465,
-    auth: {
-      user: env.smtp2goUsername,
-      pass: env.smtp2goPassword
-    }
-  });
-  cacheKey = nextCacheKey;
-  return transporterCache;
+function resolveApiErrorMessage(payload, fallback) {
+  const candidates = [
+    payload?.data?.error,
+    payload?.data?.message,
+    payload?.error,
+    payload?.message,
+    fallback
+  ];
+  for (const candidate of candidates) {
+    const text = normalizeText(candidate);
+    if (text) return text;
+  }
+  return "SMTP2GO API request failed";
 }
 
 async function sendEmail(env, payload) {
@@ -53,27 +56,68 @@ async function sendEmail(env, payload) {
   if (!recipients.length) {
     return { ok: false, skipped: true, reason: "missing-recipient" };
   }
-
-  const transporter = getTransporter(env);
-  if (!transporter) {
+  if (!isMailerConfigured(env)) {
     return { ok: false, skipped: true, reason: "smtp2go-not-configured" };
   }
 
-  const fromName = String(env.mailFromName || "").trim();
-  const fromAddress = String(env.mailFrom || "").trim();
-  const from = fromName ? `"${fromName}" <${fromAddress}>` : fromAddress;
-  const replyTo = String(payload?.replyTo || env.mailReplyTo || "").trim();
+  const apiBaseUrl = normalizedApiBaseUrl(env.smtp2goApiBaseUrl || "https://api.smtp2go.com/v3");
+  const endpoint = `${apiBaseUrl}/email/send`;
+  const replyTo = normalizeEmail(payload?.replyTo || env.mailReplyTo || "");
+  const sender = buildSender(env);
 
-  await transporter.sendMail({
-    from,
-    to: recipients.join(", "),
-    replyTo: replyTo || undefined,
-    subject: String(payload?.subject || "BOOQDAT Notification"),
-    text: String(payload?.text || ""),
-    html: String(payload?.html || "")
-  });
+  const requestBody = {
+    sender,
+    to: recipients,
+    subject: normalizeText(payload?.subject || "BOOQDAT Notification"),
+    text_body: String(payload?.text || ""),
+    html_body: String(payload?.html || "")
+  };
+  if (isValidEmail(replyTo)) {
+    requestBody.custom_headers = [`Reply-To: ${replyTo}`];
+  }
 
-  return { ok: true, sentTo: recipients };
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Smtp2go-Api-Key": normalizeText(env.smtp2goApiKey)
+      },
+      body: JSON.stringify(requestBody)
+    });
+  } catch {
+    return { ok: false, skipped: true, reason: "smtp2go-request-failed" };
+  }
+
+  const contentType = normalizeText(response.headers.get("content-type")).toLowerCase();
+  const parsed = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null;
+  if (!response.ok) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "smtp2go-api-error",
+      error: resolveApiErrorMessage(parsed, `SMTP2GO API request failed (${response.status})`)
+    };
+  }
+
+  const succeededEntries = Array.isArray(parsed?.data?.succeeded) ? parsed.data.succeeded : [];
+  const failedEntries = Array.isArray(parsed?.data?.failed) ? parsed.data.failed : [];
+  const succeededRecipients = succeededEntries
+    .map((entry) => normalizeEmail(entry?.email || entry))
+    .filter(Boolean);
+  if (failedEntries.length && !succeededRecipients.length) {
+    return { ok: false, skipped: true, reason: "smtp2go-delivery-failed", failed: failedEntries };
+  }
+
+  return {
+    ok: true,
+    sentTo: succeededRecipients.length ? succeededRecipients : recipients,
+    requestId: normalizeText(parsed?.data?.request_id || parsed?.request_id)
+  };
 }
 
 module.exports = {
