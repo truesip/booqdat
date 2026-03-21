@@ -19,6 +19,18 @@ const ROLE_GUARDS_BY_PAGE = {
   "promoter-dashboard.html": ["promoter", "admin"],
   "user-portal.html": ["user", "admin"]
 };
+const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
+const LEGACY_DEMO_EVENT_TITLES = new Set([
+  "sunset rooftop sessions",
+  "southwest comedy night",
+  "high desert boxing showcase",
+  "creative founder meetup",
+  "city food & culture fest",
+  "desert bass weekender",
+  "skyline bass social",
+  "founder mixer: creative southwest",
+  "downtown comedy trial run"
+]);
 
 function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase();
@@ -27,6 +39,34 @@ function normalizeRole(value) {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeEventTitle(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isLegacyDemoEvent(event) {
+  if (!event || typeof event !== "object") return false;
+  const id = String(event.id || "").trim();
+  const title = normalizeEventTitle(event.title);
+  if (LEGACY_DEMO_EVENT_IDS.has(id)) return true;
+  return LEGACY_DEMO_EVENT_TITLES.has(title);
+}
+
+function filterLegacyDemoEvents(events) {
+  return (Array.isArray(events) ? events : []).filter((event) => !isLegacyDemoEvent(event));
+}
+
+function isLegacyDemoOrder(order) {
+  if (!order || typeof order !== "object") return false;
+  const eventId = String(order.eventId || "").trim();
+  const eventTitle = normalizeEventTitle(order.eventTitle);
+  if (LEGACY_DEMO_EVENT_IDS.has(eventId)) return true;
+  return LEGACY_DEMO_EVENT_TITLES.has(eventTitle);
+}
+
+function filterLegacyDemoOrders(orders) {
+  return (Array.isArray(orders) ? orders : []).filter((order) => !isLegacyDemoOrder(order));
 }
 
 function currentPageName() {
@@ -300,9 +340,9 @@ async function hydrateStateFromApi() {
   const role = normalizeRole(data?.auth?.role);
   const canHydrateUserScope = role === "admin" || role === "user";
 
-  if (Array.isArray(data.events)) localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(data.events));
-  if (Array.isArray(data.promoterEvents)) localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(data.promoterEvents));
-  if (canHydrateUserScope && Array.isArray(data.orders)) localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(data.orders));
+  if (Array.isArray(data.events)) localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filterLegacyDemoEvents(data.events)));
+  if (Array.isArray(data.promoterEvents)) localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filterLegacyDemoEvents(data.promoterEvents)));
+  if (canHydrateUserScope && Array.isArray(data.orders)) localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filterLegacyDemoOrders(data.orders)));
   if (canHydrateUserScope && data.userProfiles && typeof data.userProfiles === "object") localStorage.setItem(STORAGE_KEYS.userProfiles, JSON.stringify(data.userProfiles));
   if (canHydrateUserScope && data.userPaymentMethods && typeof data.userPaymentMethods === "object") localStorage.setItem(STORAGE_KEYS.userPaymentMethods, JSON.stringify(data.userPaymentMethods));
   if (canHydrateUserScope && data.userFavorites && typeof data.userFavorites === "object") localStorage.setItem(STORAGE_KEYS.userFavorites, JSON.stringify(data.userFavorites));
@@ -343,15 +383,21 @@ function readStoredEvents() {
     const raw = localStorage.getItem(STORAGE_KEYS.customEvents);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const filtered = filterLegacyDemoEvents(parsed);
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filtered));
+    }
+    return filtered;
   } catch {
     return [];
   }
 }
 
 function writeStoredEvents(events) {
-  localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(events));
-  queueApiSync("events", "/sync/events", { events });
+  const filtered = filterLegacyDemoEvents(events);
+  localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filtered));
+  queueApiSync("events", "/sync/events", { events: filtered });
 }
 
 function upsertStoredEvent(event) {
@@ -375,15 +421,21 @@ function readPromoterDashboardEvents() {
     const raw = localStorage.getItem(STORAGE_KEYS.promoterDashboardEvents);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const filtered = filterLegacyDemoEvents(parsed);
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filtered));
+    }
+    return filtered;
   } catch {
     return [];
   }
 }
 
 function writePromoterDashboardEvents(events) {
-  localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(events));
-  queueApiSync("promoter-events", "/sync/promoter-events", { promoterEvents: events });
+  const filtered = filterLegacyDemoEvents(events);
+  localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filtered));
+  queueApiSync("promoter-events", "/sync/promoter-events", { promoterEvents: filtered });
 }
 
 function readBuyerOrders() {
@@ -391,15 +443,21 @@ function readBuyerOrders() {
     const raw = localStorage.getItem(STORAGE_KEYS.buyerOrders);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const filtered = filterLegacyDemoOrders(parsed);
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filtered));
+    }
+    return filtered;
   } catch {
     return [];
   }
 }
 
 function writeBuyerOrders(orders) {
-  localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(orders));
-  queueApiSync("orders", "/sync/orders", { orders });
+  const filtered = filterLegacyDemoOrders(orders);
+  localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filtered));
+  queueApiSync("orders", "/sync/orders", { orders: filtered });
 }
 
 function addBuyerOrder(order) {

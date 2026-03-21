@@ -30,6 +30,47 @@ function normalizeRole(value) {
   return "";
 }
 
+const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
+const LEGACY_DEMO_EVENT_TITLES = new Set([
+  "sunset rooftop sessions",
+  "southwest comedy night",
+  "high desert boxing showcase",
+  "creative founder meetup",
+  "city food & culture fest",
+  "desert bass weekender",
+  "skyline bass social",
+  "founder mixer: creative southwest",
+  "downtown comedy trial run"
+]);
+
+function normalizeEventTitle(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isLegacyDemoEventData(event) {
+  if (!event || typeof event !== "object") return false;
+  const id = String(event.id || "").trim();
+  const title = normalizeEventTitle(event.title);
+  if (LEGACY_DEMO_EVENT_IDS.has(id)) return true;
+  return LEGACY_DEMO_EVENT_TITLES.has(title);
+}
+
+function filterLegacyDemoEvents(events) {
+  return ensureArray(events).filter((event) => !isLegacyDemoEventData(event));
+}
+
+function isLegacyDemoOrderData(order) {
+  if (!order || typeof order !== "object") return false;
+  const eventId = String(order.eventId || "").trim();
+  const eventTitle = normalizeEventTitle(order.eventTitle);
+  if (LEGACY_DEMO_EVENT_IDS.has(eventId)) return true;
+  return LEGACY_DEMO_EVENT_TITLES.has(eventTitle);
+}
+
+function filterLegacyDemoOrders(orders) {
+  return ensureArray(orders).filter((order) => !isLegacyDemoOrderData(order));
+}
+
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -992,8 +1033,8 @@ function createApiRouter(env) {
 
       const basePayload = {
         ok: true,
-        events: events.map((item) => item.data),
-        promoterEvents: promoterEvents.map((item) => item.data),
+        events: filterLegacyDemoEvents(events.map((item) => item.data)),
+        promoterEvents: filterLegacyDemoEvents(promoterEvents.map((item) => item.data)),
         orders: [],
         userProfiles: {},
         userPaymentMethods: {},
@@ -1016,7 +1057,7 @@ function createApiRouter(env) {
         ]);
         res.status(200).json({
           ...basePayload,
-          orders: orders.map((item) => item.data),
+          orders: filterLegacyDemoOrders(orders.map((item) => item.data)),
           userProfiles: toProfileMap(profiles),
           userPaymentMethods: toMethodsMap(paymentMethods),
           userFavorites: toFavoritesMap(favorites)
@@ -1034,7 +1075,7 @@ function createApiRouter(env) {
         ]);
         res.status(200).json({
           ...basePayload,
-          orders: orders.map((item) => item.data),
+          orders: filterLegacyDemoOrders(orders.map((item) => item.data)),
           userProfiles: toProfileMap(profiles),
           userPaymentMethods: toMethodsMap(paymentMethods),
           userFavorites: toFavoritesMap(favorites)
@@ -1050,7 +1091,7 @@ function createApiRouter(env) {
 
   router.put("/sync/events", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
-      const incoming = ensureArray(req.body?.events).filter((item) => item && typeof item.id === "string");
+      const incoming = filterLegacyDemoEvents(ensureArray(req.body?.events).filter((item) => item && typeof item.id === "string"));
       const rows = incoming.map((item) => ({ eventId: item.id, data: item }));
       const count = await upsertRows(AppEvent, rows, "eventId", (item) => ({ data: item.data }));
       res.status(200).json({ ok: true, synced: count });
@@ -1076,7 +1117,7 @@ function createApiRouter(env) {
 
   router.put("/sync/promoter-events", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
-      const incoming = ensureArray(req.body?.promoterEvents).filter((item) => item && typeof item.id === "string");
+      const incoming = filterLegacyDemoEvents(ensureArray(req.body?.promoterEvents).filter((item) => item && typeof item.id === "string"));
       const rows = incoming.map((item) => ({ eventId: item.id, data: item }));
       const count = await upsertRows(PromoterEvent, rows, "eventId", (item) => ({ data: item.data }));
       res.status(200).json({ ok: true, synced: count });
@@ -1089,7 +1130,7 @@ function createApiRouter(env) {
     try {
       const role = normalizeRole(req.auth?.role);
       const sessionEmail = normalizeEmail(req.auth?.email);
-      let incoming = ensureArray(req.body?.orders).filter((item) => item && typeof item.id === "string");
+      let incoming = filterLegacyDemoOrders(ensureArray(req.body?.orders).filter((item) => item && typeof item.id === "string"));
       if (role === "user") {
         incoming = incoming.filter((item) => normalizeEmail(item?.attendee?.email) === sessionEmail);
       }
