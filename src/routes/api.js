@@ -155,6 +155,36 @@ function isPendingReviewEventStatus(value) {
     || status.includes("flag");
 }
 
+function toCanonicalEventStatus(value) {
+  const status = normalizeLifecycleStatus(value);
+  if (isLiveEventStatus(status)) return "Live";
+  if (status === "paused") return "Paused";
+  if (status === "draft") return "Draft";
+  if (status.includes("reject")) return "Rejected";
+  if (status.includes("flag")) return "Flagged";
+  if (isPendingReviewEventStatus(status)) return "Pending Approval";
+  return "";
+}
+
+function normalizePromoterEventStatusForRole(role, requestedStatus, previousStatus) {
+  const roleValue = normalizeRole(role);
+  const requestedCanonical = toCanonicalEventStatus(requestedStatus);
+  const previousCanonical = toCanonicalEventStatus(previousStatus) || "Pending Approval";
+  if (roleValue !== "promoter") {
+    return requestedCanonical || previousCanonical;
+  }
+  const wasLiveCapable = previousCanonical === "Live" || previousCanonical === "Paused";
+  if (requestedCanonical === "Draft") return "Draft";
+  if (requestedCanonical === "Pending Approval") return "Pending Approval";
+  if (requestedCanonical === "Live" || requestedCanonical === "Paused") {
+    return wasLiveCapable ? requestedCanonical : "Pending Approval";
+  }
+  if (requestedCanonical === "Flagged" || requestedCanonical === "Rejected") {
+    return previousCanonical;
+  }
+  return wasLiveCapable ? previousCanonical : "Pending Approval";
+}
+
 function isSettledOrderData(order) {
   const status = normalizeLifecycleStatus(order?.status);
   const paymentStatus = normalizeLifecycleStatus(order?.paymentStatus);
@@ -1206,25 +1236,53 @@ function createApiRouter(env) {
 
   router.put("/sync/events", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
       const incoming = filterLegacyDemoEvents(ensureArray(req.body?.events).filter((item) => item && typeof item.id === "string"));
       const rows = [];
       const removeIds = [];
+      const unauthorizedIds = [];
+      const incomingEventIds = incoming
+        .map((item) => truncateText(item?.id, 120))
+        .filter(Boolean);
+      const promoterRows = role === "promoter" && incomingEventIds.length
+        ? await PromoterEvent.find({ eventId: { $in: incomingEventIds } }).lean()
+        : [];
+      const promoterByEventId = new Map(promoterRows.map((row) => [row?.eventId, row?.data && typeof row.data === "object" ? row.data : {}]));
       incoming.forEach((item) => {
         const eventId = truncateText(item?.id, 120);
         if (!eventId) return;
-        if (isLiveEventStatus(item?.status || "live")) {
-          rows.push({
-            eventId,
-            data: {
-              ...item,
-              id: eventId,
-              status: "Live"
-            }
-          });
+        const incomingStatus = normalizeLifecycleStatus(item?.status);
+        if (!isLiveEventStatus(incomingStatus)) {
+          removeIds.push(eventId);
           return;
         }
-        removeIds.push(eventId);
+        if (role === "promoter") {
+          const promoterEvent = promoterByEventId.get(eventId);
+          const promoterEventStatus = normalizeLifecycleStatus(promoterEvent?.status);
+          const ownerEmail = normalizeEmail(promoterEvent?.promoterEmail);
+          if (!promoterEvent || (ownerEmail && ownerEmail !== sessionEmail)) {
+            unauthorizedIds.push(eventId);
+            return;
+          }
+          if (!isLiveEventStatus(promoterEventStatus)) {
+            removeIds.push(eventId);
+            return;
+          }
+        }
+        rows.push({
+          eventId,
+          data: {
+            ...item,
+            id: eventId,
+            status: "Live"
+          }
+        });
       });
+      if (unauthorizedIds.length) {
+        res.status(403).json({ ok: false, error: "Cannot sync events outside your promoter account scope" });
+        return;
+      }
       const count = await upsertRows(AppEvent, rows, "eventId", (item) => ({ data: item.data }));
       let removed = 0;
       if (removeIds.length) {
@@ -1254,8 +1312,50 @@ function createApiRouter(env) {
 
   router.put("/sync/promoter-events", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      if (role === "promoter" && !sessionEmail) {
+        res.status(403).json({ ok: false, error: "Authenticated promoter email is required" });
+        return;
+      }
       const incoming = filterLegacyDemoEvents(ensureArray(req.body?.promoterEvents).filter((item) => item && typeof item.id === "string"));
-      const rows = incoming.map((item) => ({ eventId: item.id, data: item }));
+      const incomingEventIds = incoming
+        .map((item) => truncateText(item?.id, 120))
+        .filter(Boolean);
+      const existingRows = incomingEventIds.length
+        ? await PromoterEvent.find({ eventId: { $in: incomingEventIds } }).lean()
+        : [];
+      const existingByEventId = new Map(existingRows.map((row) => [row?.eventId, row?.data && typeof row.data === "object" ? row.data : {}]));
+      const unauthorizedIds = [];
+      const rows = incoming
+        .map((item) => {
+          const eventId = truncateText(item?.id, 120);
+          if (!eventId) return null;
+          const existingEvent = existingByEventId.get(eventId) || {};
+          const existingOwnerEmail = normalizeEmail(existingEvent?.promoterEmail);
+          if (role === "promoter" && existingOwnerEmail && existingOwnerEmail !== sessionEmail) {
+            unauthorizedIds.push(eventId);
+            return null;
+          }
+          const resolvedStatus = normalizePromoterEventStatusForRole(role, item?.status, existingEvent?.status);
+          const resolvedPromoterEmail = role === "promoter"
+            ? sessionEmail
+            : normalizeEmail(item?.promoterEmail || existingOwnerEmail || "");
+          return {
+            eventId,
+            data: {
+              ...item,
+              id: eventId,
+              status: resolvedStatus,
+              promoterEmail: resolvedPromoterEmail
+            }
+          };
+        })
+        .filter(Boolean);
+      if (unauthorizedIds.length) {
+        res.status(403).json({ ok: false, error: "Cannot modify promoter events outside your account scope" });
+        return;
+      }
       const count = await upsertRows(PromoterEvent, rows, "eventId", (item) => ({ data: item.data }));
       res.status(200).json({ ok: true, synced: count });
     } catch (error) {

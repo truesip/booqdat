@@ -568,6 +568,7 @@ function mapPromoterEventToMarketplaceEvent(event) {
     price,
     capacity,
     description: String(event.description || ""),
+    status: "Live",
     banner,
     imageGallery,
     promoterEmail: normalizeEmail(event.promoterEmail || "")
@@ -578,7 +579,7 @@ function getAllEvents() {
   const merged = new Map();
   readStoredEvents().forEach((event) => {
     if (!event || typeof event !== "object") return;
-    if (!isMarketplaceLiveEventStatus(event?.status || "Live")) return;
+    if (!isMarketplaceLiveEventStatus(event?.status)) return;
     const id = String(event.id || "").trim();
     if (!id) return;
     merged.set(id, event);
@@ -1553,7 +1554,7 @@ function setupPromoterDashboard() {
     }
     if (toNumber(event.ticketsSold) >= totalInventory(event)) return "Sold Out";
     if (event.date && event.date < todayKey) return "Past";
-    return "Live";
+    return "Pending Approval";
   }
 
   function classifyEventTab(event) {
@@ -1602,6 +1603,7 @@ function setupPromoterDashboard() {
       price: minPrice,
       capacity: totalInventory(event),
       description: event.description || "",
+      status: "Live",
       banner,
       imageGallery,
       promoterEmail: normalizeEmail(event.promoterEmail || currentPromoterEmail())
@@ -1711,7 +1713,7 @@ function setupPromoterDashboard() {
         ? normalizeImageList(event.imageGallery)
         : normalizeImageList(event.images),
       promoCodes: Array.isArray(event.promoCodes) ? event.promoCodes : [],
-      status: String(event.status || "Live"),
+      status: String(event.status || "Pending Approval"),
       ticketsSold,
       revenue: Math.max(0, toNumber(event.revenue, inferredRevenue)),
       promoterEmail: normalizeEmail(event.promoterEmail || currentPromoterEmail()),
