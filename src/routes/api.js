@@ -174,6 +174,19 @@ function createApiRouter(env) {
   const companyName = String(env.companyName || "BOOQDAT");
   const supportEmail = String(env.supportEmail || env.mailReplyTo || env.mailFrom || "");
 
+  router.use((req, res, next) => {
+    delete req.headers["if-none-match"];
+    delete req.headers["if-modified-since"];
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
+      Expires: "0",
+      "Surrogate-Control": "no-store"
+    });
+    res.vary("Authorization");
+    next();
+  });
+
   async function sendTemplateEmail(recipient, template, contextLabel) {
     if (!isValidEmail(recipient)) {
       return { ok: false, skipped: true, reason: "invalid-recipient" };

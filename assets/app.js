@@ -284,6 +284,7 @@ async function apiRequest(path, options = {}) {
     if (token) headers.Authorization = `Bearer ${token}`;
     const response = await fetch(`${API_BASE}${path}`, {
       method: options.method || "GET",
+      cache: "no-store",
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined
     });
@@ -847,6 +848,18 @@ function setupAuthPage() {
   if (!loginForm && !registerForm) return;
 
   const url = new URL(window.location.href);
+  const sensitiveAuthParams = ["email", "password", "token", "accessToken", "refreshToken"];
+  let strippedSensitiveParams = false;
+  sensitiveAuthParams.forEach((param) => {
+    if (!url.searchParams.has(param)) return;
+    url.searchParams.delete(param);
+    strippedSensitiveParams = true;
+  });
+  if (strippedSensitiveParams) {
+    const nextQuery = url.searchParams.toString();
+    const safeUrl = `${url.pathname}${nextQuery ? `?${nextQuery}` : ""}${url.hash || ""}`;
+    window.history.replaceState({}, "", safeUrl);
+  }
   const redirectPath = sanitizeRedirectPath(url.searchParams.get("redirect"));
   const requiredRole = normalizeRole(url.searchParams.get("role"));
   const isSignupPage = currentPageName() === "signup.html";
