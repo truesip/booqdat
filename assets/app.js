@@ -555,6 +555,7 @@ function upsertPromoterDashboardEventFromSimple(event) {
     venue: event.venue || "Venue TBA",
     city: event.city || "Albuquerque",
     state: event.state || "NM",
+    country: event.country || "",
     capacity: ticketQty,
     ticketTypes: [
       {
@@ -628,6 +629,7 @@ function mapPromoterEventToMarketplaceEvent(event) {
     venue: String(event.venue || "Venue TBA"),
     city: String(event.city || "Albuquerque"),
     state: String(event.state || "NM"),
+    country: String(event.country || ""),
     date: String(event.date || ""),
     time: String(event.time || "19:00"),
     price,
@@ -670,7 +672,15 @@ function usd(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 }
 
+function formatLocationLine(placeLike) {
+  const city = String(placeLike?.city || "").trim();
+  const state = String(placeLike?.state || "").trim();
+  const country = String(placeLike?.country || "").trim();
+  return [city, state, country].filter(Boolean).join(", ");
+}
+
 function createEventCard(event) {
+  const location = formatLocationLine(event) || "Location TBA";
   return `
     <article class="event-card">
       <div class="event-banner">
@@ -679,7 +689,7 @@ function createEventCard(event) {
       <div class="event-body">
         <h3>${event.title}</h3>
         <div class="event-meta">${formatDate(event.date)} • ${formatTime(event.time)}</div>
-        <div class="event-meta">${event.venue}, ${event.city}, ${event.state}</div>
+        <div class="event-meta">${event.venue}, ${location}</div>
         <div class="event-actions">
           <span class="event-price">From ${usd(event.price)}</span>
           <a href="checkout.html?event=${encodeURIComponent(event.id)}" class="btn btn-primary">Buy Tickets</a>
@@ -726,7 +736,7 @@ function renderBrowseEvents() {
     const category = categorySelect.value;
 
     const filtered = events.filter((event) => {
-      const textMatch = !query || `${event.title} ${event.venue} ${event.city}`.toLowerCase().includes(query);
+      const textMatch = !query || `${event.title} ${event.venue} ${event.city} ${event.state || ""} ${event.country || ""}`.toLowerCase().includes(query);
       const cityMatch = !city || event.city === city;
       const categoryMatch = !category || event.category === category;
       return textMatch && cityMatch && categoryMatch;
@@ -1028,7 +1038,7 @@ function setupUserPortal() {
       `DTSTART:${formatIcs(dt)}`,
       `DTEND:${formatIcs(end)}`,
       `SUMMARY:${order.eventTitle}`,
-      `LOCATION:${order.venue}, ${order.city}, ${order.state}`,
+      `LOCATION:${order.venue}, ${formatLocationLine(order)}`,
       `DESCRIPTION:Ticket token ${order.ticketToken}`,
       "END:VEVENT",
       "END:VCALENDAR"
@@ -1172,7 +1182,7 @@ function setupUserPortal() {
     const card = (event, isSaved) => `
       <article class="favorite-card">
         <h4>${event.title}</h4>
-        <p>${formatDate(event.date)} • ${event.city}, ${event.state}</p>
+        <p>${formatDate(event.date)} • ${formatLocationLine(event) || "Location TBA"}</p>
         <p>From ${usd(event.price)}</p>
         <div class="ticket-actions">
           <a href="checkout.html?event=${encodeURIComponent(event.id)}" class="btn btn-secondary">Buy</a>
@@ -1555,6 +1565,7 @@ function setupPromoterDashboard() {
       venue: event.venue || "Venue TBA",
       city: event.city || "Albuquerque",
       state: event.state || "NM",
+      country: event.country || "",
       date: event.date || dateOffset(14),
       time: event.time || "19:00",
       price: minPrice,
@@ -1608,6 +1619,7 @@ function setupPromoterDashboard() {
       venue: String(event.venue || ""),
       city: String(event.city || ""),
       state: String(event.state || ""),
+      country: String(event.country || ""),
       capacity: inventory,
       ticketTypes,
       banner: String(event.banner || ""),
@@ -1728,7 +1740,7 @@ function setupPromoterDashboard() {
             <h3>${event.title}</h3>
             <span class="promoter-status-pill ${statusClass}">${status}</span>
           </div>
-          <p class="promoter-meta">${formatDate(event.date)} • ${formatTime(event.time)} • ${event.venue}, ${event.city}</p>
+          <p class="promoter-meta">${formatDate(event.date)} • ${formatTime(event.time)} • ${event.venue}, ${formatLocationLine(event) || "Location TBA"}</p>
           <div class="progress-inline">
             <span><strong>Tickets Sold</strong><strong>${soldPct}%</strong></span>
             <div class="bar-track"><div class="bar-fill" style="width:${soldPct}%"></div></div>
@@ -1792,6 +1804,7 @@ function setupPromoterDashboard() {
       venue: String(formData.get("venue") || "").trim(),
       city: String(formData.get("city") || "").trim(),
       state: String(formData.get("state") || "").trim(),
+      country: String(formData.get("country") || "").trim(),
       capacity: toNumber(formData.get("capacity"), 1),
       ticketTypes: ticketTypes.length ? ticketTypes : createDefaultTicketTypes(),
       banner: String(formData.get("banner") || "").trim(),
@@ -1811,7 +1824,7 @@ function setupPromoterDashboard() {
         <li><strong>Category:</strong> ${data.category}</li>
         <li><strong>Date & Time:</strong> ${data.date ? `${formatDate(data.date)} at ${formatTime(data.time)}` : "Not set"}</li>
         <li><strong>Venue:</strong> ${data.venue || "Venue not set"} (${data.venueType})</li>
-        <li><strong>Location:</strong> ${data.city || "City"}, ${data.state || "State"}</li>
+        <li><strong>Location:</strong> ${formatLocationLine(data) || "Not set"}</li>
         <li><strong>Capacity:</strong> ${data.capacity.toLocaleString()}</li>
         <li><strong>Ticket Types:</strong> ${data.ticketTypes.map((ticket) => `${ticket.name} ${usd(ticket.price)} x ${ticket.quantity}`).join(" • ")}</li>
         <li><strong>Promo Codes:</strong> ${data.promoCodes.length ? data.promoCodes.join(", ") : "None"}</li>
@@ -2080,6 +2093,7 @@ function setupPromoterDashboard() {
     setWizardInput("venue", event.venue);
     setWizardInput("city", event.city);
     setWizardInput("state", event.state);
+    setWizardInput("country", event.country || "");
     setWizardInput("capacity", event.capacity);
 
     const ga = (event.ticketTypes || []).find((ticket) => ticket.name === "General Admission") || {};
@@ -2094,6 +2108,8 @@ function setupPromoterDashboard() {
     setWizardInput("vipEnd", vip.salesEnd || "");
     setWizardInput("banner", event.banner || "");
     setWizardInput("promoCodes", (event.promoCodes || []).join(", "));
+    const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
+    if (imageUploads && "value" in imageUploads) imageUploads.value = "";
   }
 
   function resetWizardState() {
@@ -2102,8 +2118,41 @@ function setupPromoterDashboard() {
     if (wizardOutput) wizardOutput.classList.add("hidden");
     setWizardStep(1);
   }
+  const MAX_WIZARD_IMAGE_UPLOADS = 3;
+  const MAX_WIZARD_IMAGE_BYTES = 2 * 1024 * 1024;
 
-  function saveWizardEvent(asDraft) {
+  function readImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Unable to read image file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function collectWizardUploadedImages() {
+    const input = wizardForm?.elements?.namedItem("imageUploads");
+    if (!input || !("files" in input)) return { ok: true, images: [] };
+    const files = Array.from(input.files || [])
+      .filter((file) => String(file?.type || "").toLowerCase().startsWith("image/"))
+      .slice(0, MAX_WIZARD_IMAGE_UPLOADS);
+    for (const file of files) {
+      if (Number(file.size || 0) > MAX_WIZARD_IMAGE_BYTES) {
+        return {
+          ok: false,
+          error: `"${file.name}" exceeds 2MB. Please upload a smaller image.`
+        };
+      }
+    }
+    try {
+      const images = await Promise.all(files.map((file) => readImageFileAsDataUrl(file)));
+      return { ok: true, images: images.filter(Boolean) };
+    } catch {
+      return { ok: false, error: "Unable to process uploaded images. Please try again." };
+    }
+  }
+
+  async function saveWizardEvent(asDraft) {
     for (let step = 1; step <= 4; step += 1) {
       if (!validateStep(step)) {
         setWizardStep(step);
@@ -2113,15 +2162,28 @@ function setupPromoterDashboard() {
 
     const data = collectWizardData();
     if (!data) return;
+    const uploadedImagesResult = await collectWizardUploadedImages();
+    if (!uploadedImagesResult.ok) {
+      showFeedback(uploadedImagesResult.error);
+      return;
+    }
+    const uploadedImages = uploadedImagesResult.images;
 
     const existing = promoterEvents.find((event) => event.id === editingEventId);
     const inventory = Math.max(1, data.ticketTypes.reduce((sum, ticket) => sum + toNumber(ticket.quantity), 0) || toNumber(data.capacity, 1));
     const sold = existing ? Math.min(inventory, Math.max(0, toNumber(existing.ticketsSold))) : 0;
     const revenue = existing ? Math.max(0, toNumber(existing.revenue)) : 0;
+    const previousImageGallery = Array.isArray(existing?.imageGallery)
+      ? existing.imageGallery.filter((item) => typeof item === "string" && item.trim())
+      : [];
+    const imageGallery = uploadedImages.length ? uploadedImages : previousImageGallery;
+    const resolvedBanner = data.banner || imageGallery[0] || String(existing?.banner || "").trim();
 
     const finalEvent = {
       ...(existing || {}),
       ...data,
+      banner: resolvedBanner,
+      imageGallery,
       id: existing?.id || `evt-pr-${Date.now()}`,
       status: asDraft ? "Draft" : "Live",
       ticketsSold: sold,
@@ -2229,10 +2291,14 @@ function setupPromoterDashboard() {
     wizardPrev.addEventListener("click", () => setWizardStep(currentStep - 1));
   }
   if (wizardDraft) {
-    wizardDraft.addEventListener("click", () => saveWizardEvent(true));
+    wizardDraft.addEventListener("click", () => {
+      void saveWizardEvent(true);
+    });
   }
   if (wizardPublish) {
-    wizardPublish.addEventListener("click", () => saveWizardEvent(false));
+    wizardPublish.addEventListener("click", () => {
+      void saveWizardEvent(false);
+    });
   }
 
   root.querySelectorAll("[data-scroll-create]").forEach((button) => {
@@ -2857,6 +2923,7 @@ function setupPromoterAccount() {
       venue: raw.venue,
       city: raw.city,
       state: raw.state,
+      country: raw.country,
       date: raw.date,
       time: raw.time,
       price: Number(raw.price),
@@ -2904,7 +2971,7 @@ function renderCheckout() {
   summaryEl.innerHTML = `
     <h2>${event.title}</h2>
     <p><strong>Date:</strong> ${formatDate(event.date)} at ${formatTime(event.time)}</p>
-    <p><strong>Venue:</strong> ${event.venue}, ${event.city}, ${event.state}</p>
+    <p><strong>Venue:</strong> ${event.venue}, ${formatLocationLine(event) || "Location TBA"}</p>
     <p><strong>Ticket Price:</strong> ${usd(event.price)}</p>
     <p>${event.description || "Event details available after purchase confirmation."}</p>
   `;
@@ -2965,6 +3032,7 @@ function renderCheckout() {
       venue: event.venue,
       city: event.city,
       state: event.state,
+      country: event.country,
       attendee: {
         name: attendeeName,
         email: normalizedEmail,

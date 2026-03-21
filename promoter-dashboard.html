@@ -170,6 +170,51 @@
                 </label>
               </div>
               <label>
+                Country
+                <select name="country" required>
+                  <option value="">Select country</option>
+                  <option value="United States">United States</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Mexico">Mexico</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Ireland">Ireland</option>
+                  <option value="France">France</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Spain">Spain</option>
+                  <option value="Italy">Italy</option>
+                  <option value="Netherlands">Netherlands</option>
+                  <option value="Sweden">Sweden</option>
+                  <option value="Norway">Norway</option>
+                  <option value="Denmark">Denmark</option>
+                  <option value="Switzerland">Switzerland</option>
+                  <option value="Portugal">Portugal</option>
+                  <option value="Nigeria">Nigeria</option>
+                  <option value="Ghana">Ghana</option>
+                  <option value="Kenya">Kenya</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="India">India</option>
+                  <option value="Pakistan">Pakistan</option>
+                  <option value="Bangladesh">Bangladesh</option>
+                  <option value="United Arab Emirates">United Arab Emirates</option>
+                  <option value="Saudi Arabia">Saudi Arabia</option>
+                  <option value="Singapore">Singapore</option>
+                  <option value="Malaysia">Malaysia</option>
+                  <option value="Philippines">Philippines</option>
+                  <option value="Indonesia">Indonesia</option>
+                  <option value="Japan">Japan</option>
+                  <option value="South Korea">South Korea</option>
+                  <option value="China">China</option>
+                  <option value="Australia">Australia</option>
+                  <option value="New Zealand">New Zealand</option>
+                  <option value="Brazil">Brazil</option>
+                  <option value="Argentina">Argentina</option>
+                  <option value="Colombia">Colombia</option>
+                  <option value="Chile">Chile</option>
+                  <option value="Peru">Peru</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label>
                 Capacity
                 <input name="capacity" type="number" min="1" step="1" required placeholder="450">
               </label>
@@ -228,16 +273,21 @@
             </section>
 
             <section class="wizard-step" data-step="4">
-              <h3>Step 4: Image/Banner + Promo Codes</h3>
+              <h3>Step 4: Assets & Promo</h3>
               <label>
                 Banner Image URL
                 <input name="banner" type="url" placeholder="https://example.com/event-banner.jpg">
               </label>
               <label>
+                Upload Event Images (optional)
+                <input name="imageUploads" type="file" accept="image/*" multiple>
+              </label>
+              <p class="muted">Upload up to 3 images. If Banner URL is empty, the first uploaded image is used as the event banner.</p>
+              <label>
                 Promo Codes (comma-separated)
                 <input name="promoCodes" type="text" placeholder="EARLY10,VIP20">
               </label>
-              <p class="muted">Tip: Leave banner empty to use BOOQDAT default event styling.</p>
+              <p class="muted">Tip: Banner URL is optional. Leave it empty to use uploaded images or BOOQDAT default event styling.</p>
             </section>
 
             <section class="wizard-step" data-step="5">

@@ -815,6 +815,7 @@ function createApiRouter(env) {
         venue: truncateText(incomingOrder?.venue || req.body?.venue, 200),
         city: truncateText(incomingOrder?.city || req.body?.city, 120),
         state: truncateText(incomingOrder?.state || req.body?.state, 120),
+        country: truncateText(incomingOrder?.country || req.body?.country, 120),
         attendee: {
           name: attendeeName,
           email: attendeeEmail,
