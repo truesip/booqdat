@@ -582,6 +582,25 @@ function toFiniteNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeLifecycleStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isSettledOrderForMetrics(order) {
+  const status = normalizeLifecycleStatus(order?.status);
+  const paymentStatus = normalizeLifecycleStatus(order?.paymentStatus);
+
+  if (status.includes("refund") || paymentStatus.includes("refund")) return false;
+
+  if (["paid", "completed", "confirmed", "succeeded", "successful", "settled", "captured"].includes(paymentStatus)) {
+    return true;
+  }
+  if (["paid", "completed", "confirmed"].includes(status)) {
+    return true;
+  }
+  return false;
+}
+
 function ticketTypeAveragePrice(ticketTypes = [], fallback = 25) {
   const prices = ticketTypes
     .map((ticket) => toFiniteNumber(ticket?.price, 0))
@@ -1619,6 +1638,7 @@ function setupPromoterDashboard() {
     const eventIds = new Set(promoterEvents.map((event) => String(event.id || "")));
     const promoterEmail = currentPromoterEmail();
     return readBuyerOrders().filter((order) => {
+      if (!isSettledOrderForMetrics(order)) return false;
       const eventId = String(order?.eventId || "");
       const ownerEmail = normalizeEmail(order?.promoterEmail || "");
       if (eventId && eventIds.has(eventId)) return true;
@@ -2331,7 +2351,7 @@ function setupAdminDashboard() {
     const now = new Date();
     const today = startOfDay(now);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const orders = readBuyerOrders();
+    const orders = readBuyerOrders().filter(isSettledOrderForMetrics);
 
     const weekRevenue = Array(7).fill(0);
     const monthRevenue = Array(12).fill(0);
@@ -2438,7 +2458,7 @@ function setupAdminDashboard() {
   function renderSalesSnapshot() {
     const target = dashboardRoot.querySelector("#sales-snapshot-body");
     if (!target) return;
-    const totalsByEvent = readBuyerOrders().reduce((acc, order) => {
+    const totalsByEvent = readBuyerOrders().filter(isSettledOrderForMetrics).reduce((acc, order) => {
       const eventId = String(order?.eventId || "");
       if (!eventId) return acc;
       if (!acc[eventId]) acc[eventId] = { sold: 0, gross: 0 };
@@ -2615,7 +2635,7 @@ function setupAdminDashboard() {
 
   function exportCsv() {
     const events = getAllEvents();
-    const totalsByEvent = readBuyerOrders().reduce((acc, order) => {
+    const totalsByEvent = readBuyerOrders().filter(isSettledOrderForMetrics).reduce((acc, order) => {
       const eventId = String(order?.eventId || "");
       if (!eventId) return acc;
       if (!acc[eventId]) acc[eventId] = { sold: 0, gross: 0 };
