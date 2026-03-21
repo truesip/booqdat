@@ -66,6 +66,13 @@ app.get("/healthz", (_req, res) => {
     environment: env.nodeEnv
   });
 });
+app.post("/login.html", (_req, res) => {
+  res.redirect(303, "/login.html");
+});
+
+app.post("/user-portal.html", (_req, res) => {
+  res.redirect(303, "/user-portal.html");
+});
 
 app.use("/api", createApiRouter(env));
 app.use(express.static(rootDir, { extensions: ["html"] }));
