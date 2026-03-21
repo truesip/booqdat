@@ -75,6 +75,15 @@ app.post("/user-portal.html", (_req, res) => {
 });
 
 app.use("/api", createApiRouter(env));
+app.use((req, res, next) => {
+  const requestPath = String(req.path || "").toLowerCase();
+  if (req.method === "GET" && (requestPath.endsWith(".html") || requestPath === "/" || requestPath === "/assets/app.js")) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+  }
+  next();
+});
 app.use(express.static(rootDir, { extensions: ["html"] }));
 
 app.get("*", (req, res) => {
