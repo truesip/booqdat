@@ -642,6 +642,10 @@ function mapPromoterEventToMarketplaceEvent(event) {
   if (!id || !title || status === "draft" || status === "paused") return null;
 
   const ticketTypes = Array.isArray(event.ticketTypes) ? event.ticketTypes : [];
+  const imageGallery = normalizeImageList(event.imageGallery).length
+    ? normalizeImageList(event.imageGallery)
+    : normalizeImageList(event.images);
+  const banner = extractImageUrl(event.banner || event.bannerUrl || imageGallery[0] || "");
   const price = ticketTypeAveragePrice(ticketTypes, toFiniteNumber(event.price, 0));
   const capacityFromTickets = ticketTypes.reduce((sum, ticket) => sum + toFiniteNumber(ticket?.quantity, 0), 0);
   const capacity = Math.max(1, capacityFromTickets || toFiniteNumber(event.capacity, 1));
@@ -659,8 +663,8 @@ function mapPromoterEventToMarketplaceEvent(event) {
     price,
     capacity,
     description: String(event.description || ""),
-    banner: String(event.banner || ""),
-    imageGallery: Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [],
+    banner,
+    imageGallery,
     promoterEmail: normalizeEmail(event.promoterEmail || "")
   };
 }
@@ -703,12 +707,31 @@ function formatLocationLine(placeLike) {
   const country = String(placeLike?.country || "").trim();
   return [city, state, country].filter(Boolean).join(", ");
 }
+function extractImageUrl(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object") {
+    const candidate = value.url || value.src || value.href || value.path || value.dataUrl || value.dataURL;
+    return typeof candidate === "string" ? candidate.trim() : "";
+  }
+  return "";
+}
+function normalizeImageList(value) {
+  const items = Array.isArray(value) ? value : [];
+  const urls = [];
+  items.forEach((item) => {
+    const imageUrl = extractImageUrl(item);
+    if (imageUrl) urls.push(imageUrl);
+  });
+  return urls;
+}
 function getEventImageUrl(event) {
-  const banner = String(event?.banner || "").trim();
+  const banner = extractImageUrl(event?.banner || event?.bannerUrl || event?.bannerURL);
   if (banner) return banner;
-  const gallery = Array.isArray(event?.imageGallery) ? event.imageGallery : [];
-  const firstImage = gallery.find((item) => typeof item === "string" && item.trim());
-  return firstImage ? String(firstImage).trim() : "";
+  const gallery = normalizeImageList(event?.imageGallery);
+  if (gallery.length) return gallery[0];
+  const images = normalizeImageList(event?.images);
+  return images[0] || "";
 }
 
 function createEventCard(event) {
@@ -1633,7 +1656,10 @@ function setupPromoterDashboard() {
   function mapPromoterEventToMarketplace(event) {
     const prices = (event.ticketTypes || []).map((ticket) => toNumber(ticket.price)).filter((price) => price > 0);
     const minPrice = prices.length ? Math.min(...prices) : 25;
-    const imageGallery = Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [];
+    const imageGallery = normalizeImageList(event.imageGallery).length
+      ? normalizeImageList(event.imageGallery)
+      : normalizeImageList(event.images);
+    const banner = extractImageUrl(event.banner || event.bannerUrl || imageGallery[0] || "");
     return {
       id: event.id,
       title: event.title,
@@ -1647,7 +1673,7 @@ function setupPromoterDashboard() {
       price: minPrice,
       capacity: totalInventory(event),
       description: event.description || "",
-      banner: event.banner || imageGallery[0] || "",
+      banner,
       imageGallery,
       promoterEmail: normalizeEmail(event.promoterEmail || currentPromoterEmail())
     };
@@ -1751,8 +1777,10 @@ function setupPromoterDashboard() {
       country: String(event.country || ""),
       capacity: inventory,
       ticketTypes,
-      banner: String(event.banner || ""),
-      imageGallery: Array.isArray(event.imageGallery) ? event.imageGallery.filter((item) => typeof item === "string" && item.trim()) : [],
+      banner: extractImageUrl(event.banner || event.bannerUrl || ""),
+      imageGallery: normalizeImageList(event.imageGallery).length
+        ? normalizeImageList(event.imageGallery)
+        : normalizeImageList(event.images),
       promoCodes: Array.isArray(event.promoCodes) ? event.promoCodes : [],
       status: String(event.status || "Live"),
       ticketsSold,
@@ -2240,15 +2268,16 @@ function setupPromoterDashboard() {
     setWizardInput("vipQty", toNumber(vip.quantity, 0));
     setWizardInput("vipStart", vip.salesStart || "");
     setWizardInput("vipEnd", vip.salesEnd || "");
-    setWizardInput("banner", event.banner || "");
+    setWizardInput("banner", extractImageUrl(event.banner || event.bannerUrl || ""));
     setWizardInput("promoCodes", (event.promoCodes || []).join(", "));
     const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
     if (imageUploads && "value" in imageUploads) imageUploads.value = "";
-    const existingImages = Array.isArray(event.imageGallery)
-      ? event.imageGallery.filter((item) => typeof item === "string" && item.trim())
-      : [];
-    if (!existingImages.length && String(event.banner || "").trim()) {
-      existingImages.push(String(event.banner).trim());
+    const existingImages = normalizeImageList(event.imageGallery).length
+      ? normalizeImageList(event.imageGallery)
+      : normalizeImageList(event.images);
+    const eventBanner = extractImageUrl(event.banner || event.bannerUrl || "");
+    if (!existingImages.length && eventBanner) {
+      existingImages.push(eventBanner);
     }
     clearWizardPreviewObjectUrls();
     renderWizardImagePreview(existingImages);
@@ -2315,11 +2344,11 @@ function setupPromoterDashboard() {
     const inventory = Math.max(1, data.ticketTypes.reduce((sum, ticket) => sum + toNumber(ticket.quantity), 0) || toNumber(data.capacity, 1));
     const sold = existing ? Math.min(inventory, Math.max(0, toNumber(existing.ticketsSold))) : 0;
     const revenue = existing ? Math.max(0, toNumber(existing.revenue)) : 0;
-    const previousImageGallery = Array.isArray(existing?.imageGallery)
-      ? existing.imageGallery.filter((item) => typeof item === "string" && item.trim())
-      : [];
+    const previousImageGallery = normalizeImageList(existing?.imageGallery).length
+      ? normalizeImageList(existing?.imageGallery)
+      : normalizeImageList(existing?.images);
     const imageGallery = uploadedImages.length ? uploadedImages : previousImageGallery;
-    const resolvedBanner = data.banner || imageGallery[0] || String(existing?.banner || "").trim();
+    const resolvedBanner = extractImageUrl(data.banner || existing?.banner || existing?.bannerUrl || "") || imageGallery[0] || "";
 
     const finalEvent = {
       ...(existing || {}),
