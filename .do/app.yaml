@@ -58,6 +58,12 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: OPTIONAL_NYVAPAY_WEBHOOK_TOKEN
+      - key: NYVAPAY_TIMEOUT_MS
+        scope: RUN_TIME
+        value: "8000"
+      - key: NYVAPAY_MAX_ATTEMPTS
+        scope: RUN_TIME
+        value: "2"
       - key: SMTP2GO_API_BASE_URL
         scope: RUN_TIME
         value: https://api.smtp2go.com/v3

@@ -18,6 +18,12 @@ function loadFromLegacyEnvTxt() {
   }
 }
 
+function toIntegerInRange(value, fallback, minimum, maximum) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
 function loadEnvironment() {
   dotenv.config();
 
@@ -45,6 +51,8 @@ function loadEnvironment() {
   const nyvapayWebhookUrl = process.env.NYVAPAY_WEBHOOK_URL || "";
   const nyvapaySuccessRedirectUrl = process.env.NYVAPAY_SUCCESS_REDIRECT_URL || "";
   const nyvapayWebhookToken = process.env.NYVAPAY_WEBHOOK_TOKEN || "";
+  const nyvapayTimeoutMs = toIntegerInRange(process.env.NYVAPAY_TIMEOUT_MS, 8000, 2000, 20000);
+  const nyvapayMaxAttempts = toIntegerInRange(process.env.NYVAPAY_MAX_ATTEMPTS, 2, 1, 2);
 
   if (!mongoUri) {
     throw new Error("Missing MongoDB URI. Set MONGODB_URI in environment.");
@@ -79,7 +87,9 @@ function loadEnvironment() {
     nyvapayApiKey,
     nyvapayWebhookUrl,
     nyvapaySuccessRedirectUrl,
-    nyvapayWebhookToken
+    nyvapayWebhookToken,
+    nyvapayTimeoutMs,
+    nyvapayMaxAttempts
   };
 }
 

@@ -310,7 +310,7 @@ async function apiRequest(path, options = {}) {
         redirectToLogin(getRequiredRolesForCurrentPage(), currentPageName());
       }
       if (options.includeErrorResponse) {
-        return payload || { ok: false, error: `Request failed (${response.status})` };
+        return payload || { ok: false, error: `Request failed (${response.status})`, gatewayStatus: response.status };
       }
       return null;
     }
@@ -2978,8 +2978,21 @@ function renderCheckout() {
     setSubmitInFlight(false);
 
     if (!paymentResponse?.ok || !paymentResponse?.paymentUrl) {
+      const gatewayStatus = Number(paymentResponse?.gatewayStatus || 0);
+      const gatewayErrorText = String(paymentResponse?.error || "");
+      const isGatewayTimeout = gatewayStatus === 504
+        || /(^|[^0-9])504([^0-9]|$)/.test(gatewayErrorText)
+        || /timed out/i.test(gatewayErrorText);
+      const isGatewayUnavailable = [502, 503].includes(gatewayStatus)
+        || /(^|[^0-9])(502|503)([^0-9]|$)/.test(gatewayErrorText);
+      let checkoutErrorMessage = gatewayErrorText || "Unable to start NYVAPAY checkout right now. Please try again.";
+      if (isGatewayTimeout) {
+        checkoutErrorMessage = "NYVAPAY took too long to respond. Please wait a few seconds and try again.";
+      } else if (isGatewayUnavailable) {
+        checkoutErrorMessage = "NYVAPAY is temporarily unavailable. Please try again shortly.";
+      }
       result.classList.remove("hidden");
-      result.innerHTML = `<p>${paymentResponse?.error || "Unable to start NYVAPAY checkout right now. Please try again."}</p>`;
+      result.innerHTML = `<p>${checkoutErrorMessage}</p>`;
       return;
     }
 

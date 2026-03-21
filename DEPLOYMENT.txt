@@ -38,6 +38,8 @@ BOOQDAT deployment checklist
   - NYVAPAY_WEBHOOK_URL=<optional-public-webhook-url>
   - NYVAPAY_SUCCESS_REDIRECT_URL=<optional-checkout-return-url>
   - NYVAPAY_WEBHOOK_TOKEN=<optional-random-webhook-token>
+  - NYVAPAY_TIMEOUT_MS=8000
+  - NYVAPAY_MAX_ATTEMPTS=2
   - SMTP2GO_API_BASE_URL=https://api.smtp2go.com/v3
   - SMTP2GO_API_KEY=<smtp2go-api-key>
   - MAIL_FROM=<no-reply@your-domain>
