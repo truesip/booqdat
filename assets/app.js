@@ -341,6 +341,14 @@ function queueApiSync(key, path, payload, delayMs = 450) {
 }
 
 let didHydrateFromApi = false;
+function setLocalStorageJsonSafely(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
 function applyBootstrapPayloadToLocalState(data) {
   if (!data || typeof data !== "object") return;
   const role = normalizeRole(data?.auth?.role);
@@ -348,22 +356,22 @@ function applyBootstrapPayloadToLocalState(data) {
   const canHydrateProfileScope = role === "admin" || role === "user";
 
   if (Array.isArray(data.events)) {
-    localStorage.setItem(STORAGE_KEYS.customEvents, JSON.stringify(filterLegacyDemoEvents(data.events)));
+    setLocalStorageJsonSafely(STORAGE_KEYS.customEvents, filterLegacyDemoEvents(data.events));
   }
   if (Array.isArray(data.promoterEvents)) {
-    localStorage.setItem(STORAGE_KEYS.promoterDashboardEvents, JSON.stringify(filterLegacyDemoEvents(data.promoterEvents)));
+    setLocalStorageJsonSafely(STORAGE_KEYS.promoterDashboardEvents, filterLegacyDemoEvents(data.promoterEvents));
   }
   if (canHydrateOrderScope && Array.isArray(data.orders)) {
-    localStorage.setItem(STORAGE_KEYS.buyerOrders, JSON.stringify(filterLegacyDemoOrders(data.orders)));
+    setLocalStorageJsonSafely(STORAGE_KEYS.buyerOrders, filterLegacyDemoOrders(data.orders));
   }
   if (canHydrateProfileScope && data.userProfiles && typeof data.userProfiles === "object") {
-    localStorage.setItem(STORAGE_KEYS.userProfiles, JSON.stringify(data.userProfiles));
+    setLocalStorageJsonSafely(STORAGE_KEYS.userProfiles, data.userProfiles);
   }
   if (canHydrateProfileScope && data.userPaymentMethods && typeof data.userPaymentMethods === "object") {
-    localStorage.setItem(STORAGE_KEYS.userPaymentMethods, JSON.stringify(data.userPaymentMethods));
+    setLocalStorageJsonSafely(STORAGE_KEYS.userPaymentMethods, data.userPaymentMethods);
   }
   if (canHydrateProfileScope && data.userFavorites && typeof data.userFavorites === "object") {
-    localStorage.setItem(STORAGE_KEYS.userFavorites, JSON.stringify(data.userFavorites));
+    setLocalStorageJsonSafely(STORAGE_KEYS.userFavorites, data.userFavorites);
   }
 }
 
@@ -371,14 +379,22 @@ async function refreshStateFromApi() {
   if (!canUseApi()) return null;
   const data = await apiRequest("/bootstrap", { includeErrorResponse: true, suppressAuthRedirect: true });
   if (!data?.ok) return null;
-  applyBootstrapPayloadToLocalState(data);
+  try {
+    applyBootstrapPayloadToLocalState(data);
+  } catch {
+    // ignore hydration write errors and keep runtime functional
+  }
   return data;
 }
 async function hydrateStateFromApi() {
   if (!canUseApi() || didHydrateFromApi) return;
   const data = await apiRequest("/bootstrap");
   if (!data) return;
-  applyBootstrapPayloadToLocalState(data);
+  try {
+    applyBootstrapPayloadToLocalState(data);
+  } catch {
+    // ignore hydration write errors and keep runtime functional
+  }
 
   didHydrateFromApi = true;
 }
@@ -3679,12 +3695,15 @@ function renderCheckout() {
 }
 
 async function initializeClientApp() {
-  const hasAccess = await enforceRoleGuardForCurrentPage();
-  if (!hasAccess) return;
-  await hydrateStateFromApi();
   setYear();
   setupMobileNav();
   setupAuthPage();
+  if (["login.html", "signup.html"].includes(currentPageName())) {
+    return;
+  }
+  const hasAccess = await enforceRoleGuardForCurrentPage();
+  if (!hasAccess) return;
+  await hydrateStateFromApi();
   renderFeaturedEvents();
   renderBrowseEvents();
   setupPromoterAccount();
