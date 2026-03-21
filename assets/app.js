@@ -277,13 +277,21 @@ async function apiRequest(path, options = {}) {
   if (!canUseApi()) return null;
   try {
     const token = options.skipAuth ? "" : getAuthToken();
+    const method = String(options.method || "GET").toUpperCase();
+    let requestUrl = `${API_BASE}${path}`;
+    if (method === "GET" && !options.skipCacheBust) {
+      const sep = requestUrl.includes("?") ? "&" : "?";
+      requestUrl = `${requestUrl}${sep}_=${Date.now()}`;
+    }
     const headers = {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store, no-cache, max-age=0",
+      Pragma: "no-cache",
       ...(options.headers || {})
     };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(`${API_BASE}${path}`, {
-      method: options.method || "GET",
+    const response = await fetch(requestUrl, {
+      method,
       cache: "no-store",
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined
@@ -1303,11 +1311,13 @@ function setupUserPortal() {
   }
 
   function showPortal() {
+    root.classList.add("is-authenticated");
     if (authGate) authGate.classList.add("hidden");
     if (portalMain) portalMain.classList.remove("hidden");
   }
 
   function showAuth() {
+    root.classList.remove("is-authenticated");
     if (authGate) authGate.classList.remove("hidden");
     if (portalMain) portalMain.classList.add("hidden");
     clearFeedback();

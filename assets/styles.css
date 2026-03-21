@@ -314,6 +314,20 @@ textarea:focus {
   position: relative;
 }
 
+.user-portal-shell:not(.is-authenticated) {
+  grid-template-columns: 1fr;
+}
+
+.user-portal-shell:not(.is-authenticated) .user-sidebar,
+.user-portal-shell:not(.is-authenticated) .user-sidebar-toggle {
+  display: none;
+}
+
+.user-portal-shell:not(.is-authenticated) .user-main {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
 .event-banner img {
   width: 100%;
   height: 100%;
