@@ -212,7 +212,7 @@ test("syncing new pending promoter events emits admin queue alert logs", async (
   assert.equal(logs.length, 1);
   assert.equal(String(logs[0]?.metadata?.queueType || ""), "Promoter Event Review");
   assert.equal(String(logs[0]?.metadata?.entityId || logs[0]?.metadata?.eventId || ""), "evt-pending-alert-1");
-  assert.ok(String(logs[0]?.metadata?.adminUrl || "").includes("#events-section"));
+  assert.ok(String(logs[0]?.metadata?.adminUrl || "").includes("/admin-events.html"));
 });
 
 test("promoter signup queue alerts include admin account recipients", async () => {
@@ -453,7 +453,7 @@ test("refund requests emit admin queue alert logs for admin recipients", async (
   }).lean();
   const recipients = logs.map((item) => String(item?.recipientEmail || "")).sort();
   assert.ok(recipients.includes("admin@example.com"));
-  assert.ok(logs.every((item) => String(item?.metadata?.adminUrl || "").includes("#disputes-section")));
+  assert.ok(logs.every((item) => String(item?.metadata?.adminUrl || "").includes("/admin-disputes.html")));
 });
 
 test("transfer requests emit admin queue alert logs for admin recipients", async () => {
@@ -499,7 +499,7 @@ test("transfer requests emit admin queue alert logs for admin recipients", async
   }).lean();
   const recipients = logs.map((item) => String(item?.recipientEmail || "")).sort();
   assert.ok(recipients.includes("admin@example.com"));
-  assert.ok(logs.every((item) => String(item?.metadata?.adminUrl || "").includes("#disputes-section")));
+  assert.ok(logs.every((item) => String(item?.metadata?.adminUrl || "").includes("/admin-disputes.html")));
 });
 
 test("dispute transfer approval emits lifecycle notifications for original and recipient attendees", async () => {

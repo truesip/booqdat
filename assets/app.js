@@ -17,7 +17,41 @@ if (!authRuntime) {
 }
 const ROLE_GUARDS_BY_PAGE = {
   "admin.html": ["admin"],
-  "promoter-dashboard.html": ["promoter", "admin"]
+  "admin-promoters.html": ["admin"],
+  "admin-attendees.html": ["admin"],
+  "admin-events.html": ["admin"],
+  "admin-tickets-sales.html": ["admin"],
+  "admin-payments.html": ["admin"],
+  "admin-reports.html": ["admin"],
+  "admin-disputes.html": ["admin"],
+  "admin-settings.html": ["admin"],
+  "promoter-dashboard.html": ["promoter", "admin"],
+  "promoter-events.html": ["promoter", "admin"],
+  "promoter-create.html": ["promoter", "admin"],
+  "promoter-analytics.html": ["promoter", "admin"],
+  "promoter-payouts.html": ["promoter", "admin"],
+  "promoter-settings.html": ["promoter", "admin"],
+  "promoter-support.html": ["promoter", "admin"]
+};
+const ADMIN_SECTION_BY_PAGE = {
+  "admin.html": "dashboard-home",
+  "admin-promoters.html": "promoters-section",
+  "admin-attendees.html": "attendees-section",
+  "admin-events.html": "events-section",
+  "admin-tickets-sales.html": "tickets-sales-section",
+  "admin-payments.html": "payments-section",
+  "admin-reports.html": "reports-section",
+  "admin-disputes.html": "disputes-section",
+  "admin-settings.html": "settings-section"
+};
+const PROMOTER_SECTION_BY_PAGE = {
+  "promoter-dashboard.html": "promoter-home",
+  "promoter-events.html": "promoter-events",
+  "promoter-create.html": "promoter-create",
+  "promoter-analytics.html": "promoter-analytics",
+  "promoter-payouts.html": "promoter-payouts",
+  "promoter-settings.html": "promoter-settings",
+  "promoter-support.html": "promoter-support"
 };
 const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
 const LEGACY_DEMO_EVENT_TITLES = new Set([
@@ -1495,6 +1529,8 @@ function setupUserPortal() {
 function setupPromoterDashboard() {
   const root = document.querySelector("#promoter-dashboard");
   if (!root) return;
+  const promoterPageName = currentPageName();
+  const activeSectionId = PROMOTER_SECTION_BY_PAGE[promoterPageName] || "promoter-home";
 
   const wizardForm = root.querySelector("#promoter-wizard-form");
   const wizardSteps = root.querySelectorAll(".wizard-step");
@@ -1514,6 +1550,7 @@ function setupPromoterDashboard() {
   let currentStep = 1;
   let currentTab = "upcoming";
   let editingEventId = null;
+  const EDIT_EVENT_STORAGE_KEY = "booqdat_promoter_edit_event_id";
   const MAX_WIZARD_IMAGE_UPLOADS = 3;
   const MAX_WIZARD_IMAGE_BYTES = 2 * 1024 * 1024;
   const wizardImagePreview = root.querySelector("#wizard-image-preview");
@@ -1531,6 +1568,26 @@ function setupPromoterDashboard() {
   function toNumber(value, fallback = 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function queueEventForEditing(eventId) {
+    const normalizedId = String(eventId || "").trim();
+    if (!normalizedId) return;
+    try {
+      sessionStorage.setItem(EDIT_EVENT_STORAGE_KEY, normalizedId);
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  function consumeQueuedEditEventId() {
+    try {
+      const queuedId = String(sessionStorage.getItem(EDIT_EVENT_STORAGE_KEY) || "").trim();
+      if (queuedId) sessionStorage.removeItem(EDIT_EVENT_STORAGE_KEY);
+      return queuedId;
+    } catch {
+      return "";
+    }
   }
 
   function currentPromoterEmail() {
@@ -2328,8 +2385,12 @@ function setupPromoterDashboard() {
     showFeedback(`<strong>${finalEvent.title}</strong> ${asDraft ? "saved as draft" : "submitted for admin approval"} successfully.`);
     resetWizardState();
     if (!asDraft) {
-      const createSection = root.querySelector("#promoter-events");
-      if (createSection) createSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (activeSectionId === "promoter-events") {
+        const eventsSection = root.querySelector("#promoter-events");
+        if (eventsSection) eventsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        window.location.href = "promoter-events.html";
+      }
     }
   }
 
@@ -2351,6 +2412,11 @@ function setupPromoterDashboard() {
       if (!targetEvent) return;
 
       if (action === "edit") {
+        if (activeSectionId !== "promoter-create") {
+          queueEventForEditing(targetEvent.id);
+          window.location.href = "promoter-create.html";
+          return;
+        }
         editingEventId = targetEvent.id;
         fillWizardFromEvent(targetEvent);
         setWizardStep(1);
@@ -2442,6 +2508,10 @@ function setupPromoterDashboard() {
 
   root.querySelectorAll("[data-scroll-create]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (activeSectionId !== "promoter-create") {
+        window.location.href = "promoter-create.html";
+        return;
+      }
       const createSection = root.querySelector("#promoter-create");
       if (createSection) createSection.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -2601,12 +2671,47 @@ function setupPromoterDashboard() {
     });
   }
 
+  function applyPromoterSectionView() {
+    const sections = root.querySelectorAll(".promoter-main > .promoter-section");
+    sections.forEach((section) => {
+      section.hidden = section.id !== activeSectionId;
+    });
+  }
+
+  function setActivePromoterSidebarLink() {
+    const links = root.querySelectorAll(".promoter-sidebar-nav a");
+    links.forEach((link) => {
+      const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+      if (!href || href.startsWith("#")) return;
+      const targetPage = href.split("/").pop();
+      const isActive = targetPage === promoterPageName;
+      link.classList.toggle("active", isActive);
+      if (isActive) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
+  function openQueuedEventEditorIfNeeded() {
+    if (activeSectionId !== "promoter-create") return;
+    const queuedEventId = consumeQueuedEditEventId();
+    if (!queuedEventId) return;
+    const queuedEvent = promoterEvents.find((event) => String(event?.id || "").trim() === queuedEventId);
+    if (!queuedEvent) return;
+    editingEventId = queuedEvent.id;
+    fillWizardFromEvent(queuedEvent);
+    setWizardStep(1);
+    if (wizardOutput) wizardOutput.classList.add("hidden");
+  }
+
   if (promoterLogoutButton) {
     promoterLogoutButton.addEventListener("click", async () => {
       await logoutCurrentSession();
       window.location.href = "login.html?role=promoter";
     });
   }
+  applyPromoterSectionView();
+  setActivePromoterSidebarLink();
+  openQueuedEventEditorIfNeeded();
 
   updatePromoterKpis();
   renderEventCards();
@@ -2619,6 +2724,8 @@ function setupPromoterDashboard() {
 function setupAdminDashboard() {
   const dashboardRoot = document.querySelector("#admin-dashboard");
   if (!dashboardRoot) return;
+  const adminPageName = currentPageName();
+  const activeSectionId = ADMIN_SECTION_BY_PAGE[adminPageName] || "dashboard-home";
   const adminLogoutButton = dashboardRoot.querySelector("[data-admin-logout]");
   const promoterApprovalsBody = dashboardRoot.querySelector("#admin-promoter-approvals-body");
   const attendeeRecordsBody = dashboardRoot.querySelector("#admin-attendee-records-body");
@@ -3294,6 +3401,26 @@ function setupAdminDashboard() {
     });
   }
 
+
+  function applyAdminSectionView() {
+    const sections = dashboardRoot.querySelectorAll(".admin-main > .admin-section");
+    sections.forEach((section) => {
+      section.hidden = section.id !== activeSectionId;
+    });
+  }
+
+  function setActiveAdminSidebarLink() {
+    const links = dashboardRoot.querySelectorAll(".admin-sidebar-nav a");
+    links.forEach((link) => {
+      const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+      if (!href || href.startsWith("#")) return;
+      const targetPage = href.split("/").pop();
+      const isActive = targetPage === adminPageName;
+      link.classList.toggle("active", isActive);
+      if (isActive) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
   if (adminLogoutButton) {
     adminLogoutButton.addEventListener("click", async () => {
       await logoutCurrentSession();
@@ -3301,6 +3428,8 @@ function setupAdminDashboard() {
     });
   }
 
+  applyAdminSectionView();
+  setActiveAdminSidebarLink();
   updateKpis();
   renderSalesSnapshot();
   renderTopBreakdowns();

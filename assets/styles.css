@@ -720,6 +720,12 @@ blockquote cite {
   color: #fff4ea;
 }
 
+.admin-sidebar-nav a.active,
+.admin-sidebar-nav a[aria-current="page"] {
+  background: rgba(249, 115, 22, 0.32);
+  color: #fff4ea;
+}
+
 .admin-sidebar-toggle {
   display: none;
   border: 1px solid var(--line);
@@ -1029,6 +1035,12 @@ blockquote cite {
 .promoter-sidebar-nav a:hover,
 .promoter-sidebar-nav a:focus-visible {
   background: rgba(249, 115, 22, 0.2);
+  color: #fff4ea;
+}
+
+.promoter-sidebar-nav a.active,
+.promoter-sidebar-nav a[aria-current="page"] {
+  background: rgba(249, 115, 22, 0.32);
   color: #fff4ea;
 }
 

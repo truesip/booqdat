@@ -429,13 +429,13 @@ function createApiRouter(env) {
     });
     if (!recipients.size) return [];
     const queueTypeValue = normalizeLifecycleStatus(queueType);
-    let sectionHash = "#promoters-section";
-    if (queueTypeValue.includes("event")) sectionHash = "#events-section";
-    else if (queueTypeValue.includes("payout")) sectionHash = "#payments-section";
+    let adminPagePath = "/admin-promoters.html";
+    if (queueTypeValue.includes("event")) adminPagePath = "/admin-events.html";
+    else if (queueTypeValue.includes("payout")) adminPagePath = "/admin-payments.html";
     else if (queueTypeValue.includes("dispute") || queueTypeValue.includes("refund") || queueTypeValue.includes("transfer")) {
-      sectionHash = "#disputes-section";
+      adminPagePath = "/admin-disputes.html";
     }
-    const adminUrl = absoluteUrlForPath(req, `/admin.html${sectionHash}`);
+    const adminUrl = absoluteUrlForPath(req, adminPagePath);
     const results = [];
     for (const recipient of recipients) {
       const template = adminQueueAlertTemplate({

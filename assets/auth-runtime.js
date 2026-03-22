@@ -7,7 +7,21 @@
   const API_BASE = `${window.location.origin}/api`;
   const ROLE_GUARDS_BY_PAGE = {
     "admin.html": ["admin"],
-    "promoter-dashboard.html": ["promoter", "admin"]
+    "admin-promoters.html": ["admin"],
+    "admin-attendees.html": ["admin"],
+    "admin-events.html": ["admin"],
+    "admin-tickets-sales.html": ["admin"],
+    "admin-payments.html": ["admin"],
+    "admin-reports.html": ["admin"],
+    "admin-disputes.html": ["admin"],
+    "admin-settings.html": ["admin"],
+    "promoter-dashboard.html": ["promoter", "admin"],
+    "promoter-events.html": ["promoter", "admin"],
+    "promoter-create.html": ["promoter", "admin"],
+    "promoter-analytics.html": ["promoter", "admin"],
+    "promoter-payouts.html": ["promoter", "admin"],
+    "promoter-settings.html": ["promoter", "admin"],
+    "promoter-support.html": ["promoter", "admin"]
   };
   const syncTimers = {};
   let refreshRequestPromise = null;
