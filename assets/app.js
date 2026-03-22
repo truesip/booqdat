@@ -3798,15 +3798,18 @@ async function initializeClientApp() {
   }
   const hasAccess = await enforceRoleGuardForCurrentPage();
   if (!hasAccess) return;
-  revealPageAfterAuthGuard();
-  await hydrateStateFromApi();
-  renderFeaturedEvents();
-  renderBrowseEvents();
-  setupPromoterAccount();
-  renderCheckout();
-  setupUserPortal();
-  setupAdminDashboard();
-  setupPromoterDashboard();
+  try {
+    await hydrateStateFromApi();
+    renderFeaturedEvents();
+    renderBrowseEvents();
+    setupPromoterAccount();
+    renderCheckout();
+    setupUserPortal();
+    setupAdminDashboard();
+    setupPromoterDashboard();
+  } finally {
+    revealPageAfterAuthGuard();
+  }
 }
 
 initializeClientApp();
