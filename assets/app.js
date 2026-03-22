@@ -2733,6 +2733,13 @@ function setupAdminDashboard() {
   const payoutQueueBody = dashboardRoot.querySelector("#admin-payout-queue-body");
   const disputesBody = dashboardRoot.querySelector("#admin-disputes-body");
   const activityFeed = dashboardRoot.querySelector("#admin-activity-feed");
+  const feeSettingsForm = dashboardRoot.querySelector("#admin-fee-settings-form");
+  const feeSettingsStatus = dashboardRoot.querySelector("#admin-fee-settings-status");
+  const ADMIN_FEE_SETTINGS_STORAGE_KEY = "booqdat_admin_fee_settings";
+  const DEFAULT_ADMIN_FEE_SETTINGS = {
+    platformFeePercent: 8,
+    fixedProcessingFeeUsd: 2
+  };
   let currentRevenueRange = "week";
   let revenueSeries = {
     week: Array(7).fill(0),
@@ -2745,6 +2752,7 @@ function setupAdminDashboard() {
     promoter: 0,
     event: 0
   };
+  let adminFeeSettings = readAdminFeeSettings();
   let opsState = {
     promoterApprovals: [],
     attendeeRecords: [],
@@ -2756,6 +2764,50 @@ function setupAdminDashboard() {
       pendingEvents: 0
     }
   };
+
+  function normalizeAdminFeeSettings(source) {
+    const platformFeePercent = Math.max(0, Math.min(30, toFiniteNumber(source?.platformFeePercent, DEFAULT_ADMIN_FEE_SETTINGS.platformFeePercent)));
+    const fixedProcessingFeeUsd = Math.max(0, Math.min(100, toFiniteNumber(source?.fixedProcessingFeeUsd, DEFAULT_ADMIN_FEE_SETTINGS.fixedProcessingFeeUsd)));
+    return {
+      platformFeePercent: Math.round(platformFeePercent * 100) / 100,
+      fixedProcessingFeeUsd: Math.round(fixedProcessingFeeUsd * 100) / 100
+    };
+  }
+
+  function readAdminFeeSettings() {
+    try {
+      const raw = localStorage.getItem(ADMIN_FEE_SETTINGS_STORAGE_KEY);
+      if (!raw) return { ...DEFAULT_ADMIN_FEE_SETTINGS };
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return { ...DEFAULT_ADMIN_FEE_SETTINGS };
+      return normalizeAdminFeeSettings(parsed);
+    } catch {
+      return { ...DEFAULT_ADMIN_FEE_SETTINGS };
+    }
+  }
+
+  function writeAdminFeeSettings(settings) {
+    try {
+      localStorage.setItem(ADMIN_FEE_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeAdminFeeSettings(settings)));
+    } catch {
+      // ignore storage write failures and keep runtime functional
+    }
+  }
+
+  function applyAdminFeeSettingsToForm() {
+    if (!feeSettingsForm) return;
+    if (feeSettingsForm.elements?.platformFeePercent) {
+      feeSettingsForm.elements.platformFeePercent.value = String(adminFeeSettings.platformFeePercent);
+    }
+    if (feeSettingsForm.elements?.fixedProcessingFeeUsd) {
+      feeSettingsForm.elements.fixedProcessingFeeUsd.value = String(adminFeeSettings.fixedProcessingFeeUsd);
+    }
+  }
+
+  function formatAdminFeePercent(value) {
+    const numeric = Math.max(0, toFiniteNumber(value, 0));
+    return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2).replace(/\.?0+$/, "");
+  }
 
   function escapeHtml(value) {
     return String(value || "")
@@ -2809,6 +2861,8 @@ function setupAdminDashboard() {
     const today = startOfDay(now);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const orders = readBuyerOrders().filter(isSettledOrderForMetrics);
+    const platformFeeRate = Math.max(0, toFiniteNumber(adminFeeSettings.platformFeePercent, 0)) / 100;
+    const fixedProcessingFeeUsd = Math.max(0, toFiniteNumber(adminFeeSettings.fixedProcessingFeeUsd, 0));
 
     const weekRevenue = Array(7).fill(0);
     const monthRevenue = Array(12).fill(0);
@@ -2820,6 +2874,10 @@ function setupAdminDashboard() {
     let revenueMonth = 0;
     let ticketsToday = 0;
     let ticketsMonth = 0;
+    let platformProfitAll = 0;
+    let platformProfitToday = 0;
+    let platformProfitMonth = 0;
+    let settledOrders = 0;
 
     orders.forEach((order) => {
       const purchaseDate = new Date(order?.purchaseDate || "");
@@ -2829,15 +2887,20 @@ function setupAdminDashboard() {
       const diffMonths = (now.getFullYear() - purchaseDate.getFullYear()) * 12 + (now.getMonth() - purchaseDate.getMonth());
       const qty = quantityOf(order);
       const amount = revenueOf(order);
+      const platformProfit = Math.max(0, (amount * platformFeeRate) + fixedProcessingFeeUsd);
 
       revenueAll += amount;
+      platformProfitAll += platformProfit;
+      settledOrders += 1;
       if (day.getTime() === today.getTime()) {
         revenueToday += amount;
         ticketsToday += qty;
+        platformProfitToday += platformProfit;
       }
       if (purchaseDate >= monthStart) {
         revenueMonth += amount;
         ticketsMonth += qty;
+        platformProfitMonth += platformProfit;
       }
       if (diffDays >= 0 && diffDays < 7) {
         weekRevenue[6 - diffDays] += amount;
@@ -2865,6 +2928,10 @@ function setupAdminDashboard() {
       revenueAll,
       revenueToday,
       revenueMonth,
+      platformProfitAll,
+      platformProfitToday,
+      platformProfitMonth,
+      settledOrders,
       ticketsToday,
       ticketsMonth,
       newPromoters,
@@ -3045,6 +3112,7 @@ function setupAdminDashboard() {
 
     const byKpi = {
       "revenue-all": usd(metrics.revenueAll),
+      "platform-profit": usd(metrics.platformProfitAll),
       "tickets-month": metrics.ticketsMonth.toLocaleString(),
       "active-events": activeEvents.toLocaleString(),
       "new-promoters": metrics.newPromoters.toLocaleString(),
@@ -3064,6 +3132,11 @@ function setupAdminDashboard() {
 
     const pendingBreakdown = dashboardRoot.querySelector('[data-kpi-detail="pending-breakdown"]');
     if (pendingBreakdown) pendingBreakdown.textContent = `Promoters ${approvals.promoter} • Events ${approvals.event}`;
+
+    const profitModel = dashboardRoot.querySelector('[data-kpi-detail="profit-model"]');
+    if (profitModel) {
+      profitModel.textContent = `Model ${formatAdminFeePercent(adminFeeSettings.platformFeePercent)}% + ${usd(adminFeeSettings.fixedProcessingFeeUsd)} per settled order • Today ${usd(metrics.platformProfitToday)} • Month ${usd(metrics.platformProfitMonth)} • Orders ${metrics.settledOrders.toLocaleString()}`;
+    }
   }
 
   function renderSalesSnapshot() {
@@ -3283,6 +3356,32 @@ function setupAdminDashboard() {
     });
   }
 
+  function setFeeSettingsStatus(message, isError = false) {
+    if (!feeSettingsStatus) return;
+    feeSettingsStatus.textContent = String(message || "");
+    feeSettingsStatus.style.color = isError ? "#b3261e" : "";
+  }
+
+  function setupFeeSettingsForm() {
+    if (!feeSettingsForm) return;
+    applyAdminFeeSettingsToForm();
+    feeSettingsForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!feeSettingsForm.reportValidity()) return;
+      const formData = new FormData(feeSettingsForm);
+      const nextSettings = normalizeAdminFeeSettings({
+        platformFeePercent: formData.get("platformFeePercent"),
+        fixedProcessingFeeUsd: formData.get("fixedProcessingFeeUsd")
+      });
+      adminFeeSettings = nextSettings;
+      writeAdminFeeSettings(nextSettings);
+      applyAdminFeeSettingsToForm();
+      updateKpis();
+      setFeeSettingsStatus(`Saved: ${formatAdminFeePercent(nextSettings.platformFeePercent)}% + ${usd(nextSettings.fixedProcessingFeeUsd)} per settled order.`);
+      addActivity(`Fee settings saved (${formatAdminFeePercent(nextSettings.platformFeePercent)}% + ${usd(nextSettings.fixedProcessingFeeUsd)} per settled order).`);
+    });
+  }
+
   function setupAdminTableActions() {
     dashboardRoot.addEventListener("click", async (event) => {
       const promoterActionButton = event.target.closest("[data-admin-promoter-action]");
@@ -3430,6 +3529,7 @@ function setupAdminDashboard() {
 
   applyAdminSectionView();
   setActiveAdminSidebarLink();
+  setupFeeSettingsForm();
   updateKpis();
   renderSalesSnapshot();
   renderTopBreakdowns();
