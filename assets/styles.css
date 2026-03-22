@@ -1256,6 +1256,102 @@ blockquote cite {
   font-size: 0.81rem;
 }
 
+.admin-promoter-row {
+  cursor: pointer;
+}
+
+.admin-promoter-row td {
+  transition: background-color 0.15s ease;
+}
+
+.admin-promoter-row:hover td {
+  background: #fff8f2;
+}
+
+.admin-promoter-row.is-selected td {
+  background: #fff1e8;
+}
+
+.admin-promoter-profile-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-promoter-profile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.admin-promoter-profile-head h4 {
+  margin: 0;
+}
+
+.admin-promoter-profile-head .muted {
+  margin: 0.2rem 0 0;
+}
+
+.admin-promoter-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.admin-promoter-profile-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff8f1;
+  padding: 0.55rem 0.65rem;
+}
+
+.admin-promoter-profile-grid small {
+  display: block;
+  color: #8a6149;
+}
+
+.admin-promoter-profile-grid strong {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.admin-promoter-payout-summary {
+  border: 1px dashed #f4c9aa;
+  border-radius: 10px;
+  background: #fff8f1;
+  padding: 0.65rem;
+}
+
+.admin-promoter-payout-summary small {
+  display: block;
+  color: #8a6149;
+}
+
+.admin-promoter-payout-summary p {
+  margin: 0.3rem 0 0;
+  color: #5d4335;
+}
+
+.admin-promoter-events-block h5 {
+  margin-bottom: 0.35rem;
+}
+
+.admin-promoter-events-list {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-promoter-events-list li {
+  color: #3f2e24;
+}
+
+.admin-promoter-events-list small {
+  display: block;
+  color: #8a6149;
+}
+
 .promoter-card {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1637,6 +1733,10 @@ blockquote cite {
     grid-template-columns: 1fr;
   }
 
+  .admin-promoter-profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .promoter-shell {
     grid-template-columns: 1fr;
   }
@@ -1755,6 +1855,10 @@ blockquote cite {
   }
 
   .admin-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-promoter-profile-grid {
     grid-template-columns: 1fr;
   }
 

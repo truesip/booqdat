@@ -2744,9 +2744,8 @@ function setupAdminDashboard() {
   const adminPageName = currentPageName();
   const activeSectionId = ADMIN_SECTION_BY_PAGE[adminPageName] || "dashboard-home";
   const adminLogoutButton = dashboardRoot.querySelector("[data-admin-logout]");
-  const promoterApprovalsBody = dashboardRoot.querySelector("#admin-promoter-approvals-body");
-  const promoterPayoutDetailsBody = dashboardRoot.querySelector("#admin-promoter-payout-details-body");
-  const promoterPublishedEventsBody = dashboardRoot.querySelector("#admin-promoter-published-events-body");
+  const promoterListBody = dashboardRoot.querySelector("#admin-promoter-list-body");
+  const promoterProfilePanel = dashboardRoot.querySelector("#admin-promoter-profile-panel");
   const attendeeRecordsBody = dashboardRoot.querySelector("#admin-attendee-records-body");
   const pendingEventsBody = dashboardRoot.querySelector("#admin-pending-events-body");
   const payoutQueueBody = dashboardRoot.querySelector("#admin-payout-queue-body");
@@ -2772,6 +2771,7 @@ function setupAdminDashboard() {
     event: 0
   };
   let adminFeeSettings = readAdminFeeSettings();
+  let selectedPromoterKey = "";
   let opsState = {
     promoterApprovals: [],
     promoterPayoutDetails: [],
@@ -2963,98 +2963,205 @@ function setupAdminDashboard() {
     };
   }
 
-  function renderPromoterApprovalsTable() {
-    if (!promoterApprovalsBody) return;
-    const rows = Array.isArray(opsState.promoterApprovals) ? opsState.promoterApprovals : [];
-    if (!rows.length) {
-      promoterApprovalsBody.innerHTML = `<tr><td colspan="6">No promoter approvals pending.</td></tr>`;
-      return;
-    }
-    promoterApprovalsBody.innerHTML = rows.map((item) => {
-      const status = String(item?.status || "Pending");
-      const isApproved = status.toLowerCase().includes("approved");
-      const isRejected = status.toLowerCase().includes("rejected");
-      const accountId = String(item?.id || "").trim();
-      const publishedEventsCount = Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0));
-      return `
-        <tr>
-          <td>${escapeHtml(promoterName)}<br><small>${escapeHtml(promoterEmail)}</small></td>
-          <td>${escapeHtml(item?.country || item?.location || "—")}</td>
-          <td>${escapeHtml(formatDateTime(item?.submittedAt))}</td>
-          <td>${publishedEventsCount.toLocaleString()}</td>
-          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
-          <td>
-            <div class="event-action-row">
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${isApproved || !accountId ? "disabled" : ""}>Approve</button>
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${isRejected || !accountId ? "disabled" : ""}>Reject</button>
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="delete" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${!accountId ? "disabled" : ""}>Delete</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join("");
-  }
-
   function summarizePayoutAccount(payoutAccount) {
     if (!payoutAccount || typeof payoutAccount !== "object") return "Not saved";
     const bankName = String(payoutAccount?.bankName || "").trim();
     const holder = String(payoutAccount?.accountHolderName || payoutAccount?.holder || "").trim();
     const schedule = String(payoutAccount?.schedule || "").trim().toLowerCase() === "monthly" ? "Monthly" : "Weekly";
     const accountNumber = String(payoutAccount?.bankAccountNumber || "").replace(/\s+/g, "");
-    const accountSuffix = accountNumber ? `••••${accountNumber.slice(-4)}` : "";
+    const accountSuffix = accountNumber ? `••••${accountNumber.slice(-4)}` : String(payoutAccount?.bankAccountNumberMasked || "");
     const parts = [bankName, holder, accountSuffix, schedule].filter(Boolean);
     return parts.length ? parts.join(" • ") : "Saved";
   }
 
-  function renderPromoterPayoutDetailsTable() {
-    if (!promoterPayoutDetailsBody) return;
-    const rows = Array.isArray(opsState.promoterPayoutDetails) ? opsState.promoterPayoutDetails : [];
-    if (!rows.length) {
-      promoterPayoutDetailsBody.innerHTML = `<tr><td colspan="6">No promoter payout details available yet.</td></tr>`;
-      return;
-    }
-    promoterPayoutDetailsBody.innerHTML = rows.map((item) => {
-      const payoutSummary = summarizePayoutAccount(item?.payoutAccount);
-      const promoterName = item?.promoterName || item?.name || "Promoter";
-      const promoterEmail = item?.promoterEmail || item?.email || "";
-      const payouts = Math.max(0, toFiniteNumber(item?.payoutsCompleted, toFiniteNumber(item?.payouts, 0)));
-      return `
-        <tr>
-          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
-          <td>${escapeHtml(item?.country || "—")}</td>
-          <td>${Math.max(0, toFiniteNumber(item?.ticketsSold, 0)).toLocaleString()}</td>
-          <td>${usd(Math.max(0, toFiniteNumber(item?.revenue, 0)))}</td>
-          <td>${usd(payouts)}</td>
-          <td>${escapeHtml(payoutSummary)}</td>
-        </tr>
-      `;
-    }).join("");
+  function promoterKeyFromRecord(record) {
+    const accountId = String(record?.accountId || record?.id || "").trim();
+    const email = normalizeEmail(record?.promoterEmail || record?.email || "");
+    return accountId || email;
   }
 
-  function renderPromoterPublishedEventsTable() {
-    if (!promoterPublishedEventsBody) return;
-    const rows = Array.isArray(opsState.promoterPublishedEvents) ? opsState.promoterPublishedEvents : [];
+  function buildPromoterDirectoryRows() {
+    const directory = new Map();
+    const approvalsRows = Array.isArray(opsState.promoterApprovals) ? opsState.promoterApprovals : [];
+    const payoutRows = Array.isArray(opsState.promoterPayoutDetails) ? opsState.promoterPayoutDetails : [];
+    const publishedRows = Array.isArray(opsState.promoterPublishedEvents) ? opsState.promoterPublishedEvents : [];
+
+    approvalsRows.forEach((item) => {
+      const key = promoterKeyFromRecord(item);
+      if (!key) return;
+      directory.set(key, {
+        key,
+        accountId: String(item?.id || "").trim(),
+        name: String(item?.name || "Promoter").trim() || "Promoter",
+        email: normalizeEmail(item?.email || ""),
+        country: String(item?.country || item?.location || "—"),
+        status: String(item?.status || "Pending"),
+        submittedAt: item?.submittedAt || "",
+        ticketsSold: 0,
+        revenue: 0,
+        payouts: 0,
+        publishedEventsCount: Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0)),
+        payoutAccount: null,
+        publishedEvents: []
+      });
+    });
+
+    payoutRows.forEach((item) => {
+      const key = promoterKeyFromRecord(item);
+      if (!key) return;
+      const existing = directory.get(key) || {
+        key,
+        accountId: "",
+        name: "Promoter",
+        email: "",
+        country: "—",
+        status: "Approved",
+        submittedAt: "",
+        ticketsSold: 0,
+        revenue: 0,
+        payouts: 0,
+        publishedEventsCount: 0,
+        payoutAccount: null,
+        publishedEvents: []
+      };
+      existing.accountId = existing.accountId || String(item?.accountId || "").trim();
+      existing.name = String(item?.promoterName || item?.name || existing.name || "Promoter").trim() || "Promoter";
+      existing.email = normalizeEmail(item?.promoterEmail || item?.email || existing.email);
+      existing.country = String(item?.country || existing.country || "—");
+      existing.ticketsSold = Math.max(0, toFiniteNumber(item?.ticketsSold, existing.ticketsSold));
+      existing.revenue = Math.max(0, toFiniteNumber(item?.revenue, existing.revenue));
+      existing.payouts = Math.max(0, toFiniteNumber(item?.payouts, existing.payouts));
+      existing.publishedEventsCount = Math.max(existing.publishedEventsCount, Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0)));
+      existing.payoutAccount = item?.payoutAccount && typeof item.payoutAccount === "object"
+        ? item.payoutAccount
+        : existing.payoutAccount;
+      directory.set(key, existing);
+    });
+
+    publishedRows.forEach((item) => {
+      const key = promoterKeyFromRecord(item);
+      if (!key) return;
+      const existing = directory.get(key) || {
+        key,
+        accountId: "",
+        name: "Promoter",
+        email: "",
+        country: "—",
+        status: "Approved",
+        submittedAt: "",
+        ticketsSold: 0,
+        revenue: 0,
+        payouts: 0,
+        publishedEventsCount: 0,
+        payoutAccount: null,
+        publishedEvents: []
+      };
+      const events = Array.isArray(item?.events) ? item.events : [];
+      existing.accountId = existing.accountId || String(item?.accountId || "").trim();
+      existing.name = String(item?.promoterName || item?.name || existing.name || "Promoter").trim() || "Promoter";
+      existing.email = normalizeEmail(item?.promoterEmail || item?.email || existing.email);
+      existing.country = String(item?.country || existing.country || "—");
+      existing.publishedEvents = events;
+      existing.publishedEventsCount = Math.max(existing.publishedEventsCount, Math.max(0, toFiniteNumber(item?.publishedEventsCount, events.length)));
+      directory.set(key, existing);
+    });
+
+    return [...directory.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }
+
+  function renderPromoterProfilePanel(rows) {
+    if (!promoterProfilePanel) return;
     if (!rows.length) {
-      promoterPublishedEventsBody.innerHTML = `<tr><td colspan="4">No published promoter events yet.</td></tr>`;
+      promoterProfilePanel.innerHTML = `<p class="muted">Click a promoter in the list to view profile details, payout details, revenue, and published events.</p>`;
       return;
     }
-    promoterPublishedEventsBody.innerHTML = rows.map((item) => {
-      const events = Array.isArray(item?.events) ? item.events : [];
-      const eventList = events.length
-        ? events.map((eventItem) => escapeHtml(eventItem?.title || eventItem?.eventId || "Untitled")).join(", ")
-        : "No live events";
-      const promoterName = item?.promoterName || item?.name || "Promoter";
-      const promoterEmail = item?.promoterEmail || item?.email || "";
-      const publishedCount = Math.max(0, toFiniteNumber(item?.publishedCount, toFiniteNumber(item?.publishedEventsCount, events.length)));
+    const selected = rows.find((item) => item.key === selectedPromoterKey) || rows[0];
+    if (!selected) {
+      promoterProfilePanel.innerHTML = `<p class="muted">Click a promoter in the list to view profile details, payout details, revenue, and published events.</p>`;
+      return;
+    }
+    const status = String(selected.status || "Pending");
+    const isApproved = status.toLowerCase().includes("approved");
+    const isRejected = status.toLowerCase().includes("rejected");
+    const accountId = String(selected.accountId || "").trim();
+    const payoutSummary = summarizePayoutAccount(selected.payoutAccount);
+    const payoutProvider = String(selected?.payoutAccount?.provider || "Bank Transfer");
+    const payoutRouting = String(selected?.payoutAccount?.routingNumber || "").trim();
+    const payoutSwift = String(selected?.payoutAccount?.swiftCode || "").trim();
+    const payoutAddressParts = [
+      selected?.payoutAccount?.bankAddress,
+      selected?.payoutAccount?.city,
+      selected?.payoutAccount?.stateProvince,
+      selected?.payoutAccount?.country
+    ].map((part) => String(part || "").trim()).filter(Boolean);
+    const payoutAddress = payoutAddressParts.length ? payoutAddressParts.join(", ") : "";
+    const publishedEvents = Array.isArray(selected.publishedEvents) ? selected.publishedEvents : [];
+    const publishedEventsMarkup = publishedEvents.length
+      ? `<ul class="admin-promoter-events-list">${publishedEvents.map((eventItem) => `<li>${escapeHtml(eventItem?.title || eventItem?.eventId || "Untitled Event")}<small>${escapeHtml(formatDateTime(eventItem?.date) || "Date TBA")}</small></li>`).join("")}</ul>`
+      : `<p class="muted">No published events yet.</p>`;
+    promoterProfilePanel.innerHTML = `
+      <div class="admin-promoter-profile-head">
+        <div>
+          <h4>${escapeHtml(selected.name || "Promoter")}</h4>
+          <p class="muted">${escapeHtml(selected.email || "No email on file")}</p>
+        </div>
+        <span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span>
+      </div>
+      <div class="admin-promoter-profile-grid">
+        <div><small>Country</small><strong>${escapeHtml(selected.country || "—")}</strong></div>
+        <div><small>Submitted</small><strong>${escapeHtml(formatDateTime(selected.submittedAt))}</strong></div>
+        <div><small>Tickets Sold</small><strong>${Math.max(0, toFiniteNumber(selected.ticketsSold, 0)).toLocaleString()}</strong></div>
+        <div><small>Revenue</small><strong>${usd(Math.max(0, toFiniteNumber(selected.revenue, 0)))}</strong></div>
+        <div><small>Payouts Completed</small><strong>${usd(Math.max(0, toFiniteNumber(selected.payouts, 0)))}</strong></div>
+        <div><small>Published Events</small><strong>${Math.max(0, toFiniteNumber(selected.publishedEventsCount, publishedEvents.length)).toLocaleString()}</strong></div>
+      </div>
+      <div class="admin-promoter-payout-summary">
+        <small>Bank Transfer Details</small>
+        <p>${escapeHtml(`${payoutProvider}: ${payoutSummary}`)}</p>
+        ${payoutAddress ? `<p><small>Bank Address:</small> ${escapeHtml(payoutAddress)}</p>` : ""}
+        ${payoutRouting ? `<p><small>Routing Number:</small> ${escapeHtml(payoutRouting)}</p>` : ""}
+        ${payoutSwift ? `<p><small>SWIFT Code:</small> ${escapeHtml(payoutSwift)}</p>` : ""}
+      </div>
+      <div class="event-action-row">
+        <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(selected.email || "")}" ${isApproved || !accountId ? "disabled" : ""}>Approve</button>
+        <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(selected.email || "")}" ${isRejected || !accountId ? "disabled" : ""}>Reject</button>
+        <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="delete" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(selected.email || "")}" ${!accountId ? "disabled" : ""}>Delete</button>
+      </div>
+      <div class="admin-promoter-events-block">
+        <h5>Published Events</h5>
+        ${publishedEventsMarkup}
+      </div>
+    `;
+  }
+
+  function renderPromoterListTable() {
+    if (!promoterListBody) return;
+    const rows = buildPromoterDirectoryRows();
+    if (!rows.length) {
+      promoterListBody.innerHTML = `<tr><td colspan="6">No promoters available yet.</td></tr>`;
+      selectedPromoterKey = "";
+      renderPromoterProfilePanel([]);
+      return;
+    }
+    if (!selectedPromoterKey || !rows.some((item) => item.key === selectedPromoterKey)) {
+      selectedPromoterKey = rows[0].key;
+    }
+    promoterListBody.innerHTML = rows.map((item) => {
+      const status = String(item?.status || "Pending");
+      const publishedEventsCount = Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0));
+      const isSelected = item.key === selectedPromoterKey;
       return `
-        <tr>
-          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
+        <tr class="admin-promoter-row ${isSelected ? "is-selected" : ""}" data-admin-promoter-profile-key="${escapeHtml(item.key)}">
+          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "—")}</small></td>
           <td>${escapeHtml(item?.country || "—")}</td>
-          <td>${publishedCount.toLocaleString()}</td>
-          <td>${eventList}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>${Math.max(0, toFiniteNumber(item?.ticketsSold, 0)).toLocaleString()}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(item?.revenue, 0)))}</td>
+          <td>${publishedEventsCount.toLocaleString()}</td>
         </tr>
       `;
     }).join("");
+    renderPromoterProfilePanel(rows);
   }
 
   function renderAttendeeRecordsTable() {
@@ -3148,9 +3255,7 @@ function setupAdminDashboard() {
   }
 
   function renderOpsTables() {
-    renderPromoterApprovalsTable();
-    renderPromoterPayoutDetailsTable();
-    renderPromoterPublishedEventsTable();
+    renderPromoterListTable();
     renderAttendeeRecordsTable();
     renderPendingEventsTable();
     renderPayoutQueueTable();
@@ -3475,6 +3580,15 @@ function setupAdminDashboard() {
 
   function setupAdminTableActions() {
     dashboardRoot.addEventListener("click", async (event) => {
+      const promoterRow = event.target.closest("[data-admin-promoter-profile-key]");
+      if (promoterRow && !event.target.closest("[data-admin-promoter-action]")) {
+        const profileKey = String(promoterRow.dataset.adminPromoterProfileKey || "").trim();
+        if (profileKey) {
+          selectedPromoterKey = profileKey;
+          renderPromoterListTable();
+        }
+        return;
+      }
       const promoterActionButton = event.target.closest("[data-admin-promoter-action]");
       if (promoterActionButton) {
         const accountId = String(promoterActionButton.dataset.accountId || "").trim();
@@ -3511,8 +3625,13 @@ function setupAdminDashboard() {
           return;
         }
         if (action === "delete") {
+          const emailKey = normalizeEmail(email);
+          if (selectedPromoterKey === accountId || (emailKey && selectedPromoterKey === emailKey)) {
+            selectedPromoterKey = "";
+          }
           addActivity(`Promoter deleted: ${escapeHtml(email || accountId)}`);
         } else {
+          selectedPromoterKey = accountId || normalizeEmail(email) || selectedPromoterKey;
           addActivity(`Promoter ${action === "approved" ? "approved" : "updated"}: ${escapeHtml(email || accountId)}`);
         }
         await reloadAdminData();
@@ -3711,12 +3830,13 @@ function setupPromoterAccount() {
       name: String(formData.get("name") || "").trim(),
       email: String(formData.get("email") || "").trim().toLowerCase(),
       phone: String(formData.get("phone") || "").trim(),
-      location: String(formData.get("location") || "").trim()
+      location: String(formData.get("location") || "").trim(),
+      country: String(formData.get("country") || "").trim()
     };
     const password = String(formData.get("password") || "");
 
-    if (!profile.name || !profile.email || !password) {
-      setAccountStatus("Name, email, and password are required.", true);
+    if (!profile.name || !profile.email || !password || !profile.country) {
+      setAccountStatus("Name, email, password, and country are required.", true);
       return;
     }
 
@@ -3726,7 +3846,8 @@ function setupPromoterAccount() {
         name: profile.name,
         email: profile.email,
         password,
-        role: "promoter"
+        role: "promoter",
+        country: profile.country
       },
       skipAuth: true,
       includeErrorResponse: true,

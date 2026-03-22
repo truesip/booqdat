@@ -2505,8 +2505,9 @@ function createApiRouter(env) {
 
   router.get("/admin/ops/dashboard", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
-      const [promoterAccounts, promoterEvents, orderRows, profileRows, payoutAccountRows] = await Promise.all([
+      const [promoterAccounts, userAccounts, promoterEvents, orderRows, profileRows, payoutAccountRows] = await Promise.all([
         UserAccount.find({ role: "promoter" }).sort({ createdAt: -1 }).lean(),
+        UserAccount.find({ role: "user" }).sort({ createdAt: -1 }).lean(),
         PromoterEvent.find({}).sort({ updatedAt: -1 }).lean(),
         OrderRecord.find({}).sort({ updatedAt: -1 }).lean(),
         UserProfile.find({}).lean(),
@@ -2590,6 +2591,18 @@ function createApiRouter(env) {
         .filter((event) => event.eventId);
 
       const attendeesByEmail = {};
+      userAccounts.forEach((account) => {
+        const email = normalizeEmail(account?.email);
+        if (!email) return;
+        const profileData = profileMap[email] || {};
+        attendeesByEmail[email] = {
+          name: truncateText(account?.name || profileData?.name, 200) || "Attendee",
+          email,
+          orders: 0,
+          lastPurchase: "",
+          createdAt: truncateText(account?.createdAt, 60) || ""
+        };
+      });
       orders.forEach((order) => {
         const email = normalizeEmail(order?.attendee?.email);
         if (!email) return;
@@ -2597,7 +2610,8 @@ function createApiRouter(env) {
           name: truncateText(order?.attendee?.name, 200) || truncateText(profileMap[email]?.name, 200) || "Attendee",
           email,
           orders: 0,
-          lastPurchase: ""
+          lastPurchase: "",
+          createdAt: ""
         };
         current.orders += Math.max(1, Math.floor(toFiniteNumber(order?.quantity, 1)));
         const purchaseDate = truncateText(order?.purchaseDate, 60) || "";
@@ -2607,7 +2621,11 @@ function createApiRouter(env) {
         attendeesByEmail[email] = current;
       });
       const attendeeRecords = Object.values(attendeesByEmail)
-        .sort((a, b) => String(b.lastPurchase || "").localeCompare(String(a.lastPurchase || "")))
+        .sort((a, b) => {
+          const aKey = String(a.lastPurchase || a.createdAt || "");
+          const bKey = String(b.lastPurchase || b.createdAt || "");
+          return bKey.localeCompare(aKey);
+        })
         .slice(0, 20);
 
       const payoutQueue = orders
@@ -2661,6 +2679,7 @@ function createApiRouter(env) {
         const account = accountByEmail[email] || null;
         const profileData = profileMap[email] || {};
         const payoutAccount = payoutAccountMap[email] || {};
+        const accountNumber = String(payoutAccount?.bankAccountNumber || "").replace(/\s+/g, "");
         const metrics = promoterMetricsByEmail[email] || { ticketsSold: 0, revenue: 0, payouts: 0 };
         const publishedEvents = ensureArray(publishedEventsByPromoter[email]);
         return {
@@ -2675,8 +2694,15 @@ function createApiRouter(env) {
           payoutAccount: {
             provider: truncateText(payoutAccount?.provider, 80) || "Bank Transfer",
             bankName: truncateText(payoutAccount?.bankName, 200),
+            bankAddress: truncateText(payoutAccount?.bankAddress, 240),
+            city: truncateText(payoutAccount?.city, 120),
+            stateProvince: truncateText(payoutAccount?.stateProvince || payoutAccount?.provinceState || payoutAccount?.state, 120),
             accountHolderName: truncateText(payoutAccount?.accountHolderName || payoutAccount?.holder, 200),
-            country: truncateText(payoutAccount?.country, 120)
+            country: truncateText(payoutAccount?.country, 120),
+            bankAccountNumberMasked: accountNumber ? `••••${accountNumber.slice(-4)}` : "",
+            routingNumber: truncateText(payoutAccount?.routingNumber, 120),
+            swiftCode: truncateText(payoutAccount?.swiftCode, 120),
+            schedule: truncateText(payoutAccount?.schedule, 40)
           }
         };
       })
