@@ -6,6 +6,7 @@ const userAccountSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     role: { type: String, required: true, enum: ["admin", "promoter", "user"], index: true },
     passwordHash: { type: String, required: true },
+    promoterStatus: { type: String, enum: ["pending", "approved", "rejected", "suspended"], default: "approved", index: true },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null }
   },

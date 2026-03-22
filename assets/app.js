@@ -848,6 +848,10 @@ function setupAuthPage() {
         includeErrorResponse: true,
         suppressAuthRedirect: true
       });
+      if (response?.ok && response?.requiresApproval && payload.role === "promoter") {
+        setStatus(registerStatus, response?.message || "Promoter account created. An admin must approve your account before you can sign in.");
+        return;
+      }
       const tokens = extractAuthTokens(response);
       if (!response?.ok || !tokens.accessToken || !tokens.refreshToken || !response?.user) {
         setStatus(registerStatus, response?.error || "Unable to create account.", true);
@@ -1114,7 +1118,7 @@ function setupUserPortal() {
 
     upcomingGrid.innerHTML = upcoming.length
       ? upcoming.map(card).join("")
-      : `<article class="promoter-card"><h3>No upcoming tickets</h3><p>Purchase tickets as a guest and access them here by using the same email address.</p></article>`;
+      : `<article class="promoter-card"><h3>No upcoming tickets</h3><p>Sign in with your user account (using your checkout email) to access tickets and order updates.</p></article>`;
 
     pastGrid.innerHTML = past.length
       ? past.map(card).join("")
@@ -2515,25 +2519,82 @@ function setupPromoterDashboard() {
   const profileForm = root.querySelector("#promoter-settings-form");
   const profileStatus = root.querySelector("#promoter-settings-status");
   if (profileForm && profileStatus) {
-    const profile = (() => {
+    const localProfile = (() => {
       try {
         return JSON.parse(localStorage.getItem(STORAGE_KEYS.promoter) || "{}");
       } catch {
         return {};
       }
     })();
-    profileForm.elements.name.value = profile.name || "Promoter Account";
-    profileForm.elements.email.value = profile.email || "";
-    profileForm.elements.phone.value = profile.phone || "";
-    profileForm.elements.location.value = profile.location || "";
+    const authUser = readAuthSession()?.user || {};
+    function applyPromoterProfile(profile) {
+      if (profileForm.elements?.name) profileForm.elements.name.value = String(profile?.name || "Promoter Account");
+      if (profileForm.elements?.email) profileForm.elements.email.value = String(profile?.email || "");
+      if (profileForm.elements?.phone) profileForm.elements.phone.value = String(profile?.phone || "");
+      if (profileForm.elements?.location) profileForm.elements.location.value = String(profile?.location || "");
+      if (profileForm.elements?.notifySales) profileForm.elements.notifySales.checked = profile?.notifySales !== false;
+      if (profileForm.elements?.notifyPayouts) profileForm.elements.notifyPayouts.checked = profile?.notifyPayouts !== false;
+    }
+    const fallbackProfile = {
+      name: String(localProfile?.name || authUser?.name || "Promoter Account"),
+      email: String(localProfile?.email || authUser?.email || ""),
+      phone: String(localProfile?.phone || ""),
+      location: String(localProfile?.location || ""),
+      notifySales: localProfile?.notifySales !== false,
+      notifyPayouts: localProfile?.notifyPayouts !== false
+    };
+    applyPromoterProfile(fallbackProfile);
 
-    profileForm.addEventListener("submit", (event) => {
+    async function loadPromoterProfile() {
+      const response = await apiRequest("/promoter/profile", {
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) return;
+      const profile = {
+        ...fallbackProfile,
+        ...response.profile,
+        name: String(response.profile?.name || fallbackProfile.name || "Promoter Account"),
+        email: String(response.profile?.email || fallbackProfile.email || ""),
+        phone: String(response.profile?.phone || ""),
+        location: String(response.profile?.location || ""),
+        notifySales: response.profile?.notifySales !== false,
+        notifyPayouts: response.profile?.notifyPayouts !== false
+      };
+      localStorage.setItem(STORAGE_KEYS.promoter, JSON.stringify(profile));
+      applyPromoterProfile(profile);
+    }
+
+    profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const formData = new FormData(profileForm);
-      const payload = Object.fromEntries(formData.entries());
-      localStorage.setItem(STORAGE_KEYS.promoter, JSON.stringify(payload));
+      const payload = {
+        name: String(formData.get("name") || "").trim(),
+        email: String(formData.get("email") || "").trim().toLowerCase(),
+        phone: String(formData.get("phone") || "").trim(),
+        location: String(formData.get("location") || "").trim(),
+        notifySales: Boolean(formData.get("notifySales")),
+        notifyPayouts: Boolean(formData.get("notifyPayouts"))
+      };
+      const response = await apiRequest("/promoter/profile", {
+        method: "POST",
+        body: payload,
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        profileStatus.textContent = response?.error || "Unable to update promoter profile right now.";
+        return;
+      }
+      const profile = {
+        ...payload,
+        ...response.profile,
+        email: String(response.profile?.email || payload.email || "")
+      };
+      localStorage.setItem(STORAGE_KEYS.promoter, JSON.stringify(profile));
       profileStatus.textContent = "Profile settings updated successfully.";
     });
+    void loadPromoterProfile();
   }
 
   const sidebarToggle = root.querySelector("[data-promoter-sidebar-toggle]");
@@ -2550,7 +2611,6 @@ function setupPromoterDashboard() {
     });
   }
 
-  promoterEvents.forEach(syncMarketplace);
   updatePromoterKpis();
   renderEventCards();
   renderAnalytics();
@@ -2721,6 +2781,7 @@ function setupAdminDashboard() {
     promoterApprovalsBody.innerHTML = rows.map((item) => {
       const status = String(item?.status || "Pending");
       const isApproved = status.toLowerCase().includes("approved");
+      const isRejected = status.toLowerCase().includes("rejected");
       return `
         <tr>
           <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
@@ -2730,7 +2791,7 @@ function setupAdminDashboard() {
           <td>
             <div class="event-action-row">
               <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}" ${isApproved ? "disabled" : ""}>Approve</button>
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}">Reject</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}" ${isRejected ? "disabled" : ""}>Reject</button>
             </div>
           </td>
         </tr>
@@ -3317,6 +3378,13 @@ function setupPromoterAccount() {
       includeErrorResponse: true,
       suppressAuthRedirect: true
     });
+    if (registerResponse?.ok && registerResponse?.requiresApproval) {
+      localStorage.setItem(STORAGE_KEYS.promoter, JSON.stringify(profile));
+      clearAuthSession();
+      setAccountStatus(registerResponse?.message || "Promoter account created. Wait for admin approval before signing in.");
+      accountForm.reset();
+      return;
+    }
 
     let authResponse = registerResponse;
     if (!registerResponse?.ok) {
@@ -3333,6 +3401,10 @@ function setupPromoterAccount() {
 
     const tokens = extractAuthTokens(authResponse);
     if (!authResponse?.ok || !tokens.accessToken || !tokens.refreshToken || !authResponse?.user) {
+      if (["PROMOTER_PENDING_APPROVAL", "PROMOTER_REJECTED", "PROMOTER_SUSPENDED"].includes(String(authResponse?.errorCode || ""))) {
+        setAccountStatus(authResponse?.error || "Promoter account is not approved for sign-in yet.", true);
+        return;
+      }
       setAccountStatus(authResponse?.error || "Unable to authenticate promoter account.", true);
       return;
     }

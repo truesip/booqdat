@@ -7,6 +7,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connectToMongo } = require("../src/config/db");
 const { createApp } = require("../src/app");
 const UserAccount = require("../src/models/UserAccount");
+const PromoterEvent = require("../src/models/PromoterEvent");
 
 function createTestEnv(mongoUri) {
   return {
@@ -58,6 +59,14 @@ async function registerAndLoginPromoter() {
   });
   assert.equal(registerResponse.status, 201);
   assert.equal(registerResponse.body.ok, true);
+  assert.equal(registerResponse.body.requiresApproval, true);
+  assert.equal(registerResponse.body.accessToken, undefined);
+  assert.equal(registerResponse.body.refreshToken, undefined);
+
+  await UserAccount.updateOne(
+    { email },
+    { $set: { promoterStatus: "approved", isActive: true } }
+  );
 
   const loginResponse = await request(app).post("/api/auth/login").send({
     email,
@@ -200,6 +209,44 @@ test("admin dashboard surfaces promoter pending events for approval", async () =
   const pending = dashboardResponse.body.pendingEvents || [];
   const targetEvent = pending.find((event) => String(event?.eventId || "") === pendingId);
   assert.ok(targetEvent);
+});
+
+test("admin can approve pending promoter events even when legacy records are missing data.id", async () => {
+  const { email: promoterEmail } = await registerAndLoginPromoter();
+  const pendingId = "evt-admin-legacy-missing-id-1";
+  await PromoterEvent.create({
+    eventId: pendingId,
+    data: {
+      title: "Legacy Pending Event Without Data ID",
+      status: "Pending Approval",
+      promoterEmail,
+      city: "Albuquerque",
+      category: "Music"
+    }
+  });
+
+  const { accessToken: adminToken } = await createAndLoginAdmin();
+  const dashboardResponse = await request(app)
+    .get("/api/admin/ops/dashboard")
+    .set("Authorization", `Bearer ${adminToken}`);
+  assert.equal(dashboardResponse.status, 200);
+  assert.equal(dashboardResponse.body.ok, true);
+  const pending = dashboardResponse.body.pendingEvents || [];
+  const targetEvent = pending.find((event) => String(event?.eventId || "") === pendingId);
+  assert.ok(targetEvent);
+
+  const approveResponse = await request(app)
+    .post(`/api/admin/events/${encodeURIComponent(pendingId)}/status`)
+    .set("Authorization", `Bearer ${adminToken}`)
+    .send({ status: "Live" });
+  assert.equal(approveResponse.status, 200);
+  assert.equal(approveResponse.body.ok, true);
+  assert.equal(String(approveResponse.body.status || ""), "Live");
+
+  const publicBootstrap = await request(app).get("/api/bootstrap");
+  assert.equal(publicBootstrap.status, 200);
+  const approvedEvent = (publicBootstrap.body.events || []).find((event) => String(event?.id || "") === pendingId);
+  assert.ok(approvedEvent);
 });
 
 test("promoter delete endpoint only unpublishes marketplace data and preserves pending promoter records", async () => {

@@ -203,6 +203,10 @@
 
         setStatus(registerStatus, "");
         const response = await authRequest("/auth/register", payload);
+        if (response?.ok && response?.requiresApproval && payload.role === "promoter") {
+          setStatus(registerStatus, response?.message || "Promoter account created. An admin must approve your account before you can sign in.");
+          return;
+        }
         const tokens = extractAuthTokens(response);
         if (!response?.ok || !tokens.accessToken || !tokens.refreshToken || !response?.user) {
           setStatus(registerStatus, response?.error || "Unable to create account.", true);

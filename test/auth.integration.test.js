@@ -83,6 +83,31 @@ test("register issues access and refresh tokens", async () => {
   assert.equal(response.body.user.role, "user");
 });
 
+test("promoter registration requires approval and pending promoters cannot log in", async () => {
+  const email = "pending-promoter@example.com";
+  const password = "Password123!";
+  const registerResponse = await registerUser({
+    name: "Pending Promoter",
+    email,
+    password,
+    role: "promoter"
+  });
+  assert.equal(registerResponse.status, 201);
+  assert.equal(registerResponse.body.ok, true);
+  assert.equal(registerResponse.body.requiresApproval, true);
+  assert.equal(registerResponse.body.approvalStatus, "Pending");
+  assert.equal(registerResponse.body.accessToken, undefined);
+  assert.equal(registerResponse.body.refreshToken, undefined);
+
+  const loginResponse = await request(app).post("/api/auth/login").send({
+    email,
+    password
+  });
+  assert.equal(loginResponse.status, 403);
+  assert.equal(loginResponse.body.ok, false);
+  assert.equal(loginResponse.body.errorCode, "PROMOTER_PENDING_APPROVAL");
+});
+
 test("login rejects invalid credentials with stable error code", async () => {
   await registerUser();
   const response = await request(app).post("/api/auth/login").send({

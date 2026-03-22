@@ -31,6 +31,26 @@ function normalizeRole(value) {
   return "";
 }
 
+function normalizePromoterAccountStatus(value) {
+  const status = String(value || "").trim().toLowerCase();
+  if (["pending", "approved", "rejected", "suspended"].includes(status)) return status;
+  return "";
+}
+
+function resolvePromoterAccountStatus(account) {
+  const explicit = normalizePromoterAccountStatus(account?.promoterStatus);
+  if (explicit) return explicit;
+  return account?.isActive ? "approved" : "pending";
+}
+
+function promoterAccountStatusLabel(value) {
+  const status = normalizePromoterAccountStatus(value);
+  if (status === "approved") return "Approved";
+  if (status === "rejected") return "Rejected";
+  if (status === "suspended") return "Suspended";
+  return "Pending";
+}
+
 const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
 const LEGACY_DEMO_EVENT_TITLES = new Set([
   "sunset rooftop sessions",
@@ -374,6 +394,24 @@ function createApiRouter(env) {
     return next.toISOString();
   }
 
+  function orderEventDateTime(order) {
+    const eventDate = normalizeText(order?.eventDate);
+    const eventTime = normalizeText(order?.eventTime || "00:00");
+    if (!eventDate) return null;
+    const parsed = new Date(`${eventDate}T${eventTime}:00`);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
+
+  function canRequestRefundForOrder(order) {
+    const status = normalizeLifecycleStatus(order?.status);
+    if (status !== "confirmed") return false;
+    const eventDateTime = orderEventDateTime(order);
+    if (!eventDateTime) return false;
+    const diffMs = eventDateTime.getTime() - Date.now();
+    return diffMs >= 48 * 60 * 60 * 1000;
+  }
+
   async function getPromoterOwnedEventIds(promoterEmail) {
     if (!promoterEmail) return new Set();
     const rows = await PromoterEvent.find({}).lean();
@@ -637,16 +675,17 @@ function createApiRouter(env) {
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
+      const isPromoterAccount = role === "promoter";
       const account = await UserAccount.create({
         name: name || email.split("@")[0],
         email,
         role,
         passwordHash,
-        isActive: true,
-        lastLoginAt: new Date()
+        promoterStatus: isPromoterAccount ? "pending" : "approved",
+        isActive: isPromoterAccount ? false : true,
+        lastLoginAt: isPromoterAccount ? null : new Date()
       });
 
-      const tokenBundle = await issueTokenBundle(account, req);
       const welcomeTemplate = welcomeEmailTemplate({
         companyName,
         name: account.name,
@@ -658,6 +697,23 @@ function createApiRouter(env) {
             : "/user-portal.html"
       });
       await sendTemplateEmail(account.email, welcomeTemplate, `welcome-${account.role}`);
+      if (isPromoterAccount) {
+        res.status(201).json({
+          ok: true,
+          requiresApproval: true,
+          approvalStatus: "Pending",
+          message: "Promoter account created and pending admin approval.",
+          user: {
+            id: String(account._id),
+            name: account.name,
+            email: account.email,
+            role: account.role
+          }
+        });
+        return;
+      }
+
+      const tokenBundle = await issueTokenBundle(account, req);
       res.status(201).json(authSuccessPayload(account, tokenBundle));
     } catch (error) {
       next(error);
@@ -674,7 +730,38 @@ function createApiRouter(env) {
       }
 
       const account = await UserAccount.findOne({ email });
-      if (!account || !account.isActive) {
+      if (!account) {
+        res.status(401).json({ ok: false, error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
+        return;
+      }
+      if (account.role === "promoter") {
+        const promoterStatus = resolvePromoterAccountStatus(account);
+        if (promoterStatus === "pending") {
+          res.status(403).json({
+            ok: false,
+            error: "Promoter account is pending admin approval.",
+            errorCode: "PROMOTER_PENDING_APPROVAL"
+          });
+          return;
+        }
+        if (promoterStatus === "rejected") {
+          res.status(403).json({
+            ok: false,
+            error: "Promoter account was rejected. Contact support for next steps.",
+            errorCode: "PROMOTER_REJECTED"
+          });
+          return;
+        }
+        if (promoterStatus === "suspended") {
+          res.status(403).json({
+            ok: false,
+            error: "Promoter account is suspended. Contact support to restore access.",
+            errorCode: "PROMOTER_SUSPENDED"
+          });
+          return;
+        }
+      }
+      if (!account.isActive) {
         res.status(401).json({ ok: false, error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
         return;
       }
@@ -1157,11 +1244,13 @@ function createApiRouter(env) {
         AppEvent.find({}).sort({ updatedAt: -1 }).lean(),
         PromoterEvent.find({}).sort({ updatedAt: -1 }).lean()
       ]);
+      const publicEvents = filterLegacyDemoEvents(events.map((item) => item.data));
+      const allPromoterEvents = filterLegacyDemoEvents(promoterEvents.map((item) => item.data));
 
       const basePayload = {
         ok: true,
-        events: filterLegacyDemoEvents(events.map((item) => item.data)),
-        promoterEvents: filterLegacyDemoEvents(promoterEvents.map((item) => item.data)),
+        events: publicEvents,
+        promoterEvents: [],
         orders: [],
         userProfiles: {},
         userPaymentMethods: {},
@@ -1184,6 +1273,7 @@ function createApiRouter(env) {
         ]);
         res.status(200).json({
           ...basePayload,
+          promoterEvents: allPromoterEvents,
           orders: filterLegacyDemoOrders(orders.map((item) => item.data)),
           userProfiles: toProfileMap(profiles),
           userPaymentMethods: toMethodsMap(paymentMethods),
@@ -1212,9 +1302,9 @@ function createApiRouter(env) {
 
       if (role === "promoter") {
         const promoterEmail = normalizeEmail(req.auth.email);
+        const promoterScopedEvents = allPromoterEvents.filter((event) => normalizeEmail(event?.promoterEmail) === promoterEmail);
         const ownedEventIds = new Set(
-          filterLegacyDemoEvents(basePayload.promoterEvents)
-            .filter((event) => normalizeEmail(event?.promoterEmail) === promoterEmail)
+          promoterScopedEvents
             .map((event) => String(event?.id || "").trim())
             .filter(Boolean)
         );
@@ -1223,6 +1313,7 @@ function createApiRouter(env) {
           .filter((order) => orderBelongsToPromoter(order, promoterEmail, ownedEventIds));
         res.status(200).json({
           ...basePayload,
+          promoterEvents: promoterScopedEvents,
           orders: promoterOrders
         });
         return;
@@ -1587,6 +1678,90 @@ function createApiRouter(env) {
     }
   });
 
+  router.get("/promoter/profile", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.query?.promoterEmail || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid promoter email is required" });
+        return;
+      }
+
+      const account = await UserAccount.findOne({ email: targetEmail, role: "promoter" }).lean();
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Promoter account not found" });
+        return;
+      }
+      const profileRow = await UserProfile.findOne({ email: targetEmail }).lean();
+      const profileData = profileRow?.data && typeof profileRow.data === "object" ? profileRow.data : {};
+      const profile = {
+        name: truncateText(profileData?.name || account.name, 200) || account.name,
+        email: targetEmail,
+        phone: truncateText(profileData?.phone, 80),
+        location: truncateText(profileData?.location, 200),
+        notifySales: profileData?.notifySales !== false,
+        notifyPayouts: profileData?.notifyPayouts !== false
+      };
+      res.status(200).json({
+        ok: true,
+        promoterEmail: targetEmail,
+        profile
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/promoter/profile", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const targetEmail = role === "admin"
+        ? normalizeEmail(req.body?.promoterEmail || req.body?.email || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid promoter email is required" });
+        return;
+      }
+
+      const account = await UserAccount.findOne({ email: targetEmail, role: "promoter" });
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Promoter account not found" });
+        return;
+      }
+
+      const profile = {
+        name: truncateText(req.body?.name || account.name, 200) || account.name,
+        email: targetEmail,
+        phone: truncateText(req.body?.phone, 80),
+        location: truncateText(req.body?.location, 200),
+        notifySales: req.body?.notifySales !== false,
+        notifyPayouts: req.body?.notifyPayouts !== false
+      };
+
+      await UserProfile.updateOne(
+        { email: targetEmail },
+        { $set: { email: targetEmail, data: profile } },
+        { upsert: true }
+      );
+      if (profile.name && profile.name !== account.name) {
+        account.name = profile.name;
+        await account.save();
+      }
+
+      res.status(200).json({
+        ok: true,
+        promoterEmail: targetEmail,
+        profile
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/user/payment-methods", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
     try {
       const role = normalizeRole(req.auth?.role);
@@ -1693,6 +1868,13 @@ function createApiRouter(env) {
         res.status(400).json({ ok: false, error: "Refund request requires a paid order" });
         return;
       }
+      if (!canRequestRefundForOrder(order)) {
+        res.status(400).json({
+          ok: false,
+          error: "Refund requests are only allowed for confirmed upcoming events at least 48 hours away."
+        });
+        return;
+      }
 
       order.status = "Refund Requested";
       order.paymentStatus = "Refund Requested";
@@ -1777,7 +1959,15 @@ function createApiRouter(env) {
         PromoterPayoutAccount.find({}).lean()
       ]);
 
-      const events = filterLegacyDemoEvents(promoterEvents.map((item) => item.data));
+      const events = filterLegacyDemoEvents(promoterEvents.map((item) => {
+        const eventData = item?.data && typeof item.data === "object" ? item.data : {};
+        const resolvedEventId = truncateText(eventData?.id || item?.eventId, 120);
+        return {
+          ...eventData,
+          id: resolvedEventId || "",
+          eventId: resolvedEventId || ""
+        };
+      }));
       const orders = filterLegacyDemoOrders(orderRows.map((item) => item.data));
       const profileMap = toProfileMap(profileRows);
       const payoutAccountMap = payoutAccountRows.reduce((acc, item) => {
@@ -1801,13 +1991,14 @@ function createApiRouter(env) {
         const email = normalizeEmail(account.email);
         const relatedEvent = latestEventByPromoter[email] || {};
         const location = truncateText(relatedEvent?.city || relatedEvent?.state || relatedEvent?.country, 120) || "—";
+        const promoterStatus = resolvePromoterAccountStatus(account);
         return {
           id: String(account._id),
           name: account.name,
           email,
           location,
           submittedAt: account.createdAt,
-          status: account.isActive ? "Approved" : "Pending"
+          status: promoterAccountStatusLabel(promoterStatus)
         };
       });
 
@@ -1817,7 +2008,7 @@ function createApiRouter(env) {
           return isPendingReviewEventStatus(status);
         })
         .map((event) => ({
-          eventId: truncateText(event?.id, 120),
+          eventId: truncateText(event?.id || event?.eventId, 120),
           title: truncateText(event?.title, 200) || "Untitled Event",
           promoterEmail: normalizeEmail(event?.promoterEmail),
           category: truncateText(event?.category, 120) || "—",
@@ -1905,7 +2096,7 @@ function createApiRouter(env) {
         payoutQueue,
         disputes,
         counts: {
-          pendingPromoters: promoterApprovals.filter((item) => item.status === "Pending").length,
+          pendingPromoters: promoterApprovals.filter((item) => normalizeLifecycleStatus(item.status) === "pending").length,
           pendingEvents: pendingEvents.length
         }
       });
@@ -1927,9 +2118,10 @@ function createApiRouter(env) {
         res.status(404).json({ ok: false, error: "Promoter account not found" });
         return;
       }
+      account.promoterStatus = desired;
       account.isActive = desired === "approved";
       await account.save();
-      res.status(200).json({ ok: true, accountId, status: account.isActive ? "Approved" : "Pending" });
+      res.status(200).json({ ok: true, accountId, status: promoterAccountStatusLabel(desired) });
     } catch (error) {
       next(error);
     }
@@ -2084,8 +2276,15 @@ function createApiRouter(env) {
   router.post("/admin/ops/approve-all", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
       const promoterResult = await UserAccount.updateMany(
-        { role: "promoter", isActive: false },
-        { $set: { isActive: true } }
+        {
+          role: "promoter",
+          $or: [
+            { isActive: false },
+            { promoterStatus: { $ne: "approved" } },
+            { promoterStatus: { $exists: false } }
+          ]
+        },
+        { $set: { isActive: true, promoterStatus: "approved" } }
       );
 
       const eventRows = await PromoterEvent.find({}).lean();
