@@ -1302,9 +1302,43 @@ function createApiRouter(env) {
         res.status(400).json({ ok: false, error: "eventId required" });
         return;
       }
-      await AppEvent.deleteOne({ eventId });
-      await PromoterEvent.deleteOne({ eventId });
-      res.status(200).json({ ok: true });
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const deleteScope = normalizeLifecycleStatus(req.query?.scope || req.query?.mode || "");
+      const wantsHardDelete = deleteScope === "all" || deleteScope === "full" || deleteScope === "hard";
+      if (wantsHardDelete && role !== "admin") {
+        res.status(403).json({ ok: false, error: "Only admins can hard-delete promoter event records" });
+        return;
+      }
+
+      const [appRow, promoterRow] = await Promise.all([
+        AppEvent.findOne({ eventId }).lean(),
+        PromoterEvent.findOne({ eventId }).lean()
+      ]);
+
+      if (role === "promoter" && (appRow || promoterRow)) {
+        const promoterOwnerEmail = normalizeEmail(promoterRow?.data?.promoterEmail);
+        const appOwnerEmail = normalizeEmail(appRow?.data?.promoterEmail);
+        const ownerEmail = promoterOwnerEmail || appOwnerEmail;
+        if (!sessionEmail || (ownerEmail && ownerEmail !== sessionEmail)) {
+          res.status(403).json({ ok: false, error: "Cannot delete events outside your promoter account scope" });
+          return;
+        }
+      }
+
+      const removedMarketplace = Number((await AppEvent.deleteOne({ eventId }))?.deletedCount || 0);
+      let removedPromoter = 0;
+      if (role === "admin" && wantsHardDelete) {
+        removedPromoter = Number((await PromoterEvent.deleteOne({ eventId }))?.deletedCount || 0);
+      }
+
+      res.status(200).json({
+        ok: true,
+        eventId,
+        scope: role === "admin" && wantsHardDelete ? "all" : "marketplace",
+        removedMarketplace,
+        removedPromoter
+      });
     } catch (error) {
       next(error);
     }

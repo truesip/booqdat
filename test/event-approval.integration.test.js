@@ -1,10 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connectToMongo } = require("../src/config/db");
 const { createApp } = require("../src/app");
+const UserAccount = require("../src/models/UserAccount");
 
 function createTestEnv(mongoUri) {
   return {
@@ -121,6 +123,29 @@ test("promoter sync of new event with live status is forced to pending approval 
   assert.equal(publicEvent, undefined);
 });
 
+
+async function createAndLoginAdmin() {
+  const email = "admin@example.com";
+  const password = "Password123!";
+  const passwordHash = await bcrypt.hash(password, 12);
+  await UserAccount.create({
+    name: "Admin User",
+    email,
+    role: "admin",
+    passwordHash,
+    isActive: true
+  });
+  const loginResponse = await request(app).post("/api/auth/login").send({
+    email,
+    password
+  });
+  assert.equal(loginResponse.status, 200);
+  assert.equal(loginResponse.body.ok, true);
+  return {
+    email,
+    accessToken: loginResponse.body.accessToken
+  };
+}
 test("promoter cannot force live publication through sync/events without approved promoter event state", async () => {
   const { accessToken } = await registerAndLoginPromoter();
 
@@ -144,4 +169,81 @@ test("promoter cannot force live publication through sync/events without approve
   assert.equal(publicBootstrap.status, 200);
   const leakedEvent = (publicBootstrap.body.events || []).find((event) => event.id === "evt-bypass-1");
   assert.equal(leakedEvent, undefined);
+});
+
+test("admin dashboard surfaces promoter pending events for approval", async () => {
+  const { accessToken: promoterToken } = await registerAndLoginPromoter();
+  const pendingId = "evt-admin-pending-1";
+
+  const syncResponse = await request(app)
+    .put("/api/sync/promoter-events")
+    .set("Authorization", `Bearer ${promoterToken}`)
+    .send({
+      promoterEvents: [
+        {
+          id: pendingId,
+          title: "Admin Pending Visibility Test",
+          status: "Pending Approval",
+          city: "Albuquerque"
+        }
+      ]
+    });
+  assert.equal(syncResponse.status, 200);
+  assert.equal(syncResponse.body.ok, true);
+
+  const { accessToken: adminToken } = await createAndLoginAdmin();
+  const dashboardResponse = await request(app)
+    .get("/api/admin/ops/dashboard")
+    .set("Authorization", `Bearer ${adminToken}`);
+  assert.equal(dashboardResponse.status, 200);
+  assert.equal(dashboardResponse.body.ok, true);
+  const pending = dashboardResponse.body.pendingEvents || [];
+  const targetEvent = pending.find((event) => String(event?.eventId || "") === pendingId);
+  assert.ok(targetEvent);
+});
+
+test("promoter delete endpoint only unpublishes marketplace data and preserves pending promoter records", async () => {
+  const { accessToken: promoterToken } = await registerAndLoginPromoter();
+  const pendingId = "evt-admin-pending-preserve-1";
+
+  const syncResponse = await request(app)
+    .put("/api/sync/promoter-events")
+    .set("Authorization", `Bearer ${promoterToken}`)
+    .send({
+      promoterEvents: [
+        {
+          id: pendingId,
+          title: "Pending Record Preservation Test",
+          status: "Pending Approval",
+          city: "Albuquerque"
+        }
+      ]
+    });
+  assert.equal(syncResponse.status, 200);
+  assert.equal(syncResponse.body.ok, true);
+
+  const deleteResponse = await request(app)
+    .delete(`/api/events/${encodeURIComponent(pendingId)}`)
+    .set("Authorization", `Bearer ${promoterToken}`);
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deleteResponse.body.ok, true);
+  assert.equal(deleteResponse.body.scope, "marketplace");
+  assert.equal(deleteResponse.body.removedPromoter, 0);
+
+  const promoterBootstrap = await request(app)
+    .get("/api/bootstrap")
+    .set("Authorization", `Bearer ${promoterToken}`);
+  assert.equal(promoterBootstrap.status, 200);
+  const promoterEvent = (promoterBootstrap.body.promoterEvents || []).find((event) => event.id === pendingId);
+  assert.ok(promoterEvent);
+
+  const { accessToken: adminToken } = await createAndLoginAdmin();
+  const dashboardResponse = await request(app)
+    .get("/api/admin/ops/dashboard")
+    .set("Authorization", `Bearer ${adminToken}`);
+  assert.equal(dashboardResponse.status, 200);
+  assert.equal(dashboardResponse.body.ok, true);
+  const pending = dashboardResponse.body.pendingEvents || [];
+  const targetEvent = pending.find((event) => String(event?.eventId || "") === pendingId);
+  assert.ok(targetEvent);
 });

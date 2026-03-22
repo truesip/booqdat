@@ -325,10 +325,21 @@ function upsertStoredEvent(event) {
 }
 
 function removeStoredEventById(eventId) {
-  const next = readStoredEvents().filter((event) => event.id !== eventId);
+  const normalizedEventId = String(eventId || "").trim();
+  if (!normalizedEventId) return;
+  const current = readStoredEvents();
+  const existedInMarketplace = current.some((event) => String(event?.id || "").trim() === normalizedEventId);
+  const next = current.filter((event) => String(event?.id || "").trim() !== normalizedEventId);
   writeStoredEvents(next);
-  if (canUseApi()) {
-    apiRequest(`/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
+  if (canUseApi() && existedInMarketplace) {
+    queueApiSync(`events-unpublish-${normalizedEventId}`, "/sync/events", {
+      events: [
+        {
+          id: normalizedEventId,
+          status: "Pending Approval"
+        }
+      ]
+    }, 150);
   }
 }
 
@@ -1547,6 +1558,7 @@ function setupPromoterDashboard() {
     const normalizedStatus = normalizeLifecycleStatus(event?.status);
     if (normalizedStatus === "draft") return "Draft";
     if (normalizedStatus === "paused") return "Paused";
+    if (isMarketplaceLiveEventStatus(normalizedStatus)) return "Live";
     if (normalizedStatus.includes("reject")) return "Rejected";
     if (normalizedStatus.includes("flag")) return "Flagged";
     if (normalizedStatus.includes("pending") || normalizedStatus.includes("review") || normalizedStatus.includes("submitted")) {
