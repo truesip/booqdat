@@ -2152,8 +2152,15 @@ function createApiRouter(env) {
         return;
       }
       if (promoterRow?.data && typeof promoterRow.data === "object") {
-        promoterRow.data.status = nextStatus;
-        await promoterRow.save();
+        const promoterData = {
+          ...promoterRow.data,
+          id: truncateText(promoterRow.data?.id || promoterRow.eventId, 120) || promoterRow.eventId,
+          status: nextStatus
+        };
+        await PromoterEvent.updateOne(
+          { _id: promoterRow._id },
+          { $set: { data: promoterData } }
+        );
       }
       if (nextStatus === "Live") {
         const sourceData = promoterRow?.data && typeof promoterRow.data === "object"

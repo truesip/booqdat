@@ -243,6 +243,17 @@ test("admin can approve pending promoter events even when legacy records are mis
   assert.equal(approveResponse.body.ok, true);
   assert.equal(String(approveResponse.body.status || ""), "Live");
 
+  const postApproveDashboard = await request(app)
+    .get("/api/admin/ops/dashboard")
+    .set("Authorization", `Bearer ${adminToken}`);
+  assert.equal(postApproveDashboard.status, 200);
+  assert.equal(postApproveDashboard.body.ok, true);
+  const postApprovePending = postApproveDashboard.body.pendingEvents || [];
+  assert.equal(
+    postApprovePending.some((event) => String(event?.eventId || "") === pendingId),
+    false
+  );
+
   const publicBootstrap = await request(app).get("/api/bootstrap");
   assert.equal(publicBootstrap.status, 200);
   const approvedEvent = (publicBootstrap.body.events || []).find((event) => String(event?.id || "") === pendingId);
