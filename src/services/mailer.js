@@ -71,7 +71,12 @@ async function sendEmail(env, payload) {
     html_body: String(payload?.html || "")
   };
   if (isValidEmail(replyTo)) {
-    requestBody.custom_headers = [`Reply-To: ${replyTo}`];
+    requestBody.custom_headers = [
+      {
+        header: "Reply-To",
+        value: replyTo
+      }
+    ];
   }
 
   let response;
