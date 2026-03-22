@@ -30,7 +30,21 @@ body {
 }
 
 body.auth-pending {
+  background: #ffffff;
+}
+
+body.auth-pending > * {
   visibility: hidden;
+}
+
+body.auth-pending::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: #ffffff url("../Booqdat-logo.png") center center / 180px auto no-repeat;
+  z-index: 9999;
+  pointer-events: none;
+  visibility: visible;
 }
 
 img {

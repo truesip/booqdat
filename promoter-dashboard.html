@@ -9,7 +9,21 @@
     document.documentElement.classList.add("auth-pending");
   </script>
   <style>
-    html.auth-pending body.auth-pending { visibility: hidden; }
+    html.auth-pending body.auth-pending {
+      background: #ffffff;
+    }
+    html.auth-pending body.auth-pending > * {
+      visibility: hidden;
+    }
+    html.auth-pending body.auth-pending::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: #ffffff url("Booqdat-logo.png") center center / 180px auto no-repeat;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: visible;
+    }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
