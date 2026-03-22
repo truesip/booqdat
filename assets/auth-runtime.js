@@ -15,6 +15,7 @@
     "admin-reports.html": ["admin"],
     "admin-disputes.html": ["admin"],
     "admin-settings.html": ["admin"],
+    "admin-promoter-profile.html": ["admin"],
     "promoter-dashboard.html": ["promoter", "admin"],
     "promoter-events.html": ["promoter", "admin"],
     "promoter-create.html": ["promoter", "admin"],

@@ -25,6 +25,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "admin-reports.html": ["admin"],
   "admin-disputes.html": ["admin"],
   "admin-settings.html": ["admin"],
+  "admin-promoter-profile.html": ["admin"],
   "promoter-dashboard.html": ["promoter", "admin"],
   "promoter-events.html": ["promoter", "admin"],
   "promoter-create.html": ["promoter", "admin"],
@@ -42,7 +43,8 @@ const ADMIN_SECTION_BY_PAGE = {
   "admin-payments.html": "payments-section",
   "admin-reports.html": "reports-section",
   "admin-disputes.html": "disputes-section",
-  "admin-settings.html": "settings-section"
+  "admin-settings.html": "settings-section",
+  "admin-promoter-profile.html": "promoter-profile-section"
 };
 const PROMOTER_SECTION_BY_PAGE = {
   "promoter-dashboard.html": "promoter-home",
@@ -2770,8 +2772,21 @@ function setupAdminDashboard() {
     promoter: 0,
     event: 0
   };
+  function readPromoterSelectionFromUrl() {
+    try {
+      const url = new URL(window.location.href);
+      return {
+        key: String(url.searchParams.get("promoterKey") || "").trim(),
+        accountId: String(url.searchParams.get("accountId") || "").trim(),
+        email: normalizeEmail(url.searchParams.get("email") || url.searchParams.get("promoterEmail") || "")
+      };
+    } catch {
+      return { key: "", accountId: "", email: "" };
+    }
+  }
+  const promoterSelectionFromUrl = readPromoterSelectionFromUrl();
   let adminFeeSettings = readAdminFeeSettings();
-  let selectedPromoterKey = "";
+  let selectedPromoterKey = promoterSelectionFromUrl.key || promoterSelectionFromUrl.accountId || promoterSelectionFromUrl.email || "";
   let opsState = {
     promoterApprovals: [],
     promoterPayoutDetails: [],
@@ -3069,13 +3084,40 @@ function setupAdminDashboard() {
     return [...directory.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }
 
+  function resolveSelectedPromoter(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const byAccountId = promoterSelectionFromUrl.accountId
+      ? rows.find((item) => String(item?.accountId || "").trim() === promoterSelectionFromUrl.accountId || item.key === promoterSelectionFromUrl.accountId)
+      : null;
+    if (byAccountId) {
+      selectedPromoterKey = byAccountId.key;
+      return byAccountId;
+    }
+    const byEmail = promoterSelectionFromUrl.email
+      ? rows.find((item) => normalizeEmail(item?.email || "") === promoterSelectionFromUrl.email)
+      : null;
+    if (byEmail) {
+      selectedPromoterKey = byEmail.key;
+      return byEmail;
+    }
+    const byKey = selectedPromoterKey
+      ? rows.find((item) => item.key === selectedPromoterKey)
+      : null;
+    if (byKey) {
+      selectedPromoterKey = byKey.key;
+      return byKey;
+    }
+    selectedPromoterKey = rows[0].key;
+    return rows[0];
+  }
+
   function renderPromoterProfilePanel(rows) {
     if (!promoterProfilePanel) return;
     if (!rows.length) {
       promoterProfilePanel.innerHTML = `<p class="muted">Click a promoter in the list to view profile details, payout details, revenue, and published events.</p>`;
       return;
     }
-    const selected = rows.find((item) => item.key === selectedPromoterKey) || rows[0];
+    const selected = resolveSelectedPromoter(rows);
     if (!selected) {
       promoterProfilePanel.innerHTML = `<p class="muted">Click a promoter in the list to view profile details, payout details, revenue, and published events.</p>`;
       return;
@@ -3135,23 +3177,24 @@ function setupAdminDashboard() {
   }
 
   function renderPromoterListTable() {
-    if (!promoterListBody) return;
     const rows = buildPromoterDirectoryRows();
+    if (!promoterListBody) {
+      renderPromoterProfilePanel(rows);
+      return;
+    }
     if (!rows.length) {
       promoterListBody.innerHTML = `<tr><td colspan="6">No promoters available yet.</td></tr>`;
       selectedPromoterKey = "";
       renderPromoterProfilePanel([]);
       return;
     }
-    if (!selectedPromoterKey || !rows.some((item) => item.key === selectedPromoterKey)) {
-      selectedPromoterKey = rows[0].key;
-    }
+    resolveSelectedPromoter(rows);
     promoterListBody.innerHTML = rows.map((item) => {
       const status = String(item?.status || "Pending");
       const publishedEventsCount = Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0));
       const isSelected = item.key === selectedPromoterKey;
       return `
-        <tr class="admin-promoter-row ${isSelected ? "is-selected" : ""}" data-admin-promoter-profile-key="${escapeHtml(item.key)}">
+        <tr class="admin-promoter-row ${isSelected ? "is-selected" : ""}" data-admin-promoter-profile-key="${escapeHtml(item.key)}" data-account-id="${escapeHtml(String(item?.accountId || "").trim())}" data-email="${escapeHtml(item?.email || "")}">
           <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "—")}</small></td>
           <td>${escapeHtml(item?.country || "—")}</td>
           <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
@@ -3582,11 +3625,13 @@ function setupAdminDashboard() {
     dashboardRoot.addEventListener("click", async (event) => {
       const promoterRow = event.target.closest("[data-admin-promoter-profile-key]");
       if (promoterRow && !event.target.closest("[data-admin-promoter-action]")) {
-        const profileKey = String(promoterRow.dataset.adminPromoterProfileKey || "").trim();
-        if (profileKey) {
-          selectedPromoterKey = profileKey;
-          renderPromoterListTable();
-        }
+        const accountId = String(promoterRow.dataset.accountId || "").trim();
+        const email = normalizeEmail(promoterRow.dataset.email || "");
+        const params = new URLSearchParams();
+        if (accountId) params.set("accountId", accountId);
+        else if (email) params.set("email", email);
+        const query = params.toString();
+        window.location.href = query ? `admin-promoter-profile.html?${query}` : "admin-promoter-profile.html";
         return;
       }
       const promoterActionButton = event.target.closest("[data-admin-promoter-action]");
@@ -3740,12 +3785,15 @@ function setupAdminDashboard() {
   }
 
   function setActiveAdminSidebarLink() {
+    const effectivePageName = adminPageName === "admin-promoter-profile.html"
+      ? "admin-promoters.html"
+      : adminPageName;
     const links = dashboardRoot.querySelectorAll(".admin-sidebar-nav a");
     links.forEach((link) => {
       const href = String(link.getAttribute("href") || "").trim().toLowerCase();
       if (!href || href.startsWith("#")) return;
       const targetPage = href.split("/").pop();
-      const isActive = targetPage === adminPageName;
+      const isActive = targetPage === effectivePageName;
       link.classList.toggle("active", isActive);
       if (isActive) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
