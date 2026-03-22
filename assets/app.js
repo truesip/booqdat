@@ -866,11 +866,16 @@ function setupAuthPage() {
         name: String(formData.get("name") || "").trim(),
         email: String(formData.get("email") || "").trim().toLowerCase(),
         password: String(formData.get("password") || ""),
-        role: normalizeRole(formData.get("role"))
+        role: normalizeRole(formData.get("role")),
+        country: String(formData.get("country") || "").trim()
       };
 
       if (!payload.name || !payload.email || !payload.password || !payload.role) {
         setStatus(registerStatus, "Name, email, password, and role are required.", true);
+        return;
+      }
+      if (payload.role === "promoter" && !payload.country) {
+        setStatus(registerStatus, "Country is required for promoter registration.", true);
         return;
       }
 
@@ -2540,32 +2545,44 @@ function setupPromoterDashboard() {
     });
     if (!response?.ok || !response?.payoutAccount) return;
     const payoutAccount = response.payoutAccount;
-    if (bankConnectForm.elements?.provider) {
-      bankConnectForm.elements.provider.value = payoutAccount.provider || "NYVAPAY";
+    if (bankConnectForm.elements?.bankName) bankConnectForm.elements.bankName.value = payoutAccount.bankName || "";
+    if (bankConnectForm.elements?.bankAddress) bankConnectForm.elements.bankAddress.value = payoutAccount.bankAddress || "";
+    if (bankConnectForm.elements?.city) bankConnectForm.elements.city.value = payoutAccount.city || "";
+    if (bankConnectForm.elements?.stateProvince) bankConnectForm.elements.stateProvince.value = payoutAccount.stateProvince || "";
+    if (bankConnectForm.elements?.country) bankConnectForm.elements.country.value = payoutAccount.country || "";
+    if (bankConnectForm.elements?.accountHolderName) {
+      bankConnectForm.elements.accountHolderName.value = payoutAccount.accountHolderName || payoutAccount.holder || "";
     }
-    if (bankConnectForm.elements?.holder) {
-      bankConnectForm.elements.holder.value = payoutAccount.holder || "";
-    }
-    if (bankConnectForm.elements?.email) {
-      bankConnectForm.elements.email.value = payoutAccount.payoutEmail || "";
-    }
+    if (bankConnectForm.elements?.bankAccountNumber) bankConnectForm.elements.bankAccountNumber.value = payoutAccount.bankAccountNumber || "";
+    if (bankConnectForm.elements?.routingNumber) bankConnectForm.elements.routingNumber.value = payoutAccount.routingNumber || "";
+    if (bankConnectForm.elements?.swiftCode) bankConnectForm.elements.swiftCode.value = payoutAccount.swiftCode || "";
     if (payoutScheduleSelect) {
       payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
       updatePayoutScheduleInfo();
     }
-    bankConnectStatus.textContent = `${payoutAccount.provider || "NYVAPAY"} account linked for ${payoutAccount.payoutEmail || "payout destination"}.`;
+    bankConnectStatus.textContent = "Bank transfer details loaded.";
   }
   if (bankConnectForm && bankConnectStatus) {
     bankConnectForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!bankConnectForm.reportValidity()) return;
       const formData = new FormData(bankConnectForm);
-      const provider = String(formData.get("provider") || "").trim();
-      const holder = String(formData.get("holder") || "").trim();
-      const email = String(formData.get("email") || "").trim().toLowerCase();
       const schedule = payoutScheduleSelect?.value === "monthly" ? "monthly" : "weekly";
+      const payload = {
+        bankName: String(formData.get("bankName") || "").trim(),
+        bankAddress: String(formData.get("bankAddress") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        stateProvince: String(formData.get("stateProvince") || "").trim(),
+        country: String(formData.get("country") || "").trim(),
+        accountHolderName: String(formData.get("accountHolderName") || "").trim(),
+        bankAccountNumber: String(formData.get("bankAccountNumber") || "").trim(),
+        routingNumber: String(formData.get("routingNumber") || "").trim(),
+        swiftCode: String(formData.get("swiftCode") || "").trim(),
+        schedule
+      };
       const response = await apiRequest("/promoter/payout-account", {
         method: "POST",
-        body: { provider, holder, email, schedule },
+        body: payload,
         includeErrorResponse: true,
         suppressAuthRedirect: true
       });
@@ -2574,7 +2591,7 @@ function setupPromoterDashboard() {
         return;
       }
       const payoutAccount = response.payoutAccount;
-      bankConnectStatus.textContent = `${payoutAccount.provider || provider} account connected for ${payoutAccount.payoutEmail || email}. Verification is in progress.`;
+      bankConnectStatus.textContent = `Bank transfer details saved for ${payoutAccount.accountHolderName || payload.accountHolderName}.`;
       if (payoutScheduleSelect) {
         payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
         updatePayoutScheduleInfo();
@@ -2728,6 +2745,8 @@ function setupAdminDashboard() {
   const activeSectionId = ADMIN_SECTION_BY_PAGE[adminPageName] || "dashboard-home";
   const adminLogoutButton = dashboardRoot.querySelector("[data-admin-logout]");
   const promoterApprovalsBody = dashboardRoot.querySelector("#admin-promoter-approvals-body");
+  const promoterPayoutDetailsBody = dashboardRoot.querySelector("#admin-promoter-payout-details-body");
+  const promoterPublishedEventsBody = dashboardRoot.querySelector("#admin-promoter-published-events-body");
   const attendeeRecordsBody = dashboardRoot.querySelector("#admin-attendee-records-body");
   const pendingEventsBody = dashboardRoot.querySelector("#admin-pending-events-body");
   const payoutQueueBody = dashboardRoot.querySelector("#admin-payout-queue-body");
@@ -2755,6 +2774,8 @@ function setupAdminDashboard() {
   let adminFeeSettings = readAdminFeeSettings();
   let opsState = {
     promoterApprovals: [],
+    promoterPayoutDetails: [],
+    promoterPublishedEvents: [],
     attendeeRecords: [],
     pendingEvents: [],
     payoutQueue: [],
@@ -2946,25 +2967,91 @@ function setupAdminDashboard() {
     if (!promoterApprovalsBody) return;
     const rows = Array.isArray(opsState.promoterApprovals) ? opsState.promoterApprovals : [];
     if (!rows.length) {
-      promoterApprovalsBody.innerHTML = `<tr><td colspan="5">No promoter approvals pending.</td></tr>`;
+      promoterApprovalsBody.innerHTML = `<tr><td colspan="6">No promoter approvals pending.</td></tr>`;
       return;
     }
     promoterApprovalsBody.innerHTML = rows.map((item) => {
       const status = String(item?.status || "Pending");
       const isApproved = status.toLowerCase().includes("approved");
       const isRejected = status.toLowerCase().includes("rejected");
+      const accountId = String(item?.id || "").trim();
+      const publishedEventsCount = Math.max(0, toFiniteNumber(item?.publishedEventsCount, 0));
       return `
         <tr>
-          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
-          <td>${escapeHtml(item?.location || "—")}</td>
+          <td>${escapeHtml(promoterName)}<br><small>${escapeHtml(promoterEmail)}</small></td>
+          <td>${escapeHtml(item?.country || item?.location || "—")}</td>
           <td>${escapeHtml(formatDateTime(item?.submittedAt))}</td>
+          <td>${publishedEventsCount.toLocaleString()}</td>
           <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
           <td>
             <div class="event-action-row">
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}" ${isApproved ? "disabled" : ""}>Approve</button>
-              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(item?.id || "")}" data-email="${escapeHtml(item?.email || "")}" ${isRejected ? "disabled" : ""}>Reject</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="approved" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${isApproved || !accountId ? "disabled" : ""}>Approve</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="rejected" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${isRejected || !accountId ? "disabled" : ""}>Reject</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-admin-promoter-action="delete" data-account-id="${escapeHtml(accountId)}" data-email="${escapeHtml(item?.email || "")}" ${!accountId ? "disabled" : ""}>Delete</button>
             </div>
           </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function summarizePayoutAccount(payoutAccount) {
+    if (!payoutAccount || typeof payoutAccount !== "object") return "Not saved";
+    const bankName = String(payoutAccount?.bankName || "").trim();
+    const holder = String(payoutAccount?.accountHolderName || payoutAccount?.holder || "").trim();
+    const schedule = String(payoutAccount?.schedule || "").trim().toLowerCase() === "monthly" ? "Monthly" : "Weekly";
+    const accountNumber = String(payoutAccount?.bankAccountNumber || "").replace(/\s+/g, "");
+    const accountSuffix = accountNumber ? `••••${accountNumber.slice(-4)}` : "";
+    const parts = [bankName, holder, accountSuffix, schedule].filter(Boolean);
+    return parts.length ? parts.join(" • ") : "Saved";
+  }
+
+  function renderPromoterPayoutDetailsTable() {
+    if (!promoterPayoutDetailsBody) return;
+    const rows = Array.isArray(opsState.promoterPayoutDetails) ? opsState.promoterPayoutDetails : [];
+    if (!rows.length) {
+      promoterPayoutDetailsBody.innerHTML = `<tr><td colspan="6">No promoter payout details available yet.</td></tr>`;
+      return;
+    }
+    promoterPayoutDetailsBody.innerHTML = rows.map((item) => {
+      const payoutSummary = summarizePayoutAccount(item?.payoutAccount);
+      const promoterName = item?.promoterName || item?.name || "Promoter";
+      const promoterEmail = item?.promoterEmail || item?.email || "";
+      const payouts = Math.max(0, toFiniteNumber(item?.payoutsCompleted, toFiniteNumber(item?.payouts, 0)));
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
+          <td>${escapeHtml(item?.country || "—")}</td>
+          <td>${Math.max(0, toFiniteNumber(item?.ticketsSold, 0)).toLocaleString()}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(item?.revenue, 0)))}</td>
+          <td>${usd(payouts)}</td>
+          <td>${escapeHtml(payoutSummary)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderPromoterPublishedEventsTable() {
+    if (!promoterPublishedEventsBody) return;
+    const rows = Array.isArray(opsState.promoterPublishedEvents) ? opsState.promoterPublishedEvents : [];
+    if (!rows.length) {
+      promoterPublishedEventsBody.innerHTML = `<tr><td colspan="4">No published promoter events yet.</td></tr>`;
+      return;
+    }
+    promoterPublishedEventsBody.innerHTML = rows.map((item) => {
+      const events = Array.isArray(item?.events) ? item.events : [];
+      const eventList = events.length
+        ? events.map((eventItem) => escapeHtml(eventItem?.title || eventItem?.eventId || "Untitled")).join(", ")
+        : "No live events";
+      const promoterName = item?.promoterName || item?.name || "Promoter";
+      const promoterEmail = item?.promoterEmail || item?.email || "";
+      const publishedCount = Math.max(0, toFiniteNumber(item?.publishedCount, toFiniteNumber(item?.publishedEventsCount, events.length)));
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Promoter")}<br><small>${escapeHtml(item?.email || "")}</small></td>
+          <td>${escapeHtml(item?.country || "—")}</td>
+          <td>${publishedCount.toLocaleString()}</td>
+          <td>${eventList}</td>
         </tr>
       `;
     }).join("");
@@ -3062,6 +3149,8 @@ function setupAdminDashboard() {
 
   function renderOpsTables() {
     renderPromoterApprovalsTable();
+    renderPromoterPayoutDetailsTable();
+    renderPromoterPublishedEventsTable();
     renderAttendeeRecordsTable();
     renderPendingEventsTable();
     renderPayoutQueueTable();
@@ -3076,6 +3165,8 @@ function setupAdminDashboard() {
     if (!response?.ok) return false;
     opsState = {
       promoterApprovals: Array.isArray(response.promoterApprovals) ? response.promoterApprovals : [],
+      promoterPayoutDetails: Array.isArray(response.promoterPayoutDetails) ? response.promoterPayoutDetails : [],
+      promoterPublishedEvents: Array.isArray(response.promoterPublishedEvents) ? response.promoterPublishedEvents : [],
       attendeeRecords: Array.isArray(response.attendeeRecords) ? response.attendeeRecords : [],
       pendingEvents: Array.isArray(response.pendingEvents) ? response.pendingEvents : [],
       payoutQueue: Array.isArray(response.payoutQueue) ? response.payoutQueue : [],
@@ -3387,22 +3478,43 @@ function setupAdminDashboard() {
       const promoterActionButton = event.target.closest("[data-admin-promoter-action]");
       if (promoterActionButton) {
         const accountId = String(promoterActionButton.dataset.accountId || "").trim();
-        const status = String(promoterActionButton.dataset.adminPromoterAction || "").trim().toLowerCase();
+        const action = String(promoterActionButton.dataset.adminPromoterAction || "").trim().toLowerCase();
         const email = String(promoterActionButton.dataset.email || "").trim();
-        if (!accountId || !status) return;
+        if (!accountId || !action) return;
         promoterActionButton.disabled = true;
-        const response = await apiRequest(`/admin/promoters/${encodeURIComponent(accountId)}/status`, {
-          method: "POST",
-          body: { status },
-          includeErrorResponse: true,
-          suppressAuthRedirect: true
-        });
+        let response;
+        if (action === "delete") {
+          const confirmed = window.confirm(`Delete promoter ${email || accountId}? This removes their profile, payout account, and promoter events.`);
+          if (!confirmed) {
+            promoterActionButton.disabled = false;
+            return;
+          }
+          response = await apiRequest(`/admin/promoters/${encodeURIComponent(accountId)}`, {
+            method: "DELETE",
+            includeErrorResponse: true,
+            suppressAuthRedirect: true
+          });
+        } else if (["approved", "rejected"].includes(action)) {
+          response = await apiRequest(`/admin/promoters/${encodeURIComponent(accountId)}/status`, {
+            method: "POST",
+            body: { status: action },
+            includeErrorResponse: true,
+            suppressAuthRedirect: true
+          });
+        } else {
+          promoterActionButton.disabled = false;
+          return;
+        }
         if (!response?.ok) {
           addActivity(`Promoter action failed for ${escapeHtml(email || accountId)}: ${escapeHtml(response?.error || "Unknown error")}`);
           promoterActionButton.disabled = false;
           return;
         }
-        addActivity(`Promoter ${status === "approved" ? "approved" : "updated"}: ${escapeHtml(email || accountId)}`);
+        if (action === "delete") {
+          addActivity(`Promoter deleted: ${escapeHtml(email || accountId)}`);
+        } else {
+          addActivity(`Promoter ${action === "approved" ? "approved" : "updated"}: ${escapeHtml(email || accountId)}`);
+        }
         await reloadAdminData();
         return;
       }

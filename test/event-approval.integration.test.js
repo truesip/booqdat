@@ -55,7 +55,8 @@ async function registerAndLoginPromoter() {
     name: "Promoter Test",
     email,
     password,
-    role: "promoter"
+    role: "promoter",
+    country: "United States"
   });
   assert.equal(registerResponse.status, 201);
   assert.equal(registerResponse.body.ok, true);

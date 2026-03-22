@@ -194,10 +194,15 @@
           name: String(formData.get("name") || "").trim(),
           email: normalizeEmail(formData.get("email")),
           password: String(formData.get("password") || ""),
-          role: normalizeRole(formData.get("role"))
+          role: normalizeRole(formData.get("role")),
+          country: String(formData.get("country") || "").trim()
         };
         if (!payload.name || !payload.email || !payload.password || !payload.role) {
           setStatus(registerStatus, "Name, email, password, and role are required.", true);
+          return;
+        }
+        if (payload.role === "promoter" && !payload.country) {
+          setStatus(registerStatus, "Country is required for promoter registration.", true);
           return;
         }
 

@@ -226,7 +226,8 @@ test("promoter signup queue alerts include admin account recipients", async () =
     name: "Needs Approval Promoter",
     email: "needs-approval@example.com",
     password: "Password123!",
-    role: "promoter"
+    role: "promoter",
+    country: "United States"
   });
   assert.equal(registerResponse.status, 201);
   assert.equal(registerResponse.body.ok, true);

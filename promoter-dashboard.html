@@ -537,24 +537,49 @@
             <p id="payout-schedule-info" class="muted">Weekly payouts are issued every Friday for cleared transactions.</p>
           </article>
           <article class="promoter-card">
-            <h3>Connect Bank Account</h3>
+            <h3>Bank Transfer Details</h3>
             <form id="bank-connect-form" class="stack">
               <label>
-                Provider
-                <select name="provider" required>
-                  <option value="">Select provider</option>
-                  <option>NYVAPAY</option>
-                </select>
+                Bank Name
+                <input name="bankName" type="text" required placeholder="Global Bank Plc">
+              </label>
+              <label>
+                Bank Address
+                <input name="bankAddress" type="text" required placeholder="123 Finance Street">
+              </label>
+              <div class="split">
+                <label>
+                  City
+                  <input name="city" type="text" required placeholder="Lagos">
+                </label>
+                <label>
+                  Province / State
+                  <input name="stateProvince" type="text" required placeholder="Lagos State">
+                </label>
+              </div>
+              <label>
+                Country
+                <input name="country" type="text" required placeholder="Nigeria">
               </label>
               <label>
                 Account Holder Name
-                <input name="holder" type="text" required placeholder="Business account holder">
+                <input name="accountHolderName" type="text" required placeholder="Business account holder">
               </label>
               <label>
-                Payout Email
-                <input name="email" type="email" required placeholder="billing@company.com">
+                Bank Account Number
+                <input name="bankAccountNumber" type="text" required placeholder="0123456789">
               </label>
-              <button class="btn btn-primary" type="submit">Connect Account</button>
+              <div class="split">
+                <label>
+                  Routing Number
+                  <input name="routingNumber" type="text" required placeholder="110000000">
+                </label>
+                <label>
+                  Swift Code
+                  <input name="swiftCode" type="text" required placeholder="BOFAUS3N">
+                </label>
+              </div>
+              <button class="btn btn-primary" type="submit">Save Bank Transfer Details</button>
             </form>
             <p id="bank-connect-status" class="status"></p>
           </article>

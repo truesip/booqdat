@@ -53,6 +53,9 @@ async function registerUser(overrides = {}) {
     role: "user",
     ...overrides
   };
+  if (payload.role === "promoter" && !payload.country) {
+    payload.country = "United States";
+  }
   return request(app).post("/api/auth/register").send(payload);
 }
 

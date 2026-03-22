@@ -1005,6 +1005,7 @@ function createApiRouter(env) {
       const email = normalizeEmail(req.body?.email);
       const password = String(req.body?.password || "");
       const role = normalizeRole(req.body?.role || "user");
+      const country = truncateText(req.body?.country, 120);
 
       if (!email || !password || !role) {
         res.status(400).json({ ok: false, error: "email, password, and role are required" });
@@ -1027,6 +1028,10 @@ function createApiRouter(env) {
 
       const passwordHash = await bcrypt.hash(password, 12);
       const isPromoterAccount = role === "promoter";
+      if (isPromoterAccount && !country) {
+        res.status(400).json({ ok: false, error: "Country is required for promoter registration" });
+        return;
+      }
       const account = await UserAccount.create({
         name: name || email.split("@")[0],
         email,
@@ -1037,6 +1042,23 @@ function createApiRouter(env) {
         lastLoginAt: isPromoterAccount ? null : new Date()
       });
       if (isPromoterAccount) {
+        await UserProfile.updateOne(
+          { email },
+          {
+            $set: {
+              email,
+              data: {
+                name: account.name,
+                email,
+                country,
+                location: country,
+                notifySales: true,
+                notifyPayouts: true
+              }
+            }
+          },
+          { upsert: true }
+        );
         const pendingTemplate = promoterPendingApprovalTemplate({
           companyName,
           name: account.name,
@@ -2114,22 +2136,44 @@ function createApiRouter(env) {
         return;
       }
 
-      const provider = truncateText(req.body?.provider, 80) || "NYVAPAY";
-      const holder = truncateText(req.body?.holder || req.body?.accountHolder, 200);
-      const payoutEmail = normalizeEmail(req.body?.email || req.body?.payoutEmail || targetEmail);
+      const bankName = truncateText(req.body?.bankName, 200);
+      const bankAddress = truncateText(req.body?.bankAddress, 240);
+      const city = truncateText(req.body?.city || req.body?.bankCity, 120);
+      const stateProvince = truncateText(req.body?.stateProvince || req.body?.provinceState || req.body?.state, 120);
+      const country = truncateText(req.body?.country, 120);
+      const accountHolderName = truncateText(req.body?.accountHolderName || req.body?.holder || req.body?.accountHolder, 200);
+      const bankAccountNumber = truncateText(req.body?.bankAccountNumber, 120);
+      const routingNumber = truncateText(req.body?.routingNumber, 120);
+      const swiftCode = truncateText(req.body?.swiftCode, 120);
       const schedule = ["weekly", "monthly"].includes(normalizeText(req.body?.schedule).toLowerCase())
         ? normalizeText(req.body?.schedule).toLowerCase()
         : "weekly";
-
-      if (!holder || !isValidEmail(payoutEmail)) {
-        res.status(400).json({ ok: false, error: "Provider, account holder, and valid payout email are required" });
+      if (
+        !bankName
+        || !bankAddress
+        || !city
+        || !stateProvince
+        || !country
+        || !accountHolderName
+        || !bankAccountNumber
+        || !routingNumber
+        || !swiftCode
+      ) {
+        res.status(400).json({ ok: false, error: "All bank transfer fields are required" });
         return;
       }
 
       const payload = {
-        provider,
-        holder,
-        payoutEmail,
+        provider: "Bank Transfer",
+        bankName,
+        bankAddress,
+        city,
+        stateProvince,
+        country,
+        accountHolderName,
+        bankAccountNumber,
+        routingNumber,
+        swiftCode,
         schedule,
         updatedAt: new Date().toISOString()
       };
@@ -2179,6 +2223,7 @@ function createApiRouter(env) {
         email: targetEmail,
         phone: truncateText(profileData?.phone, 80),
         location: truncateText(profileData?.location, 200),
+        country: truncateText(profileData?.country || profileData?.location, 120),
         notifySales: profileData?.notifySales !== false,
         notifyPayouts: profileData?.notifyPayouts !== false
       };
@@ -2215,6 +2260,7 @@ function createApiRouter(env) {
         email: targetEmail,
         phone: truncateText(req.body?.phone, 80),
         location: truncateText(req.body?.location, 200),
+        country: truncateText(req.body?.country || req.body?.location, 120),
         notifySales: req.body?.notifySales !== false,
         notifyPayouts: req.body?.notifyPayouts !== false
       };
@@ -2482,6 +2528,10 @@ function createApiRouter(env) {
         acc[item.email] = item.data || {};
         return acc;
       }, {});
+      const accountByEmail = promoterAccounts.reduce((acc, account) => {
+        acc[normalizeEmail(account?.email)] = account;
+        return acc;
+      }, {});
 
       const latestEventByPromoter = {};
       events.forEach((event) => {
@@ -2494,17 +2544,32 @@ function createApiRouter(env) {
           latestEventByPromoter[email] = event;
         }
       });
+      const publishedEventsByPromoter = {};
+      events.forEach((event) => {
+        if (!isLiveEventStatus(event?.status)) return;
+        const promoterEmail = normalizeEmail(event?.promoterEmail);
+        if (!promoterEmail) return;
+        if (!publishedEventsByPromoter[promoterEmail]) publishedEventsByPromoter[promoterEmail] = [];
+        publishedEventsByPromoter[promoterEmail].push({
+          eventId: truncateText(event?.id || event?.eventId, 120),
+          title: truncateText(event?.title, 200) || "Untitled Event",
+          date: truncateText(event?.date, 40),
+          status: truncateText(event?.status, 40) || "Live"
+        });
+      });
 
       const promoterApprovals = promoterAccounts.map((account) => {
         const email = normalizeEmail(account.email);
+        const profileData = profileMap[email] || {};
         const relatedEvent = latestEventByPromoter[email] || {};
-        const location = truncateText(relatedEvent?.city || relatedEvent?.state || relatedEvent?.country, 120) || "—";
+        const country = truncateText(profileData?.country || profileData?.location || relatedEvent?.country, 120) || "—";
         const promoterStatus = resolvePromoterAccountStatus(account);
         return {
           id: String(account._id),
           name: account.name,
           email,
-          location,
+          country,
+          publishedEventsCount: ensureArray(publishedEventsByPromoter[email]).length,
           submittedAt: account.createdAt,
           status: promoterAccountStatusLabel(promoterStatus)
         };
@@ -2557,7 +2622,7 @@ function createApiRouter(env) {
           return {
             orderId: truncateText(order?.id, 120),
             promoterEmail,
-            promoterName: truncateText(payoutAccount?.holder, 200) || promoterEmail || "Unknown promoter",
+            promoterName: truncateText(payoutAccount?.accountHolderName || payoutAccount?.holder, 200) || promoterEmail || "Unknown promoter",
             amount: toPositiveAmount(order?.total),
             payoutDate: addDays(order?.paidAt || order?.purchaseDate, 7),
             status: truncateText(order?.payoutStatus, 40) || "Scheduled"
@@ -2566,6 +2631,71 @@ function createApiRouter(env) {
         .filter((item) => item.orderId)
         .sort((a, b) => String(a.payoutDate || "").localeCompare(String(b.payoutDate || "")))
         .slice(0, 30);
+      const promoterMetricsByEmail = {};
+      orders.forEach((order) => {
+        if (!isSettledOrderData(order)) return;
+        const promoterEmail = normalizeEmail(order?.promoterEmail);
+        if (!promoterEmail) return;
+        if (!promoterMetricsByEmail[promoterEmail]) {
+          promoterMetricsByEmail[promoterEmail] = {
+            ticketsSold: 0,
+            revenue: 0,
+            payouts: 0
+          };
+        }
+        const qty = Math.max(1, Math.floor(toFiniteNumber(order?.quantity, 1)));
+        const total = toPositiveAmount(order?.total);
+        const payoutStatus = normalizeLifecycleStatus(order?.payoutStatus);
+        promoterMetricsByEmail[promoterEmail].ticketsSold += qty;
+        promoterMetricsByEmail[promoterEmail].revenue += total;
+        if (payoutStatus === "processed") {
+          promoterMetricsByEmail[promoterEmail].payouts += total;
+        }
+      });
+      const promoterEmails = new Set([
+        ...promoterAccounts.map((account) => normalizeEmail(account?.email)).filter(Boolean),
+        ...Object.keys(promoterMetricsByEmail),
+        ...Object.keys(publishedEventsByPromoter)
+      ]);
+      const promoterPayoutDetails = [...promoterEmails].map((email) => {
+        const account = accountByEmail[email] || null;
+        const profileData = profileMap[email] || {};
+        const payoutAccount = payoutAccountMap[email] || {};
+        const metrics = promoterMetricsByEmail[email] || { ticketsSold: 0, revenue: 0, payouts: 0 };
+        const publishedEvents = ensureArray(publishedEventsByPromoter[email]);
+        return {
+          accountId: account ? String(account._id) : "",
+          promoterName: truncateText(account?.name || profileData?.name, 200) || email || "Unknown promoter",
+          promoterEmail: email,
+          country: truncateText(profileData?.country || profileData?.location, 120) || "—",
+          ticketsSold: Math.max(0, Math.floor(toFiniteNumber(metrics?.ticketsSold, 0))),
+          revenue: toPositiveAmount(metrics?.revenue),
+          payouts: toPositiveAmount(metrics?.payouts),
+          publishedEventsCount: publishedEvents.length,
+          payoutAccount: {
+            provider: truncateText(payoutAccount?.provider, 80) || "Bank Transfer",
+            bankName: truncateText(payoutAccount?.bankName, 200),
+            accountHolderName: truncateText(payoutAccount?.accountHolderName || payoutAccount?.holder, 200),
+            country: truncateText(payoutAccount?.country, 120)
+          }
+        };
+      })
+        .sort((a, b) => b.revenue - a.revenue);
+      const promoterPublishedEvents = [...promoterEmails].map((email) => {
+        const account = accountByEmail[email] || null;
+        const profileData = profileMap[email] || {};
+        const publishedEvents = ensureArray(publishedEventsByPromoter[email]);
+        return {
+          accountId: account ? String(account._id) : "",
+          promoterName: truncateText(account?.name || profileData?.name, 200) || email || "Unknown promoter",
+          promoterEmail: email,
+          country: truncateText(profileData?.country || profileData?.location, 120) || "—",
+          publishedEventsCount: publishedEvents.length,
+          events: publishedEvents
+            .sort((a, b) => String(b?.date || "").localeCompare(String(a?.date || "")))
+        };
+      })
+        .sort((a, b) => b.publishedEventsCount - a.publishedEventsCount);
 
       const disputes = orders
         .filter((order) => {
@@ -2602,6 +2732,8 @@ function createApiRouter(env) {
         attendeeRecords,
         pendingEvents,
         payoutQueue,
+        promoterPayoutDetails,
+        promoterPublishedEvents,
         disputes,
         counts: {
           pendingPromoters: promoterApprovals.filter((item) => normalizeLifecycleStatus(item.status) === "pending").length,
@@ -2643,6 +2775,51 @@ function createApiRouter(env) {
     }
   });
 
+  router.delete("/admin/promoters/:accountId", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const accountId = truncateText(req.params?.accountId, 120);
+      if (!accountId) {
+        res.status(400).json({ ok: false, error: "Valid accountId is required" });
+        return;
+      }
+      const account = await UserAccount.findOne({ _id: accountId, role: "promoter" });
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Promoter account not found" });
+        return;
+      }
+      const promoterEmail = normalizeEmail(account.email);
+      const promoterEventRows = await PromoterEvent.find({}).lean();
+      const ownedEventIds = [...new Set(
+        promoterEventRows
+          .filter((row) => normalizeEmail(row?.data?.promoterEmail) === promoterEmail)
+          .map((row) => truncateText(row?.data?.id || row?.eventId, 120))
+          .filter(Boolean)
+      )];
+
+      const [accountDelete, profileDelete, payoutDelete, promoterEventsDelete, appEventsDelete] = await Promise.all([
+        UserAccount.deleteOne({ _id: account._id }),
+        UserProfile.deleteOne({ email: promoterEmail }),
+        PromoterPayoutAccount.deleteOne({ email: promoterEmail }),
+        ownedEventIds.length ? PromoterEvent.deleteMany({ eventId: { $in: ownedEventIds } }) : Promise.resolve({ deletedCount: 0 }),
+        ownedEventIds.length ? AppEvent.deleteMany({ eventId: { $in: ownedEventIds } }) : Promise.resolve({ deletedCount: 0 })
+      ]);
+
+      res.status(200).json({
+        ok: true,
+        accountId: String(account._id),
+        promoterEmail,
+        removed: {
+          account: Number(accountDelete?.deletedCount || 0),
+          profile: Number(profileDelete?.deletedCount || 0),
+          payoutAccount: Number(payoutDelete?.deletedCount || 0),
+          promoterEvents: Number(promoterEventsDelete?.deletedCount || 0),
+          publishedEvents: Number(appEventsDelete?.deletedCount || 0)
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post("/admin/promoters/:accountId/status", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
       const accountId = truncateText(req.params?.accountId, 120);
