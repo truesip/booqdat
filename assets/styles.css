@@ -805,6 +805,10 @@ blockquote cite {
   background: #fff;
 }
 
+.admin-activity-card {
+  margin-top: 0.8rem;
+}
+
 .admin-chart-grid .admin-card:first-child {
   grid-column: 1 / -1;
 }
