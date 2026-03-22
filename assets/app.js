@@ -3647,10 +3647,12 @@ async function initializeClientApp() {
   setupMobileNav();
   setupAuthPage();
   if (["login.html", "signup.html"].includes(currentPageName())) {
+    document.body.classList.remove("auth-pending");
     return;
   }
   const hasAccess = await enforceRoleGuardForCurrentPage();
   if (!hasAccess) return;
+  document.body.classList.remove("auth-pending");
   await hydrateStateFromApi();
   renderFeaturedEvents();
   renderBrowseEvents();

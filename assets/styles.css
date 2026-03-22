@@ -29,6 +29,10 @@ body {
   background: var(--bg);
 }
 
+body.auth-pending {
+  visibility: hidden;
+}
+
 img {
   max-width: 100%;
 }
