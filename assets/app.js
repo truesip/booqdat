@@ -3643,16 +3643,20 @@ function renderCheckout() {
 }
 
 async function initializeClientApp() {
+  function revealPageAfterAuthGuard() {
+    document.documentElement.classList.remove("auth-pending");
+    if (document.body) document.body.classList.remove("auth-pending");
+  }
   setYear();
   setupMobileNav();
   setupAuthPage();
   if (["login.html", "signup.html"].includes(currentPageName())) {
-    document.body.classList.remove("auth-pending");
+    revealPageAfterAuthGuard();
     return;
   }
   const hasAccess = await enforceRoleGuardForCurrentPage();
   if (!hasAccess) return;
-  document.body.classList.remove("auth-pending");
+  revealPageAfterAuthGuard();
   await hydrateStateFromApi();
   renderFeaturedEvents();
   renderBrowseEvents();
