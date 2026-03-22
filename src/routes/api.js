@@ -12,12 +12,19 @@ const PromoterPayoutAccount = require("../models/PromoterPayoutAccount");
 const UserAccount = require("../models/UserAccount");
 const RefreshToken = require("../models/RefreshToken");
 const AccessTokenBlocklist = require("../models/AccessTokenBlocklist");
+const NotificationLog = require("../models/NotificationLog");
 const { sendEmail } = require("../services/mailer");
 const {
   welcomeEmailTemplate,
   ticketConfirmationTemplate,
   promoterSaleAlertTemplate,
-  promoterEventPublishedTemplate
+  promoterEventPublishedTemplate,
+  promoterPendingApprovalTemplate,
+  promoterStatusUpdateTemplate,
+  eventModerationUpdateTemplate,
+  orderLifecycleUpdateTemplate,
+  payoutProcessedTemplate,
+  adminQueueAlertTemplate
 } = require("../services/emailTemplates");
 const { createNyvapayPaymentLink, isNyvapayConfigured } = require("../services/nyvapay");
 
@@ -252,6 +259,317 @@ function createApiRouter(env) {
       console.error(`Email send failed (${contextLabel}):`, error.message);
       return { ok: false, skipped: true, reason: "send-failed" };
     }
+  }
+
+  const notificationMaxAttempts = 2;
+  const notificationRetryBaseMs = 350;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function absoluteUrlForPath(req, pathValue) {
+    const base = appBaseUrlFromRequest(req);
+    const normalizedPath = String(pathValue || "").trim();
+    if (!normalizedPath) return "";
+    if (isValidHttpUrl(normalizedPath)) return normalizedPath;
+    if (!base) return normalizedPath;
+    const pathname = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+    return `${base}${pathname}`;
+  }
+
+  function notificationKeySegment(value) {
+    return normalizeText(value).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 120) || "na";
+  }
+
+  function buildNotificationIdempotencyKey(parts = []) {
+    return parts.map((part) => notificationKeySegment(part)).join(":").slice(0, 240);
+  }
+
+  function isRetriableNotificationFailure(result) {
+    const reason = normalizeText(result?.reason).toLowerCase();
+    const error = normalizeText(result?.error).toLowerCase();
+    if (!reason && !error) return false;
+    if (reason.includes("request-failed") || reason.includes("api-error") || reason.includes("delivery-failed")) return true;
+    if (reason.includes("send-failed")) return true;
+    return error.includes("timed out") || error.includes("timeout") || error.includes("temporarily unavailable");
+  }
+
+  async function getPromoterNotificationPreferences(promoterEmail) {
+    const email = normalizeEmail(promoterEmail);
+    if (!isValidEmail(email)) return { notifySales: true, notifyPayouts: true };
+    const profile = await UserProfile.findOne({ email }).lean();
+    const data = profile?.data && typeof profile.data === "object" ? profile.data : {};
+    return {
+      notifySales: data.notifySales !== false,
+      notifyPayouts: data.notifyPayouts !== false
+    };
+  }
+
+  async function deliverTemplateWithLogging({
+    idempotencyKey,
+    category,
+    templateName,
+    contextLabel,
+    recipientEmail,
+    template,
+    metadata = {}
+  }) {
+    const recipient = normalizeEmail(recipientEmail);
+    const key = buildNotificationIdempotencyKey([idempotencyKey || category, recipient || "none"]);
+    let log = await NotificationLog.findOne({ idempotencyKey: key });
+    if (!log) {
+      log = await NotificationLog.create({
+        idempotencyKey: key,
+        category: normalizeText(category) || "general",
+        contextLabel: normalizeText(contextLabel) || "notification",
+        templateName: normalizeText(templateName) || "template",
+        recipientEmail: recipient || "invalid-recipient",
+        status: "pending",
+        attempts: 0,
+        maxAttempts: notificationMaxAttempts,
+        metadata
+      });
+    } else if (["sent", "skipped"].includes(normalizeLifecycleStatus(log.status))) {
+      return {
+        ok: log.status === "sent",
+        deduped: true,
+        skipped: log.status === "skipped",
+        reason: log.lastError || "already-processed"
+      };
+    }
+
+    if (!isValidEmail(recipient)) {
+      log.status = "skipped";
+      log.lastError = "invalid-recipient";
+      log.nextRetryAt = null;
+      log.attempts = Math.max(1, toFiniteNumber(log.attempts, 0));
+      await log.save();
+      return { ok: false, skipped: true, reason: "invalid-recipient" };
+    }
+
+    let attempt = Math.max(0, toFiniteNumber(log.attempts, 0));
+    while (attempt < notificationMaxAttempts) {
+      attempt += 1;
+      log.attempts = attempt;
+      log.lastAttemptAt = new Date();
+      log.status = "pending";
+      await log.save();
+
+      const result = await sendTemplateEmail(recipient, template, contextLabel);
+      if (result?.ok) {
+        log.status = "sent";
+        log.sentAt = new Date();
+        log.nextRetryAt = null;
+        log.lastError = "";
+        log.providerRequestId = normalizeText(result.requestId);
+        await log.save();
+        return { ok: true, sentTo: recipient };
+      }
+
+      const retriable = attempt < notificationMaxAttempts && isRetriableNotificationFailure(result);
+      if (retriable) {
+        const backoffMs = notificationRetryBaseMs * (2 ** (attempt - 1));
+        log.status = "pending";
+        log.lastError = normalizeText(result?.reason || result?.error || "retry-scheduled");
+        log.nextRetryAt = new Date(Date.now() + backoffMs);
+        await log.save();
+        await sleep(backoffMs);
+        continue;
+      }
+
+      log.status = result?.skipped ? "skipped" : "failed";
+      log.lastError = normalizeText(result?.reason || result?.error || "delivery-failed");
+      log.nextRetryAt = null;
+      await log.save();
+      return {
+        ok: false,
+        skipped: Boolean(result?.skipped),
+        reason: normalizeText(result?.reason || result?.error || "delivery-failed")
+      };
+    }
+
+    log.status = "failed";
+    log.lastError = log.lastError || "max-attempts-exceeded";
+    log.nextRetryAt = null;
+    await log.save();
+    return { ok: false, skipped: false, reason: "max-attempts-exceeded" };
+  }
+
+  async function sendAdminQueueAlert(req, queueType, entityName, entityId, submittedBy, keySuffix = "") {
+    const recipients = new Set();
+    const normalizedSupport = normalizeEmail(supportEmail);
+    const normalizedSeedAdmin = normalizeEmail(env.seedAdminEmail);
+    if (isValidEmail(normalizedSupport)) recipients.add(normalizedSupport);
+    if (isValidEmail(normalizedSeedAdmin)) recipients.add(normalizedSeedAdmin);
+    if (!recipients.size) return [];
+    const adminUrl = absoluteUrlForPath(req, "/admin.html#promoters-section");
+    const results = [];
+    for (const recipient of recipients) {
+      const template = adminQueueAlertTemplate({
+        companyName,
+        queueType,
+        entityName,
+        entityId,
+        submittedBy,
+        adminUrl
+      });
+      results.push(await deliverTemplateWithLogging({
+        idempotencyKey: buildNotificationIdempotencyKey(["admin-queue", queueType, entityId, recipient, keySuffix]),
+        category: "admin-queue-alert",
+        templateName: "adminQueueAlertTemplate",
+        contextLabel: "admin-queue-alert",
+        recipientEmail: recipient,
+        template,
+        metadata: {
+          queueType,
+          entityId,
+          submittedBy
+        }
+      }));
+    }
+    return results;
+  }
+
+  function resolveEventId(event) {
+    return truncateText(event?.id || event?.eventId, 120);
+  }
+
+  function resolveEventShareLink(req, event) {
+    const eventId = resolveEventId(event);
+    if (!eventId) return "";
+    return absoluteUrlForPath(req, `/checkout.html?event=${encodeURIComponent(eventId)}`);
+  }
+
+  async function deliverPromoterEventPublishedNotification(req, {
+    promoterEmail,
+    event,
+    shareLink = "",
+    source = "unknown"
+  }) {
+    const recipient = normalizeEmail(promoterEmail);
+    if (!isValidEmail(recipient)) {
+      return { ok: false, skipped: true, reason: "invalid-recipient" };
+    }
+    const eventId = resolveEventId(event) || "unknown-event";
+    const normalizedShareLink = normalizeText(shareLink) || resolveEventShareLink(req, event);
+    const template = promoterEventPublishedTemplate({
+      companyName,
+      event: {
+        ...(event && typeof event === "object" ? event : {}),
+        id: eventId
+      },
+      shareLink: normalizedShareLink
+    });
+    return deliverTemplateWithLogging({
+      idempotencyKey: buildNotificationIdempotencyKey(["promoter-event-published", eventId, recipient]),
+      category: "event-publication",
+      templateName: "promoterEventPublishedTemplate",
+      contextLabel: "promoter-event-published",
+      recipientEmail: recipient,
+      template,
+      metadata: {
+        eventId,
+        promoterEmail: recipient,
+        shareLink: normalizedShareLink,
+        source
+      }
+    });
+  }
+
+  async function deliverEventModerationNotification(req, {
+    promoterEmail,
+    promoterName,
+    event,
+    status,
+    shareLink = "",
+    source = "unknown"
+  }) {
+    const recipient = normalizeEmail(promoterEmail);
+    if (!isValidEmail(recipient)) {
+      return { ok: false, skipped: true, reason: "invalid-recipient" };
+    }
+    const eventId = resolveEventId(event) || "unknown-event";
+    const normalizedStatus = toCanonicalEventStatus(status) || truncateText(status, 40) || "Updated";
+    const resolvedShareLink = normalizeText(shareLink) || resolveEventShareLink(req, event);
+    const template = eventModerationUpdateTemplate({
+      companyName,
+      promoterName: truncateText(promoterName, 200) || "Promoter",
+      event: {
+        ...(event && typeof event === "object" ? event : {}),
+        id: eventId
+      },
+      status: normalizedStatus,
+      supportEmail,
+      dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html"),
+      shareLink: resolvedShareLink
+    });
+    return deliverTemplateWithLogging({
+      idempotencyKey: buildNotificationIdempotencyKey(["event-moderation", eventId, normalizedStatus, recipient]),
+      category: "event-moderation",
+      templateName: "eventModerationUpdateTemplate",
+      contextLabel: "event-moderation-status",
+      recipientEmail: recipient,
+      template,
+      metadata: {
+        eventId,
+        promoterEmail: recipient,
+        status: normalizedStatus,
+        shareLink: resolvedShareLink,
+        source
+      }
+    });
+  }
+
+  function buildOrderLifecycleRecipientView(order, recipientEmail, recipientName = "") {
+    const existingAttendee = order?.attendee && typeof order.attendee === "object" ? order.attendee : {};
+    return {
+      ...(order && typeof order === "object" ? order : {}),
+      attendee: {
+        ...existingAttendee,
+        name: truncateText(recipientName || existingAttendee?.name, 200) || "there",
+        email: normalizeEmail(recipientEmail) || normalizeEmail(existingAttendee?.email)
+      }
+    };
+  }
+
+  async function deliverOrderLifecycleNotification(req, {
+    order,
+    stage,
+    recipientEmail,
+    recipientName = "",
+    source = "unknown",
+    metadata = {}
+  }) {
+    const recipient = normalizeEmail(recipientEmail);
+    if (!isValidEmail(recipient)) {
+      return { ok: false, skipped: true, reason: "invalid-recipient" };
+    }
+    const orderId = truncateText(order?.id, 120) || "unknown-order";
+    const portalUrl = absoluteUrlForPath(req, `/user-portal.html?email=${encodeURIComponent(recipient)}`);
+    const template = orderLifecycleUpdateTemplate({
+      companyName,
+      order: buildOrderLifecycleRecipientView(order, recipient, recipientName),
+      stage,
+      supportEmail,
+      portalUrl,
+      recipientEmail: normalizeEmail(metadata?.recipientEmail || "")
+    });
+    return deliverTemplateWithLogging({
+      idempotencyKey: buildNotificationIdempotencyKey(["order-lifecycle", orderId, stage, recipient]),
+      category: "order-lifecycle",
+      templateName: "orderLifecycleUpdateTemplate",
+      contextLabel: `order-lifecycle-${stage}`,
+      recipientEmail: recipient,
+      template,
+      metadata: {
+        orderId,
+        stage,
+        recipientEmail: recipient,
+        source,
+        ...metadata
+      }
+    });
   }
 
   function normalizeText(value) {
@@ -685,19 +1003,33 @@ function createApiRouter(env) {
         isActive: isPromoterAccount ? false : true,
         lastLoginAt: isPromoterAccount ? null : new Date()
       });
-
-      const welcomeTemplate = welcomeEmailTemplate({
-        companyName,
-        name: account.name,
-        role: account.role,
-        dashboardUrl: account.role === "admin"
-          ? "/admin.html"
-          : account.role === "promoter"
-            ? "/promoter-dashboard.html"
-            : "/user-portal.html"
-      });
-      await sendTemplateEmail(account.email, welcomeTemplate, `welcome-${account.role}`);
       if (isPromoterAccount) {
+        const pendingTemplate = promoterPendingApprovalTemplate({
+          companyName,
+          name: account.name,
+          supportEmail,
+          dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html")
+        });
+        await deliverTemplateWithLogging({
+          idempotencyKey: buildNotificationIdempotencyKey(["promoter-registration-pending", account._id]),
+          category: "promoter-moderation",
+          templateName: "promoterPendingApprovalTemplate",
+          contextLabel: "promoter-registration-pending",
+          recipientEmail: account.email,
+          template: pendingTemplate,
+          metadata: {
+            accountId: String(account._id),
+            status: "pending"
+          }
+        });
+        await sendAdminQueueAlert(
+          req,
+          "Promoter Approvals",
+          account.name,
+          String(account._id),
+          account.email,
+          "registration"
+        );
         res.status(201).json({
           ok: true,
           requiresApproval: true,
@@ -712,6 +1044,27 @@ function createApiRouter(env) {
         });
         return;
       }
+
+      const welcomeTemplate = welcomeEmailTemplate({
+        companyName,
+        name: account.name,
+        role: account.role,
+        dashboardUrl: account.role === "admin"
+          ? absoluteUrlForPath(req, "/admin.html")
+          : absoluteUrlForPath(req, "/user-portal.html")
+      });
+      await deliverTemplateWithLogging({
+        idempotencyKey: buildNotificationIdempotencyKey(["welcome", account.role, account._id]),
+        category: "account",
+        templateName: "welcomeEmailTemplate",
+        contextLabel: `welcome-${account.role}`,
+        recipientEmail: account.email,
+        template: welcomeTemplate,
+        metadata: {
+          accountId: String(account._id),
+          role: account.role
+        }
+      });
 
       const tokenBundle = await issueTokenBundle(account, req);
       res.status(201).json(authSuccessPayload(account, tokenBundle));
@@ -898,31 +1251,66 @@ function createApiRouter(env) {
     }
   });
 
-  router.post("/notifications/ticket-confirmation", async (req, res, next) => {
+  router.post("/notifications/ticket-confirmation", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
       const order = req.body?.order || {};
       const attendeeEmail = normalizeEmail(order?.attendee?.email);
-      const promoterEmail = normalizeEmail(req.body?.promoterEmail);
+      const promoterEmail = normalizeEmail(req.body?.promoterEmail || order?.promoterEmail || sessionEmail);
 
       if (!isValidEmail(attendeeEmail)) {
         res.status(400).json({ ok: false, error: "Valid attendee email is required" });
         return;
       }
+      if (role === "promoter" && promoterEmail !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "Promoters can only send notifications for their own account scope" });
+        return;
+      }
 
-      const portalUrl = `/user-portal.html?email=${encodeURIComponent(attendeeEmail)}`;
+      const orderId = truncateText(order?.id, 120) || "unknown-order";
+      const portalUrl = absoluteUrlForPath(req, `/user-portal.html?email=${encodeURIComponent(attendeeEmail)}`);
       const userTemplate = ticketConfirmationTemplate({
         companyName,
         order,
         portalUrl,
         supportEmail
       });
-
-      const userDelivery = await sendTemplateEmail(attendeeEmail, userTemplate, "ticket-confirmation-user");
+      const userDelivery = await deliverTemplateWithLogging({
+        idempotencyKey: buildNotificationIdempotencyKey(["ticket-confirmation", orderId, attendeeEmail]),
+        category: "order-confirmation",
+        templateName: "ticketConfirmationTemplate",
+        contextLabel: "ticket-confirmation-user",
+        recipientEmail: attendeeEmail,
+        template: userTemplate,
+        metadata: {
+          orderId,
+          attendeeEmail,
+          source: "notifications-ticket-confirmation-endpoint"
+        }
+      });
 
       let promoterDelivery = { ok: false, skipped: true, reason: "not-requested" };
       if (isValidEmail(promoterEmail) && promoterEmail !== attendeeEmail) {
-        const promoterTemplate = promoterSaleAlertTemplate({ companyName, order });
-        promoterDelivery = await sendTemplateEmail(promoterEmail, promoterTemplate, "ticket-sale-promoter");
+        const preferences = await getPromoterNotificationPreferences(promoterEmail);
+        if (preferences.notifySales) {
+          const promoterTemplate = promoterSaleAlertTemplate({ companyName, order });
+          promoterDelivery = await deliverTemplateWithLogging({
+            idempotencyKey: buildNotificationIdempotencyKey(["ticket-sale-alert", orderId, promoterEmail]),
+            category: "promoter-sales",
+            templateName: "promoterSaleAlertTemplate",
+            contextLabel: "ticket-sale-promoter",
+            recipientEmail: promoterEmail,
+            template: promoterTemplate,
+            metadata: {
+              orderId,
+              promoterEmail,
+              source: "notifications-ticket-confirmation-endpoint"
+            }
+          });
+        } else {
+          promoterDelivery = { ok: false, skipped: true, reason: "promoter-notify-sales-disabled" };
+        }
       }
 
       res.status(200).json({
@@ -939,26 +1327,32 @@ function createApiRouter(env) {
 
   router.post("/notifications/promoter-event-published", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
     try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
       const event = req.body?.event || {};
-      const shareLink = String(req.body?.shareLink || "").trim();
-      const promoterEmail = normalizeEmail(req.body?.promoterEmail || req.auth?.email);
+      const shareLink = normalizeText(req.body?.shareLink || "");
+      const promoterEmail = normalizeEmail(req.body?.promoterEmail || event?.promoterEmail || sessionEmail);
 
       if (!isValidEmail(promoterEmail)) {
         res.status(400).json({ ok: false, error: "Valid promoter email is required" });
         return;
       }
-
-      const template = promoterEventPublishedTemplate({
-        companyName,
+      if (role === "promoter" && promoterEmail !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "Promoters can only send notifications for their own account scope" });
+        return;
+      }
+      const delivery = await deliverPromoterEventPublishedNotification(req, {
+        promoterEmail,
         event,
-        shareLink
+        shareLink,
+        source: "notifications-promoter-event-published-endpoint"
       });
-      const delivery = await sendTemplateEmail(promoterEmail, template, "promoter-event-published");
 
       res.status(200).json({
         ok: true,
         promoterEmail,
-        emailSent: Boolean(delivery.ok)
+        emailSent: Boolean(delivery.ok),
+        deduped: Boolean(delivery?.deduped)
       });
     } catch (error) {
       next(error);
@@ -1207,21 +1601,49 @@ function createApiRouter(env) {
       let attendeeEmailSent = false;
       let promoterEmailSent = false;
       if (!wasAlreadyPaid && isValidEmail(attendeeEmail)) {
+        const orderId = truncateText(updatedOrder?.id || orderReference, 120) || orderReference;
         const promoterEmail = normalizeEmail(updatedOrder?.promoterEmail || payload?.metadata?.promoterEmail);
-        const portalUrl = `/user-portal.html?email=${encodeURIComponent(attendeeEmail)}`;
+        const portalUrl = absoluteUrlForPath(req, `/user-portal.html?email=${encodeURIComponent(attendeeEmail)}`);
         const userTemplate = ticketConfirmationTemplate({
           companyName,
           order: updatedOrder,
           portalUrl,
           supportEmail
         });
-        const userDelivery = await sendTemplateEmail(attendeeEmail, userTemplate, "nyvapay-ticket-confirmation-user");
+        const userDelivery = await deliverTemplateWithLogging({
+          idempotencyKey: buildNotificationIdempotencyKey(["ticket-confirmation", orderId, attendeeEmail]),
+          category: "order-confirmation",
+          templateName: "ticketConfirmationTemplate",
+          contextLabel: "ticket-confirmation-user",
+          recipientEmail: attendeeEmail,
+          template: userTemplate,
+          metadata: {
+            orderId,
+            attendeeEmail,
+            source: "nyvapay-payment-succeeded-webhook"
+          }
+        });
         attendeeEmailSent = Boolean(userDelivery.ok);
 
         if (isValidEmail(promoterEmail) && promoterEmail !== attendeeEmail) {
-          const promoterTemplate = promoterSaleAlertTemplate({ companyName, order: updatedOrder });
-          const promoterDelivery = await sendTemplateEmail(promoterEmail, promoterTemplate, "nyvapay-ticket-sale-promoter");
-          promoterEmailSent = Boolean(promoterDelivery.ok);
+          const preferences = await getPromoterNotificationPreferences(promoterEmail);
+          if (preferences.notifySales) {
+            const promoterTemplate = promoterSaleAlertTemplate({ companyName, order: updatedOrder });
+            const promoterDelivery = await deliverTemplateWithLogging({
+              idempotencyKey: buildNotificationIdempotencyKey(["ticket-sale-alert", orderId, promoterEmail]),
+              category: "promoter-sales",
+              templateName: "promoterSaleAlertTemplate",
+              contextLabel: "nyvapay-ticket-sale-promoter",
+              recipientEmail: promoterEmail,
+              template: promoterTemplate,
+              metadata: {
+                orderId,
+                promoterEmail,
+                source: "nyvapay-payment-succeeded-webhook"
+              }
+            });
+            promoterEmailSent = Boolean(promoterDelivery.ok);
+          }
         }
       }
 
@@ -1452,6 +1874,7 @@ function createApiRouter(env) {
         : [];
       const existingByEventId = new Map(existingRows.map((row) => [row?.eventId, row?.data && typeof row.data === "object" ? row.data : {}]));
       const unauthorizedIds = [];
+      const pendingQueueAlertItems = [];
       const rows = incoming
         .map((item) => {
           const eventId = truncateText(item?.id, 120);
@@ -1466,6 +1889,15 @@ function createApiRouter(env) {
           const resolvedPromoterEmail = role === "promoter"
             ? sessionEmail
             : normalizeEmail(item?.promoterEmail || existingOwnerEmail || "");
+          const isPendingNow = isPendingReviewEventStatus(resolvedStatus);
+          const wasPending = isPendingReviewEventStatus(existingEvent?.status);
+          if (role === "promoter" && isPendingNow && !wasPending) {
+            pendingQueueAlertItems.push({
+              eventId,
+              title: truncateText(item?.title || existingEvent?.title, 200) || "Untitled Event",
+              promoterEmail: resolvedPromoterEmail || sessionEmail
+            });
+          }
           return {
             eventId,
             data: {
@@ -1482,6 +1914,16 @@ function createApiRouter(env) {
         return;
       }
       const count = await upsertRows(PromoterEvent, rows, "eventId", (item) => ({ data: item.data }));
+      for (const pendingItem of pendingQueueAlertItems) {
+        await sendAdminQueueAlert(
+          req,
+          "Promoter Event Review",
+          pendingItem.title,
+          pendingItem.eventId,
+          pendingItem.promoterEmail,
+          "event-submission"
+        );
+      }
       res.status(200).json({ ok: true, synced: count });
     } catch (error) {
       next(error);
@@ -1887,6 +2329,12 @@ function createApiRouter(env) {
       };
       row.data = order;
       await row.save();
+      await deliverOrderLifecycleNotification(req, {
+        order,
+        stage: "refund-requested",
+        recipientEmail: attendeeEmail,
+        source: "order-refund-request"
+      });
 
       res.status(200).json({ ok: true, order });
     } catch (error) {
@@ -1942,6 +2390,15 @@ function createApiRouter(env) {
       };
       row.data = order;
       await row.save();
+      await deliverOrderLifecycleNotification(req, {
+        order,
+        stage: "transfer-requested",
+        recipientEmail: attendeeEmail,
+        source: "order-transfer-request",
+        metadata: {
+          recipientEmail
+        }
+      });
 
       res.status(200).json({ ok: true, order });
     } catch (error) {
@@ -2105,6 +2562,36 @@ function createApiRouter(env) {
     }
   });
 
+  router.get("/admin/notifications/logs", requireAuth, requireRoles("admin"), async (req, res, next) => {
+    try {
+      const limit = Math.max(1, Math.min(200, Math.floor(toFiniteNumber(req.query?.limit, 50))));
+      const status = normalizeLifecycleStatus(req.query?.status);
+      const category = normalizeText(req.query?.category);
+      const recipientEmail = normalizeEmail(req.query?.recipientEmail);
+      const filter = {};
+      if (["pending", "sent", "failed", "skipped"].includes(status)) {
+        filter.status = status;
+      }
+      if (category) {
+        filter.category = category;
+      }
+      if (isValidEmail(recipientEmail)) {
+        filter.recipientEmail = recipientEmail;
+      }
+      const logs = await NotificationLog.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+      res.status(200).json({
+        ok: true,
+        count: logs.length,
+        logs
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/admin/promoters/:accountId/status", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
       const accountId = truncateText(req.params?.accountId, 120);
@@ -2118,10 +2605,38 @@ function createApiRouter(env) {
         res.status(404).json({ ok: false, error: "Promoter account not found" });
         return;
       }
+      const previousStatus = resolvePromoterAccountStatus(account);
       account.promoterStatus = desired;
       account.isActive = desired === "approved";
       await account.save();
-      res.status(200).json({ ok: true, accountId, status: promoterAccountStatusLabel(desired) });
+      const template = promoterStatusUpdateTemplate({
+        companyName,
+        name: account.name,
+        status: desired,
+        supportEmail,
+        dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html"),
+        wasReactivated: previousStatus === "suspended" && desired === "approved"
+      });
+      const notification = await deliverTemplateWithLogging({
+        idempotencyKey: buildNotificationIdempotencyKey(["promoter-status", accountId, desired, account.email]),
+        category: "promoter-moderation",
+        templateName: "promoterStatusUpdateTemplate",
+        contextLabel: "promoter-status-change",
+        recipientEmail: account.email,
+        template,
+        metadata: {
+          accountId,
+          previousStatus,
+          nextStatus: desired,
+          source: "admin-promoter-status"
+        }
+      });
+      res.status(200).json({
+        ok: true,
+        accountId,
+        status: promoterAccountStatusLabel(desired),
+        notificationSent: Boolean(notification.ok)
+      });
     } catch (error) {
       next(error);
     }
@@ -2151,6 +2666,16 @@ function createApiRouter(env) {
         res.status(404).json({ ok: false, error: "Event not found" });
         return;
       }
+      const currentData = promoterRow?.data && typeof promoterRow.data === "object"
+        ? promoterRow.data
+        : appRow?.data && typeof appRow.data === "object"
+          ? appRow.data
+          : {};
+      const normalizedEvent = {
+        ...currentData,
+        id: truncateText(currentData?.id || eventId, 120) || eventId,
+        eventId
+      };
       if (promoterRow?.data && typeof promoterRow.data === "object") {
         const promoterData = {
           ...promoterRow.data,
@@ -2187,8 +2712,44 @@ function createApiRouter(env) {
       } else {
         await AppEvent.deleteOne({ eventId });
       }
+      const promoterEmail = normalizeEmail(normalizedEvent?.promoterEmail);
+      let moderationNotification = { ok: false, skipped: true, reason: "missing-promoter-email" };
+      let publishedNotification = { ok: false, skipped: true, reason: "not-live-status" };
+      if (isValidEmail(promoterEmail)) {
+        const promoterAccount = await UserAccount.findOne({ email: promoterEmail, role: "promoter" }).lean();
+        const promoterName = truncateText(promoterAccount?.name || normalizedEvent?.promoterName, 200) || "Promoter";
+        const shareLink = resolveEventShareLink(req, normalizedEvent);
+        moderationNotification = await deliverEventModerationNotification(req, {
+          promoterEmail,
+          promoterName,
+          event: {
+            ...normalizedEvent,
+            status: nextStatus
+          },
+          status: nextStatus,
+          shareLink,
+          source: "admin-event-status"
+        });
+        if (nextStatus === "Live") {
+          publishedNotification = await deliverPromoterEventPublishedNotification(req, {
+            promoterEmail,
+            event: {
+              ...normalizedEvent,
+              status: "Live"
+            },
+            shareLink,
+            source: "admin-event-status"
+          });
+        }
+      }
 
-      res.status(200).json({ ok: true, eventId, status: nextStatus });
+      res.status(200).json({
+        ok: true,
+        eventId,
+        status: nextStatus,
+        moderationEmailSent: Boolean(moderationNotification.ok),
+        publicationEmailSent: Boolean(publishedNotification.ok)
+      });
     } catch (error) {
       next(error);
     }
@@ -2209,7 +2770,38 @@ function createApiRouter(env) {
       row.data.payoutStatus = "Processed";
       row.data.payoutProcessedAt = new Date().toISOString();
       await row.save();
-      res.status(200).json({ ok: true, order: row.data });
+      const order = row.data;
+      const promoterEmail = normalizeEmail(order?.promoterEmail);
+      let payoutNotification = { ok: false, skipped: true, reason: "missing-promoter-email" };
+      if (isValidEmail(promoterEmail)) {
+        const preferences = await getPromoterNotificationPreferences(promoterEmail);
+        if (preferences.notifyPayouts) {
+          const promoterAccount = await UserAccount.findOne({ email: promoterEmail, role: "promoter" }).lean();
+          const template = payoutProcessedTemplate({
+            companyName,
+            promoterName: truncateText(promoterAccount?.name, 200) || "Promoter",
+            order,
+            supportEmail,
+            dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html")
+          });
+          payoutNotification = await deliverTemplateWithLogging({
+            idempotencyKey: buildNotificationIdempotencyKey(["payout-processed", orderId, promoterEmail]),
+            category: "payout",
+            templateName: "payoutProcessedTemplate",
+            contextLabel: "payout-processed",
+            recipientEmail: promoterEmail,
+            template,
+            metadata: {
+              orderId,
+              promoterEmail,
+              source: "admin-payout-process"
+            }
+          });
+        } else {
+          payoutNotification = { ok: false, skipped: true, reason: "promoter-notify-payouts-disabled" };
+        }
+      }
+      res.status(200).json({ ok: true, order, payoutEmailSent: Boolean(payoutNotification.ok) });
     } catch (error) {
       next(error);
     }
@@ -2231,8 +2823,11 @@ function createApiRouter(env) {
       }
 
       const order = row.data;
+      const originalAttendeeEmail = normalizeEmail(order?.attendee?.email);
+      const originalAttendeeName = truncateText(order?.attendee?.name, 200);
       const isTransfer = normalizeLifecycleStatus(order?.status).includes("transfer")
         || normalizeLifecycleStatus(order?.dispute?.type).includes("transfer");
+      let transferRecipientEmail = "";
       if (resolution === "approved") {
         if (isTransfer) {
           const nextRecipient = recipientEmail || normalizeEmail(order?.transferRequest?.recipientEmail);
@@ -2240,6 +2835,7 @@ function createApiRouter(env) {
             res.status(400).json({ ok: false, error: "Valid recipientEmail is required to approve transfer requests" });
             return;
           }
+          transferRecipientEmail = nextRecipient;
           order.attendee = {
             ...(order.attendee && typeof order.attendee === "object" ? order.attendee : {}),
             email: nextRecipient
@@ -2274,7 +2870,48 @@ function createApiRouter(env) {
       };
       row.data = order;
       await row.save();
-      res.status(200).json({ ok: true, order });
+
+      const stage = resolution === "approved"
+        ? isTransfer ? "transfer-completed" : "refund-approved"
+        : isTransfer ? "transfer-rejected" : "refund-rejected";
+      const notificationResults = [];
+      if (isValidEmail(originalAttendeeEmail)) {
+        notificationResults.push(await deliverOrderLifecycleNotification(req, {
+          order,
+          stage,
+          recipientEmail: originalAttendeeEmail,
+          recipientName: originalAttendeeName,
+          source: "admin-dispute-resolution",
+          metadata: {
+            orderId,
+            resolution,
+            recipientEmail: transferRecipientEmail
+          }
+        }));
+      }
+      if (
+        isTransfer
+        && stage === "transfer-completed"
+        && isValidEmail(transferRecipientEmail)
+        && transferRecipientEmail !== originalAttendeeEmail
+      ) {
+        notificationResults.push(await deliverOrderLifecycleNotification(req, {
+          order,
+          stage,
+          recipientEmail: transferRecipientEmail,
+          source: "admin-dispute-resolution",
+          metadata: {
+            orderId,
+            resolution,
+            recipientEmail: transferRecipientEmail
+          }
+        }));
+      }
+      res.status(200).json({
+        ok: true,
+        order,
+        lifecycleEmailsSent: notificationResults.filter((item) => item?.ok).length
+      });
     } catch (error) {
       next(error);
     }
@@ -2282,20 +2919,56 @@ function createApiRouter(env) {
 
   router.post("/admin/ops/approve-all", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
+      const promoterApprovalFilter = {
+        role: "promoter",
+        $or: [
+          { isActive: false },
+          { promoterStatus: { $ne: "approved" } },
+          { promoterStatus: { $exists: false } }
+        ]
+      };
+      const [promotersToApprove, promoterDirectory] = await Promise.all([
+        UserAccount.find(promoterApprovalFilter).lean(),
+        UserAccount.find({ role: "promoter" }).select("email name promoterStatus isActive").lean()
+      ]);
+      const promoterNameByEmail = new Map(
+        promoterDirectory.map((item) => [normalizeEmail(item?.email), truncateText(item?.name, 200) || "Promoter"])
+      );
       const promoterResult = await UserAccount.updateMany(
-        {
-          role: "promoter",
-          $or: [
-            { isActive: false },
-            { promoterStatus: { $ne: "approved" } },
-            { promoterStatus: { $exists: false } }
-          ]
-        },
+        promoterApprovalFilter,
         { $set: { isActive: true, promoterStatus: "approved" } }
       );
+      let promoterEmailsSent = 0;
+      for (const promoter of promotersToApprove) {
+        const template = promoterStatusUpdateTemplate({
+          companyName,
+          name: promoter?.name,
+          status: "approved",
+          supportEmail,
+          dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html"),
+          wasReactivated: resolvePromoterAccountStatus(promoter) === "suspended"
+        });
+        const delivery = await deliverTemplateWithLogging({
+          idempotencyKey: buildNotificationIdempotencyKey(["promoter-status", promoter?._id, "approved", promoter?.email]),
+          category: "promoter-moderation",
+          templateName: "promoterStatusUpdateTemplate",
+          contextLabel: "promoter-status-change",
+          recipientEmail: normalizeEmail(promoter?.email),
+          template,
+          metadata: {
+            accountId: String(promoter?._id || ""),
+            previousStatus: resolvePromoterAccountStatus(promoter),
+            nextStatus: "approved",
+            source: "admin-approve-all"
+          }
+        });
+        if (delivery?.ok) promoterEmailsSent += 1;
+      }
 
       const eventRows = await PromoterEvent.find({}).lean();
       let eventsUpdated = 0;
+      let eventModerationEmailsSent = 0;
+      let eventPublicationEmailsSent = 0;
       for (const row of eventRows) {
         const data = row?.data && typeof row.data === "object" ? row.data : null;
         if (!data) continue;
@@ -2316,13 +2989,37 @@ function createApiRouter(env) {
             { upsert: true }
           );
           eventsUpdated += 1;
+          const promoterEmail = normalizeEmail(liveData?.promoterEmail);
+          if (isValidEmail(promoterEmail)) {
+            const promoterName = promoterNameByEmail.get(promoterEmail) || "Promoter";
+            const shareLink = resolveEventShareLink(req, liveData);
+            const moderationDelivery = await deliverEventModerationNotification(req, {
+              promoterEmail,
+              promoterName,
+              event: liveData,
+              status: "Live",
+              shareLink,
+              source: "admin-approve-all"
+            });
+            if (moderationDelivery?.ok) eventModerationEmailsSent += 1;
+            const publishedDelivery = await deliverPromoterEventPublishedNotification(req, {
+              promoterEmail,
+              event: liveData,
+              shareLink,
+              source: "admin-approve-all"
+            });
+            if (publishedDelivery?.ok) eventPublicationEmailsSent += 1;
+          }
         }
       }
 
       res.status(200).json({
         ok: true,
         promotersApproved: Number(promoterResult.modifiedCount || 0),
-        eventsApproved: eventsUpdated
+        eventsApproved: eventsUpdated,
+        promoterEmailsSent,
+        eventModerationEmailsSent,
+        eventPublicationEmailsSent
       });
     } catch (error) {
       next(error);

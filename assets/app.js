@@ -169,7 +169,6 @@ function notifyTicketConfirmation(order, eventDetails = {}) {
       order,
       promoterEmail
     },
-    skipAuth: true,
     suppressAuthRedirect: true,
     includeErrorResponse: true
   });
@@ -3218,6 +3217,22 @@ function setupAdminDashboard() {
           addActivity(`Event status update failed for ${escapeHtml(eventId)}: ${escapeHtml(response?.error || "Unknown error")}`);
           eventActionButton.disabled = false;
           return;
+        }
+        if (String(nextStatus || "").trim().toLowerCase() === "live") {
+          const pendingEvent = (Array.isArray(opsState.pendingEvents) ? opsState.pendingEvents : [])
+            .find((item) => String(item?.eventId || "").trim() === eventId);
+          const promoterEmail = normalizeEmail(pendingEvent?.promoterEmail || "");
+          if (promoterEmail) {
+            notifyPromoterEventPublished(
+              {
+                id: eventId,
+                eventId,
+                title: String(pendingEvent?.title || ""),
+                promoterEmail
+              },
+              getShareLink(eventId)
+            );
+          }
         }
         addActivity(`Event ${escapeHtml(eventId)} set to ${escapeHtml(nextStatus)}.`);
         await reloadAdminData();
