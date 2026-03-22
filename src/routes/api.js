@@ -319,24 +319,36 @@ function createApiRouter(env) {
     const key = buildNotificationIdempotencyKey([idempotencyKey || category, recipient || "none"]);
     let log = await NotificationLog.findOne({ idempotencyKey: key });
     if (!log) {
-      log = await NotificationLog.create({
-        idempotencyKey: key,
-        category: normalizeText(category) || "general",
-        contextLabel: normalizeText(contextLabel) || "notification",
-        templateName: normalizeText(templateName) || "template",
-        recipientEmail: recipient || "invalid-recipient",
-        status: "pending",
-        attempts: 0,
-        maxAttempts: notificationMaxAttempts,
-        metadata
-      });
-    } else if (["sent", "skipped"].includes(normalizeLifecycleStatus(log.status))) {
+      try {
+        log = await NotificationLog.create({
+          idempotencyKey: key,
+          category: normalizeText(category) || "general",
+          contextLabel: normalizeText(contextLabel) || "notification",
+          templateName: normalizeText(templateName) || "template",
+          recipientEmail: recipient || "invalid-recipient",
+          status: "pending",
+          attempts: 0,
+          maxAttempts: notificationMaxAttempts,
+          metadata
+        });
+      } catch (error) {
+        if (Number(error?.code) === 11000) {
+          log = await NotificationLog.findOne({ idempotencyKey: key });
+        } else {
+          throw error;
+        }
+      }
+    }
+    if (["sent", "skipped"].includes(normalizeLifecycleStatus(log?.status))) {
       return {
         ok: log.status === "sent",
         deduped: true,
         skipped: log.status === "skipped",
         reason: log.lastError || "already-processed"
       };
+    }
+    if (!log) {
+      return { ok: false, skipped: true, reason: "notification-log-conflict" };
     }
 
     if (!isValidEmail(recipient)) {
@@ -402,8 +414,20 @@ function createApiRouter(env) {
     const normalizedSeedAdmin = normalizeEmail(env.seedAdminEmail);
     if (isValidEmail(normalizedSupport)) recipients.add(normalizedSupport);
     if (isValidEmail(normalizedSeedAdmin)) recipients.add(normalizedSeedAdmin);
+    const adminAccounts = await UserAccount.find({ role: "admin" }).select("email").lean();
+    adminAccounts.forEach((account) => {
+      const email = normalizeEmail(account?.email);
+      if (isValidEmail(email)) recipients.add(email);
+    });
     if (!recipients.size) return [];
-    const adminUrl = absoluteUrlForPath(req, "/admin.html#promoters-section");
+    const queueTypeValue = normalizeLifecycleStatus(queueType);
+    let sectionHash = "#promoters-section";
+    if (queueTypeValue.includes("event")) sectionHash = "#events-section";
+    else if (queueTypeValue.includes("payout")) sectionHash = "#payments-section";
+    else if (queueTypeValue.includes("dispute") || queueTypeValue.includes("refund") || queueTypeValue.includes("transfer")) {
+      sectionHash = "#disputes-section";
+    }
+    const adminUrl = absoluteUrlForPath(req, `/admin.html${sectionHash}`);
     const results = [];
     for (const recipient of recipients) {
       const template = adminQueueAlertTemplate({
@@ -424,7 +448,8 @@ function createApiRouter(env) {
         metadata: {
           queueType,
           entityId,
-          submittedBy
+          submittedBy,
+          adminUrl
         }
       }));
     }
@@ -1257,7 +1282,8 @@ function createApiRouter(env) {
       const sessionEmail = normalizeEmail(req.auth?.email);
       const order = req.body?.order || {};
       const attendeeEmail = normalizeEmail(order?.attendee?.email);
-      const promoterEmail = normalizeEmail(req.body?.promoterEmail || order?.promoterEmail || sessionEmail);
+      const scopedPromoterEmail = role === "promoter" ? sessionEmail : "";
+      const promoterEmail = normalizeEmail(req.body?.promoterEmail || order?.promoterEmail || scopedPromoterEmail);
 
       if (!isValidEmail(attendeeEmail)) {
         res.status(400).json({ ok: false, error: "Valid attendee email is required" });
@@ -1331,7 +1357,8 @@ function createApiRouter(env) {
       const sessionEmail = normalizeEmail(req.auth?.email);
       const event = req.body?.event || {};
       const shareLink = normalizeText(req.body?.shareLink || "");
-      const promoterEmail = normalizeEmail(req.body?.promoterEmail || event?.promoterEmail || sessionEmail);
+      const scopedPromoterEmail = role === "promoter" ? sessionEmail : "";
+      const promoterEmail = normalizeEmail(req.body?.promoterEmail || event?.promoterEmail || scopedPromoterEmail);
 
       if (!isValidEmail(promoterEmail)) {
         res.status(400).json({ ok: false, error: "Valid promoter email is required" });
@@ -2335,6 +2362,14 @@ function createApiRouter(env) {
         recipientEmail: attendeeEmail,
         source: "order-refund-request"
       });
+      await sendAdminQueueAlert(
+        req,
+        "Refund Requests",
+        truncateText(order?.eventTitle, 200) || `Order ${orderId}`,
+        orderId,
+        attendeeEmail || sessionEmail,
+        "refund-request"
+      );
 
       res.status(200).json({ ok: true, order });
     } catch (error) {
@@ -2399,6 +2434,14 @@ function createApiRouter(env) {
           recipientEmail
         }
       });
+      await sendAdminQueueAlert(
+        req,
+        "Transfer Requests",
+        truncateText(order?.eventTitle, 200) || `Order ${orderId}`,
+        orderId,
+        attendeeEmail || sessionEmail,
+        "transfer-request"
+      );
 
       res.status(200).json({ ok: true, order });
     } catch (error) {
@@ -2631,11 +2674,36 @@ function createApiRouter(env) {
           source: "admin-promoter-status"
         }
       });
+      let welcomeDelivery = { ok: false, skipped: true, reason: "not-applicable" };
+      if (desired === "approved" && previousStatus === "pending") {
+        const welcomeTemplate = welcomeEmailTemplate({
+          companyName,
+          name: account.name,
+          role: "promoter",
+          dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html")
+        });
+        welcomeDelivery = await deliverTemplateWithLogging({
+          idempotencyKey: buildNotificationIdempotencyKey(["welcome", "promoter", accountId]),
+          category: "account",
+          templateName: "welcomeEmailTemplate",
+          contextLabel: "welcome-promoter-approved",
+          recipientEmail: account.email,
+          template: welcomeTemplate,
+          metadata: {
+            accountId,
+            role: "promoter",
+            previousStatus,
+            nextStatus: desired,
+            source: "admin-promoter-status"
+          }
+        });
+      }
       res.status(200).json({
         ok: true,
         accountId,
         status: promoterAccountStatusLabel(desired),
-        notificationSent: Boolean(notification.ok)
+        notificationSent: Boolean(notification.ok),
+        welcomeEmailSent: Boolean(welcomeDelivery.ok)
       });
     } catch (error) {
       next(error);
@@ -2939,14 +3007,16 @@ function createApiRouter(env) {
         { $set: { isActive: true, promoterStatus: "approved" } }
       );
       let promoterEmailsSent = 0;
+      let promoterWelcomeEmailsSent = 0;
       for (const promoter of promotersToApprove) {
+        const previousStatus = resolvePromoterAccountStatus(promoter);
         const template = promoterStatusUpdateTemplate({
           companyName,
           name: promoter?.name,
           status: "approved",
           supportEmail,
           dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html"),
-          wasReactivated: resolvePromoterAccountStatus(promoter) === "suspended"
+          wasReactivated: previousStatus === "suspended"
         });
         const delivery = await deliverTemplateWithLogging({
           idempotencyKey: buildNotificationIdempotencyKey(["promoter-status", promoter?._id, "approved", promoter?.email]),
@@ -2957,12 +3027,36 @@ function createApiRouter(env) {
           template,
           metadata: {
             accountId: String(promoter?._id || ""),
-            previousStatus: resolvePromoterAccountStatus(promoter),
+            previousStatus,
             nextStatus: "approved",
             source: "admin-approve-all"
           }
         });
         if (delivery?.ok) promoterEmailsSent += 1;
+        if (previousStatus === "pending") {
+          const welcomeTemplate = welcomeEmailTemplate({
+            companyName,
+            name: promoter?.name,
+            role: "promoter",
+            dashboardUrl: absoluteUrlForPath(req, "/promoter-dashboard.html")
+          });
+          const welcomeDelivery = await deliverTemplateWithLogging({
+            idempotencyKey: buildNotificationIdempotencyKey(["welcome", "promoter", promoter?._id]),
+            category: "account",
+            templateName: "welcomeEmailTemplate",
+            contextLabel: "welcome-promoter-approved",
+            recipientEmail: normalizeEmail(promoter?.email),
+            template: welcomeTemplate,
+            metadata: {
+              accountId: String(promoter?._id || ""),
+              role: "promoter",
+              previousStatus,
+              nextStatus: "approved",
+              source: "admin-approve-all"
+            }
+          });
+          if (welcomeDelivery?.ok) promoterWelcomeEmailsSent += 1;
+        }
       }
 
       const eventRows = await PromoterEvent.find({}).lean();
@@ -3018,6 +3112,7 @@ function createApiRouter(env) {
         promotersApproved: Number(promoterResult.modifiedCount || 0),
         eventsApproved: eventsUpdated,
         promoterEmailsSent,
+        promoterWelcomeEmailsSent,
         eventModerationEmailsSent,
         eventPublicationEmailsSent
       });
