@@ -257,7 +257,12 @@ function createApiRouter(env) {
       });
     } catch (error) {
       console.error(`Email send failed (${contextLabel}):`, error.message);
-      return { ok: false, skipped: true, reason: "send-failed" };
+      return {
+        ok: false,
+        skipped: true,
+        reason: "send-failed",
+        error: normalizeText(error?.message || "")
+      };
     }
   }
 
@@ -378,12 +383,15 @@ function createApiRouter(env) {
         await log.save();
         return { ok: true, sentTo: recipient };
       }
+      if (normalizeText(result?.requestId)) {
+        log.providerRequestId = normalizeText(result.requestId);
+      }
 
       const retriable = attempt < notificationMaxAttempts && isRetriableNotificationFailure(result);
       if (retriable) {
         const backoffMs = notificationRetryBaseMs * (2 ** (attempt - 1));
         log.status = "pending";
-        log.lastError = normalizeText(result?.reason || result?.error || "retry-scheduled");
+        log.lastError = normalizeText(result?.error || result?.reason || "retry-scheduled");
         log.nextRetryAt = new Date(Date.now() + backoffMs);
         await log.save();
         await sleep(backoffMs);
@@ -391,13 +399,13 @@ function createApiRouter(env) {
       }
 
       log.status = result?.skipped ? "skipped" : "failed";
-      log.lastError = normalizeText(result?.reason || result?.error || "delivery-failed");
+      log.lastError = normalizeText(result?.error || result?.reason || "delivery-failed");
       log.nextRetryAt = null;
       await log.save();
       return {
         ok: false,
         skipped: Boolean(result?.skipped),
-        reason: normalizeText(result?.reason || result?.error || "delivery-failed")
+        reason: normalizeText(result?.error || result?.reason || "delivery-failed")
       };
     }
 

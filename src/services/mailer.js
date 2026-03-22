@@ -23,9 +23,7 @@ function isValidEmail(value) {
 }
 
 function buildSender(env) {
-  const fromAddress = normalizeText(env.mailFrom);
-  const fromName = normalizeText(env.mailFromName);
-  return fromName ? `${fromName} <${fromAddress}>` : fromAddress;
+  return normalizeText(env.mailFrom);
 }
 
 function isMailerConfigured(env) {
@@ -100,7 +98,8 @@ async function sendEmail(env, payload) {
       ok: false,
       skipped: true,
       reason: "smtp2go-api-error",
-      error: resolveApiErrorMessage(parsed, `SMTP2GO API request failed (${response.status})`)
+      error: resolveApiErrorMessage(parsed, `SMTP2GO API request failed (${response.status})`),
+      requestId: normalizeText(parsed?.request_id || parsed?.data?.request_id)
     };
   }
 
@@ -110,7 +109,14 @@ async function sendEmail(env, payload) {
     .map((entry) => normalizeEmail(entry?.email || entry))
     .filter(Boolean);
   if (failedEntries.length && !succeededRecipients.length) {
-    return { ok: false, skipped: true, reason: "smtp2go-delivery-failed", failed: failedEntries };
+    return {
+      ok: false,
+      skipped: true,
+      reason: "smtp2go-delivery-failed",
+      error: normalizeText(failedEntries?.[0]?.error || failedEntries?.[0]?.message || ""),
+      failed: failedEntries,
+      requestId: normalizeText(parsed?.request_id || parsed?.data?.request_id)
+    };
   }
 
   return {
