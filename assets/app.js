@@ -877,7 +877,6 @@ function setupUserPortal() {
   const loginForm = root.querySelector("#portal-login-form");
   const loginEmailInput = root.querySelector("#portal-login-email");
   const loginPasswordInput = root.querySelector("#portal-login-password");
-  const loginNameInput = root.querySelector("#portal-login-name");
   const accountLabel = root.querySelector("#portal-account-label");
   const feedback = root.querySelector("#portal-feedback");
   const upcomingGrid = root.querySelector("#portal-upcoming-tickets");
@@ -1303,9 +1302,8 @@ function setupUserPortal() {
         refreshToken: tokens.refreshToken,
         user: response.user
       });
-      await loginToPortal(response.user.email, loginNameInput?.value || response.user.name || "");
+      await loginToPortal(response.user.email, response.user.name || "");
       loginPasswordInput.value = "";
-      if (loginNameInput) loginNameInput.value = "";
     });
   }
 
