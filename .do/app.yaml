@@ -74,6 +74,9 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_SMTP2GO_API_KEY
+      - key: SENDER_DOMAIN
+        scope: RUN_TIME
+        value: booqdat.com
       - key: MAIL_FROM
         scope: RUN_TIME
         value: no-reply@booqdat.com

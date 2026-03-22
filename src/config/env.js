@@ -18,6 +18,19 @@ function loadFromLegacyEnvTxt() {
   }
 }
 
+function normalizeDomain(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+}
+
+function extractDomainFromEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  const atIndex = email.lastIndexOf("@");
+  if (atIndex < 0 || atIndex >= email.length - 1) return "";
+  return normalizeDomain(email.slice(atIndex + 1));
+}
+
 function toIntegerInRange(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(String(value || ""), 10);
   if (!Number.isInteger(parsed)) return fallback;
@@ -78,7 +91,10 @@ function loadEnvironment() {
   const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD || "";
   const smtp2goApiBaseUrl = process.env.SMTP2GO_API_BASE_URL || "https://api.smtp2go.com/v3";
   const smtp2goApiKey = process.env.SMTP2GO_API_KEY || "";
-  const mailFrom = process.env.MAIL_FROM || "no-reply@booqdat.com";
+  const configuredMailFrom = String(process.env.MAIL_FROM || "").trim();
+  const configuredSenderDomain = normalizeDomain(process.env.SENDER_DOMAIN || "");
+  const senderDomain = configuredSenderDomain || extractDomainFromEmail(configuredMailFrom) || "booqdat.com";
+  const mailFrom = configuredMailFrom || (senderDomain ? `no-reply@${senderDomain}` : "no-reply@booqdat.com");
   const mailFromName = process.env.MAIL_FROM_NAME || "BOOQDAT";
   const mailReplyTo = process.env.MAIL_REPLY_TO || process.env.SUPPORT_EMAIL || "";
   const supportEmail = process.env.SUPPORT_EMAIL || "helloworld@booqdat.com";
@@ -116,6 +132,7 @@ function loadEnvironment() {
     seedAdminPassword,
     smtp2goApiBaseUrl,
     smtp2goApiKey,
+    senderDomain,
     mailFrom,
     mailFromName,
     mailReplyTo,
