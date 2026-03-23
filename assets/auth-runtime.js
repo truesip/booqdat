@@ -22,14 +22,47 @@
     "promoter-analytics.html": ["promoter", "admin"],
     "promoter-payouts.html": ["promoter", "admin"],
     "promoter-settings.html": ["promoter", "admin"],
-    "promoter-support.html": ["promoter", "admin"]
+    "promoter-support.html": ["promoter", "admin"],
+    "admin-venues.html": ["admin"],
+    "admin-booking-requests.html": ["admin"],
+    "admin-partners.html": ["admin"],
+    "venue-dashboard.html": ["venue", "admin"],
+    "venue-profile.html": ["venue", "admin"],
+    "venue-calendar.html": ["venue", "admin"],
+    "venue-booking-requests.html": ["venue", "admin"],
+    "venue-bookings-history.html": ["venue", "admin"],
+    "venue-earnings.html": ["venue", "admin"],
+    "venue-settings.html": ["venue", "admin"],
+    "host-dashboard.html": ["event_host", "admin"],
+    "host-events.html": ["event_host", "admin"],
+    "host-venue-search.html": ["event_host", "admin"],
+    "host-calendar.html": ["event_host", "admin"],
+    "host-budget-sponsors.html": ["event_host", "admin"],
+    "host-reports.html": ["event_host", "admin"],
+    "artiste-dashboard.html": ["artiste", "admin"],
+    "artiste-profile.html": ["artiste", "admin"],
+    "artiste-gigs.html": ["artiste", "admin"],
+    "artiste-venue-search.html": ["artiste", "admin"],
+    "artiste-calendar.html": ["artiste", "admin"],
+    "artiste-earnings.html": ["artiste", "admin"],
+    "artiste-fan-list.html": ["artiste", "admin"],
+    "sponsor-dashboard.html": ["sponsor", "admin"],
+    "sponsor-sponsorships.html": ["sponsor", "admin"],
+    "sponsor-event-discovery.html": ["sponsor", "admin"],
+    "sponsor-proposals.html": ["sponsor", "admin"],
+    "sponsor-analytics.html": ["sponsor", "admin"],
+    "influencer-dashboard.html": ["influencer", "admin"],
+    "influencer-profile.html": ["influencer", "admin"],
+    "influencer-invites.html": ["influencer", "admin"],
+    "influencer-promo-codes.html": ["influencer", "admin"],
+    "influencer-reports.html": ["influencer", "admin"]
   };
   const syncTimers = {};
   let refreshRequestPromise = null;
 
   function normalizeRole(value) {
     const role = String(value || "").trim().toLowerCase();
-    return ["admin", "promoter", "user"].includes(role) ? role : "";
+    return ["admin", "promoter", "user", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(role) ? role : "";
   }
 
   function normalizeEmail(value) {

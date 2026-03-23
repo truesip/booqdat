@@ -13,6 +13,7 @@ const UserAccount = require("../models/UserAccount");
 const RefreshToken = require("../models/RefreshToken");
 const AccessTokenBlocklist = require("../models/AccessTokenBlocklist");
 const NotificationLog = require("../models/NotificationLog");
+const VenueBookingRequest = require("../models/VenueBookingRequest");
 const { sendEmail } = require("../services/mailer");
 const {
   welcomeEmailTemplate,
@@ -34,8 +35,32 @@ function normalizeEmail(value) {
 
 function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase();
-  if (["admin", "promoter", "user"].includes(role)) return role;
+  if (["admin", "promoter", "user", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(role)) return role;
   return "";
+}
+
+function roleLabel(role) {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "admin") return "Admin";
+  if (normalizedRole === "promoter") return "Promoter";
+  if (normalizedRole === "venue") return "Venue";
+  if (normalizedRole === "event_host") return "Event Host";
+  if (normalizedRole === "artiste") return "Artiste";
+  if (normalizedRole === "sponsor") return "Sponsor";
+  if (normalizedRole === "influencer") return "Influencer";
+  return "User";
+}
+
+function dashboardPathForRole(role) {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "admin") return "/admin.html";
+  if (normalizedRole === "promoter") return "/promoter-dashboard.html";
+  if (normalizedRole === "venue") return "/venue-dashboard.html";
+  if (normalizedRole === "event_host") return "/host-dashboard.html";
+  if (normalizedRole === "artiste") return "/artiste-dashboard.html";
+  if (normalizedRole === "sponsor") return "/sponsor-dashboard.html";
+  if (normalizedRole === "influencer") return "/influencer-dashboard.html";
+  return "/user-portal.html";
 }
 
 function normalizePromoterAccountStatus(value) {
@@ -432,6 +457,7 @@ function createApiRouter(env) {
     let adminPagePath = "/admin-promoters.html";
     if (queueTypeValue.includes("event")) adminPagePath = "/admin-events.html";
     else if (queueTypeValue.includes("payout")) adminPagePath = "/admin-payments.html";
+    else if (queueTypeValue.includes("booking")) adminPagePath = "/admin-booking-requests.html";
     else if (queueTypeValue.includes("dispute") || queueTypeValue.includes("refund") || queueTypeValue.includes("transfer")) {
       adminPagePath = "/admin-disputes.html";
     }
@@ -1100,13 +1126,32 @@ function createApiRouter(env) {
         return;
       }
 
+      if (role !== "user") {
+        await UserProfile.updateOne(
+          { email },
+          {
+            $set: {
+              email,
+              data: {
+                name: account.name,
+                email,
+                role,
+                country,
+                location: country || "",
+                notifySales: true,
+                notifyPayouts: true
+              }
+            }
+          },
+          { upsert: true }
+        );
+      }
+
       const welcomeTemplate = welcomeEmailTemplate({
         companyName,
         name: account.name,
         role: account.role,
-        dashboardUrl: account.role === "admin"
-          ? absoluteUrlForPath(req, "/admin.html")
-          : absoluteUrlForPath(req, "/user-portal.html")
+        dashboardUrl: absoluteUrlForPath(req, dashboardPathForRole(account.role))
       });
       await deliverTemplateWithLogging({
         idempotencyKey: buildNotificationIdempotencyKey(["welcome", account.role, account._id]),
@@ -2285,6 +2330,323 @@ function createApiRouter(env) {
     }
   });
 
+  router.get("/portal/profile", requireAuth, requireRoles("admin", "promoter", "venue", "event_host", "artiste", "sponsor", "influencer"), async (req, res, next) => {
+    try {
+      const sessionRole = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const requestedRole = normalizeRole(req.query?.role || req.query?.accountRole || "");
+      const targetRole = sessionRole === "admin" ? requestedRole : sessionRole;
+      const targetEmail = sessionRole === "admin"
+        ? normalizeEmail(req.query?.email || req.query?.accountEmail || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid email is required" });
+        return;
+      }
+
+      const accountFilter = { email: targetEmail };
+      if (targetRole) accountFilter.role = targetRole;
+      const account = await UserAccount.findOne(accountFilter).lean();
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Account not found for requested portal profile" });
+        return;
+      }
+      const profileRow = await UserProfile.findOne({ email: targetEmail }).lean();
+      const profileData = profileRow?.data && typeof profileRow.data === "object" ? profileRow.data : {};
+      const profile = {
+        name: truncateText(profileData?.name || account.name, 200) || account.name,
+        email: targetEmail,
+        role: normalizeRole(account.role),
+        phone: truncateText(profileData?.phone, 80),
+        location: truncateText(profileData?.location, 200),
+        country: truncateText(profileData?.country || profileData?.location, 120),
+        notifySales: profileData?.notifySales !== false,
+        notifyPayouts: profileData?.notifyPayouts !== false,
+        data: profileData
+      };
+      res.status(200).json({ ok: true, profile });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/portal/profile", requireAuth, requireRoles("admin", "promoter", "venue", "event_host", "artiste", "sponsor", "influencer"), async (req, res, next) => {
+    try {
+      const sessionRole = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const requestedRole = normalizeRole(req.body?.role || req.body?.accountRole || "");
+      const targetRole = sessionRole === "admin" ? requestedRole : sessionRole;
+      const targetEmail = sessionRole === "admin"
+        ? normalizeEmail(req.body?.email || req.body?.accountEmail || sessionEmail)
+        : sessionEmail;
+      if (!isValidEmail(targetEmail)) {
+        res.status(400).json({ ok: false, error: "Valid email is required" });
+        return;
+      }
+
+      const accountFilter = { email: targetEmail };
+      if (targetRole) accountFilter.role = targetRole;
+      const account = await UserAccount.findOne(accountFilter);
+      if (!account) {
+        res.status(404).json({ ok: false, error: "Account not found for requested portal profile" });
+        return;
+      }
+
+      const existingProfileRow = await UserProfile.findOne({ email: targetEmail }).lean();
+      const existingData = existingProfileRow?.data && typeof existingProfileRow.data === "object"
+        ? existingProfileRow.data
+        : {};
+      const incomingData = req.body?.data && typeof req.body.data === "object" ? req.body.data : {};
+      const mergedData = {
+        ...existingData,
+        ...incomingData,
+        name: truncateText(req.body?.name || incomingData?.name || existingData?.name || account.name, 200) || account.name,
+        email: targetEmail,
+        role: normalizeRole(account.role),
+        phone: truncateText(req.body?.phone || incomingData?.phone || existingData?.phone, 80),
+        location: truncateText(req.body?.location || incomingData?.location || existingData?.location, 200),
+        country: truncateText(req.body?.country || incomingData?.country || existingData?.country || existingData?.location, 120),
+        notifySales: req.body?.notifySales !== undefined ? req.body.notifySales !== false : (existingData?.notifySales !== false),
+        notifyPayouts: req.body?.notifyPayouts !== undefined ? req.body.notifyPayouts !== false : (existingData?.notifyPayouts !== false),
+        updatedAt: new Date().toISOString()
+      };
+      if (!mergedData.location && mergedData.country) mergedData.location = mergedData.country;
+
+      await UserProfile.updateOne(
+        { email: targetEmail },
+        { $set: { email: targetEmail, data: mergedData } },
+        { upsert: true }
+      );
+      if (mergedData.name && mergedData.name !== account.name) {
+        account.name = mergedData.name;
+        await account.save();
+      }
+
+      res.status(200).json({
+        ok: true,
+        profile: {
+          name: mergedData.name,
+          email: targetEmail,
+          role: normalizeRole(account.role),
+          phone: mergedData.phone || "",
+          location: mergedData.location || "",
+          country: mergedData.country || "",
+          notifySales: mergedData.notifySales !== false,
+          notifyPayouts: mergedData.notifyPayouts !== false,
+          data: mergedData
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/venues/marketplace", requireAuth, requireRoles("admin", "promoter", "event_host", "artiste", "venue"), async (req, res, next) => {
+    try {
+      const cityFilter = truncateText(req.query?.city, 120).toLowerCase();
+      const countryFilter = truncateText(req.query?.country, 120).toLowerCase();
+      const minCapacity = Math.max(0, Math.floor(toFiniteNumber(req.query?.minCapacity, 0)));
+      const maxCapacity = Math.max(0, Math.floor(toFiniteNumber(req.query?.maxCapacity, 0)));
+      const maxPrice = Math.max(0, toFiniteNumber(req.query?.maxPrice, 0));
+
+      const venueAccounts = await UserAccount.find({ role: "venue", isActive: true }).sort({ createdAt: -1 }).lean();
+      const venueEmails = venueAccounts.map((item) => normalizeEmail(item?.email)).filter(Boolean);
+      const profileRows = venueEmails.length ? await UserProfile.find({ email: { $in: venueEmails } }).lean() : [];
+      const profileByEmail = new Map(profileRows.map((row) => [normalizeEmail(row?.email), row?.data && typeof row.data === "object" ? row.data : {}]));
+
+      const venues = venueAccounts
+        .map((account) => {
+          const email = normalizeEmail(account?.email);
+          const profileData = profileByEmail.get(email) || {};
+          const capacity = Math.max(0, Math.floor(toFiniteNumber(profileData?.capacity, 0)));
+          const hourlyRate = toPositiveAmount(profileData?.hourlyRate);
+          const dailyRate = toPositiveAmount(profileData?.dailyRate);
+          return {
+            accountId: String(account?._id || ""),
+            venueName: truncateText(profileData?.venueName || account?.name, 200) || "Untitled Venue",
+            email,
+            city: truncateText(profileData?.city, 120),
+            state: truncateText(profileData?.state || profileData?.provinceState, 120),
+            country: truncateText(profileData?.country, 120),
+            address: truncateText(profileData?.address, 240),
+            capacity,
+            amenities: ensureArray(profileData?.amenities).map((item) => truncateText(item, 80)).filter(Boolean),
+            pricing: {
+              hourlyRate,
+              dailyRate,
+              weekendSurcharge: toPositiveAmount(profileData?.weekendSurcharge),
+              cleaningFee: toPositiveAmount(profileData?.cleaningFee),
+              currency: truncateText(profileData?.currency, 12) || "USD"
+            },
+            isPublished: profileData?.isPublished !== false
+          };
+        })
+        .filter((venue) => venue.isPublished)
+        .filter((venue) => !cityFilter || String(venue.city || "").toLowerCase() === cityFilter)
+        .filter((venue) => !countryFilter || String(venue.country || "").toLowerCase() === countryFilter)
+        .filter((venue) => !minCapacity || venue.capacity >= minCapacity)
+        .filter((venue) => !maxCapacity || venue.capacity <= maxCapacity)
+        .filter((venue) => !maxPrice || venue.pricing.hourlyRate <= maxPrice || venue.pricing.dailyRate <= maxPrice)
+        .sort((a, b) => String(a.venueName || "").localeCompare(String(b.venueName || "")));
+
+      res.status(200).json({ ok: true, count: venues.length, venues });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/venues/requests", requireAuth, requireRoles("admin", "promoter", "event_host", "artiste"), async (req, res, next) => {
+    try {
+      const requesterEmail = normalizeEmail(req.auth?.email);
+      const requesterRole = normalizeRole(req.auth?.role);
+      const venueEmail = normalizeEmail(req.body?.venueEmail);
+      if (!isValidEmail(venueEmail)) {
+        res.status(400).json({ ok: false, error: "Valid venueEmail is required" });
+        return;
+      }
+      const venueAccount = await UserAccount.findOne({ email: venueEmail, role: "venue", isActive: true }).lean();
+      if (!venueAccount) {
+        res.status(404).json({ ok: false, error: "Venue account not found" });
+        return;
+      }
+
+      const eventName = truncateText(req.body?.eventName || req.body?.title, 200);
+      const eventDate = truncateText(req.body?.date || req.body?.eventDate, 40);
+      const estimatedAttendees = Math.max(1, Math.floor(toFiniteNumber(req.body?.estimatedAttendees, 1)));
+      const proposedPrice = toPositiveAmount(req.body?.proposedPrice || req.body?.budget);
+      if (!eventName || !eventDate || !proposedPrice) {
+        res.status(400).json({ ok: false, error: "eventName, eventDate, and proposedPrice are required" });
+        return;
+      }
+
+      const requestId = `vreq-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+      const requestData = {
+        requestId,
+        venueEmail,
+        requesterEmail,
+        requesterRole,
+        status: "Pending",
+        data: {
+          eventName,
+          eventDate,
+          promoterName: truncateText(req.body?.promoterName || req.body?.requesterName || req.auth?.name, 200) || "Requester",
+          estimatedAttendees,
+          proposedPrice,
+          message: truncateText(req.body?.message || "", 1000),
+          chatThread: []
+        }
+      };
+      await VenueBookingRequest.create(requestData);
+      await sendAdminQueueAlert(
+        req,
+        "Venue Booking Requests",
+        eventName,
+        requestId,
+        requesterEmail || req.auth?.name || "requester",
+        "venue-booking-request"
+      );
+      res.status(201).json({ ok: true, request: requestData });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/venues/requests", requireAuth, requireRoles("admin", "venue", "promoter", "event_host", "artiste"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const statusFilter = normalizeLifecycleStatus(req.query?.status || "");
+      const filter = {};
+      if (role === "venue") {
+        filter.venueEmail = sessionEmail;
+      } else if (role === "promoter" || role === "event_host" || role === "artiste") {
+        filter.requesterEmail = sessionEmail;
+      } else if (role === "admin") {
+        const venueEmail = normalizeEmail(req.query?.venueEmail);
+        const requesterEmail = normalizeEmail(req.query?.requesterEmail);
+        if (isValidEmail(venueEmail)) filter.venueEmail = venueEmail;
+        if (isValidEmail(requesterEmail)) filter.requesterEmail = requesterEmail;
+      }
+      if (statusFilter) {
+        filter.status = new RegExp(`^${statusFilter}$`, "i");
+      }
+      const rows = await VenueBookingRequest.find(filter).sort({ createdAt: -1 }).limit(300).lean();
+      const requests = rows.map((row) => ({
+        requestId: truncateText(row?.requestId, 120),
+        venueEmail: normalizeEmail(row?.venueEmail),
+        requesterEmail: normalizeEmail(row?.requesterEmail),
+        requesterRole: normalizeRole(row?.requesterRole),
+        requesterRoleLabel: roleLabel(row?.requesterRole),
+        status: truncateText(row?.status, 40) || "Pending",
+        actionReason: truncateText(row?.actionReason, 400),
+        actedByEmail: normalizeEmail(row?.actedByEmail),
+        actedAt: row?.actedAt || null,
+        createdAt: row?.createdAt || null,
+        data: row?.data && typeof row.data === "object" ? row.data : {}
+      }));
+      res.status(200).json({ ok: true, count: requests.length, requests });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/venues/requests/:requestId/status", requireAuth, requireRoles("admin", "venue"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const requestId = truncateText(req.params?.requestId, 120);
+      const requestedStatus = normalizeLifecycleStatus(req.body?.status);
+      const nextStatus = requestedStatus === "accept" || requestedStatus === "accepted"
+        ? "Accepted"
+        : requestedStatus === "decline" || requestedStatus === "declined"
+          ? "Declined"
+          : requestedStatus === "pending"
+            ? "Pending"
+            : "";
+      if (!requestId || !nextStatus) {
+        res.status(400).json({ ok: false, error: "Valid requestId and status are required" });
+        return;
+      }
+
+      const row = await VenueBookingRequest.findOne({ requestId });
+      if (!row) {
+        res.status(404).json({ ok: false, error: "Venue booking request not found" });
+        return;
+      }
+      if (role === "venue" && normalizeEmail(row.venueEmail) !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "Cannot update requests outside your venue scope" });
+        return;
+      }
+      row.status = nextStatus;
+      row.actionReason = truncateText(req.body?.reason || req.body?.declineReason, 400);
+      row.actedByEmail = sessionEmail;
+      row.actedAt = new Date();
+      if (!row.data || typeof row.data !== "object") row.data = {};
+      if (nextStatus === "Accepted") {
+        row.data.calendarBlocked = true;
+        row.data.contractSentAt = new Date().toISOString();
+      }
+      await row.save();
+      res.status(200).json({
+        ok: true,
+        request: {
+          requestId: row.requestId,
+          venueEmail: normalizeEmail(row.venueEmail),
+          requesterEmail: normalizeEmail(row.requesterEmail),
+          requesterRole: normalizeRole(row.requesterRole),
+          status: row.status,
+          actionReason: row.actionReason,
+          actedByEmail: normalizeEmail(row.actedByEmail),
+          actedAt: row.actedAt,
+          createdAt: row.createdAt,
+          data: row.data
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/user/payment-methods", requireAuth, requireRoles("admin", "user"), async (req, res, next) => {
     try {
       const role = normalizeRole(req.auth?.role);
@@ -2505,13 +2867,16 @@ function createApiRouter(env) {
 
   router.get("/admin/ops/dashboard", requireAuth, requireRoles("admin"), async (req, res, next) => {
     try {
-      const [promoterAccounts, userAccounts, promoterEvents, orderRows, profileRows, payoutAccountRows] = await Promise.all([
+      const [promoterAccounts, userAccounts, promoterEvents, orderRows, profileRows, payoutAccountRows, venueAccounts, partnerAccounts, bookingRequestRows] = await Promise.all([
         UserAccount.find({ role: "promoter" }).sort({ createdAt: -1 }).lean(),
         UserAccount.find({ role: "user" }).sort({ createdAt: -1 }).lean(),
         PromoterEvent.find({}).sort({ updatedAt: -1 }).lean(),
         OrderRecord.find({}).sort({ updatedAt: -1 }).lean(),
         UserProfile.find({}).lean(),
-        PromoterPayoutAccount.find({}).lean()
+        PromoterPayoutAccount.find({}).lean(),
+        UserAccount.find({ role: "venue" }).sort({ createdAt: -1 }).lean(),
+        UserAccount.find({ role: { $in: ["event_host", "artiste", "sponsor", "influencer"] } }).sort({ createdAt: -1 }).lean(),
+        VenueBookingRequest.find({}).sort({ createdAt: -1 }).lean()
       ]);
 
       const events = filterLegacyDemoEvents(promoterEvents.map((item) => {
@@ -2749,6 +3114,50 @@ function createApiRouter(env) {
         };
       })
         .sort((a, b) => b.publishedEventsCount - a.publishedEventsCount);
+      const venueRecords = venueAccounts.map((account) => {
+        const email = normalizeEmail(account?.email);
+        const profileData = profileMap[email] || {};
+        return {
+          accountId: String(account?._id || ""),
+          name: truncateText(profileData?.venueName || profileData?.name || account?.name, 200) || "Venue",
+          email,
+          city: truncateText(profileData?.city, 120),
+          state: truncateText(profileData?.state || profileData?.provinceState, 120),
+          country: truncateText(profileData?.country || profileData?.location, 120),
+          capacity: Math.max(0, Math.floor(toFiniteNumber(profileData?.capacity, 0))),
+          isPublished: profileData?.isPublished !== false,
+          createdAt: account?.createdAt || null
+        };
+      });
+      const bookingRequests = bookingRequestRows.map((row) => ({
+        requestId: truncateText(row?.requestId, 120),
+        venueEmail: normalizeEmail(row?.venueEmail),
+        requesterEmail: normalizeEmail(row?.requesterEmail),
+        requesterRole: normalizeRole(row?.requesterRole),
+        requesterRoleLabel: roleLabel(row?.requesterRole),
+        status: truncateText(row?.status, 40) || "Pending",
+        eventName: truncateText(row?.data?.eventName, 200) || "Untitled Event",
+        eventDate: truncateText(row?.data?.eventDate, 40),
+        estimatedAttendees: Math.max(0, Math.floor(toFiniteNumber(row?.data?.estimatedAttendees, 0))),
+        proposedPrice: toPositiveAmount(row?.data?.proposedPrice),
+        actionReason: truncateText(row?.actionReason, 400),
+        createdAt: row?.createdAt || null,
+        actedAt: row?.actedAt || null
+      }));
+      const partnerRoleRecords = partnerAccounts.map((account) => {
+        const email = normalizeEmail(account?.email);
+        const profileData = profileMap[email] || {};
+        return {
+          accountId: String(account?._id || ""),
+          name: truncateText(profileData?.name || account?.name, 200) || "Portal User",
+          email,
+          role: normalizeRole(account?.role),
+          roleLabel: roleLabel(account?.role),
+          country: truncateText(profileData?.country || profileData?.location, 120),
+          city: truncateText(profileData?.city, 120),
+          createdAt: account?.createdAt || null
+        };
+      });
 
       const disputes = orders
         .filter((order) => {
@@ -2787,10 +3196,14 @@ function createApiRouter(env) {
         payoutQueue,
         promoterPayoutDetails,
         promoterPublishedEvents,
+        venueRecords,
+        bookingRequests,
+        partnerRoleRecords,
         disputes,
         counts: {
           pendingPromoters: promoterApprovals.filter((item) => normalizeLifecycleStatus(item.status) === "pending").length,
-          pendingEvents: pendingEvents.length
+          pendingEvents: pendingEvents.length,
+          pendingVenueRequests: bookingRequests.filter((item) => normalizeLifecycleStatus(item.status) === "pending").length
         }
       });
     } catch (error) {

@@ -17,7 +17,17 @@ function usd(value) {
 }
 
 function welcomeEmailTemplate({ companyName, name, role, dashboardUrl }) {
-  const titleRole = role === "promoter" ? "Promoter" : role === "admin" ? "Admin" : "User";
+  const roleLabels = {
+    admin: "Admin",
+    promoter: "Promoter",
+    user: "User",
+    venue: "Venue",
+    event_host: "Event Host",
+    artiste: "Artiste",
+    sponsor: "Sponsor",
+    influencer: "Influencer"
+  };
+  const titleRole = roleLabels[String(role || "").trim().toLowerCase()] || "User";
   const safeName = escapeHtml(name || "there");
   const safeCompany = escapeHtml(companyName || "BOOQDAT");
   const safeDashboardUrl = escapeHtml(dashboardUrl || "");

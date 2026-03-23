@@ -32,7 +32,40 @@ const ROLE_GUARDS_BY_PAGE = {
   "promoter-analytics.html": ["promoter", "admin"],
   "promoter-payouts.html": ["promoter", "admin"],
   "promoter-settings.html": ["promoter", "admin"],
-  "promoter-support.html": ["promoter", "admin"]
+  "promoter-support.html": ["promoter", "admin"],
+  "admin-venues.html": ["admin"],
+  "admin-booking-requests.html": ["admin"],
+  "admin-partners.html": ["admin"],
+  "venue-dashboard.html": ["venue", "admin"],
+  "venue-profile.html": ["venue", "admin"],
+  "venue-calendar.html": ["venue", "admin"],
+  "venue-booking-requests.html": ["venue", "admin"],
+  "venue-bookings-history.html": ["venue", "admin"],
+  "venue-earnings.html": ["venue", "admin"],
+  "venue-settings.html": ["venue", "admin"],
+  "host-dashboard.html": ["event_host", "admin"],
+  "host-events.html": ["event_host", "admin"],
+  "host-venue-search.html": ["event_host", "admin"],
+  "host-calendar.html": ["event_host", "admin"],
+  "host-budget-sponsors.html": ["event_host", "admin"],
+  "host-reports.html": ["event_host", "admin"],
+  "artiste-dashboard.html": ["artiste", "admin"],
+  "artiste-profile.html": ["artiste", "admin"],
+  "artiste-gigs.html": ["artiste", "admin"],
+  "artiste-venue-search.html": ["artiste", "admin"],
+  "artiste-calendar.html": ["artiste", "admin"],
+  "artiste-earnings.html": ["artiste", "admin"],
+  "artiste-fan-list.html": ["artiste", "admin"],
+  "sponsor-dashboard.html": ["sponsor", "admin"],
+  "sponsor-sponsorships.html": ["sponsor", "admin"],
+  "sponsor-event-discovery.html": ["sponsor", "admin"],
+  "sponsor-proposals.html": ["sponsor", "admin"],
+  "sponsor-analytics.html": ["sponsor", "admin"],
+  "influencer-dashboard.html": ["influencer", "admin"],
+  "influencer-profile.html": ["influencer", "admin"],
+  "influencer-invites.html": ["influencer", "admin"],
+  "influencer-promo-codes.html": ["influencer", "admin"],
+  "influencer-reports.html": ["influencer", "admin"]
 };
 const ADMIN_SECTION_BY_PAGE = {
   "admin.html": "dashboard-home",
@@ -44,7 +77,10 @@ const ADMIN_SECTION_BY_PAGE = {
   "admin-reports.html": "reports-section",
   "admin-disputes.html": "disputes-section",
   "admin-settings.html": "settings-section",
-  "admin-promoter-profile.html": "promoter-profile-section"
+  "admin-promoter-profile.html": "promoter-profile-section",
+  "admin-venues.html": "venues-section",
+  "admin-booking-requests.html": "booking-requests-section",
+  "admin-partners.html": "partners-section"
 };
 const PROMOTER_SECTION_BY_PAGE = {
   "promoter-dashboard.html": "promoter-home",
@@ -54,6 +90,46 @@ const PROMOTER_SECTION_BY_PAGE = {
   "promoter-payouts.html": "promoter-payouts",
   "promoter-settings.html": "promoter-settings",
   "promoter-support.html": "promoter-support"
+};
+const VENUE_SECTION_BY_PAGE = {
+  "venue-dashboard.html": "venue-home",
+  "venue-profile.html": "venue-profile",
+  "venue-calendar.html": "venue-calendar",
+  "venue-booking-requests.html": "venue-booking-requests",
+  "venue-bookings-history.html": "venue-bookings-history",
+  "venue-earnings.html": "venue-earnings",
+  "venue-settings.html": "venue-settings"
+};
+const HOST_SECTION_BY_PAGE = {
+  "host-dashboard.html": "host-home",
+  "host-events.html": "host-events",
+  "host-venue-search.html": "host-venue-search",
+  "host-calendar.html": "host-calendar",
+  "host-budget-sponsors.html": "host-budget-sponsors",
+  "host-reports.html": "host-reports"
+};
+const ARTISTE_SECTION_BY_PAGE = {
+  "artiste-dashboard.html": "artiste-home",
+  "artiste-profile.html": "artiste-profile",
+  "artiste-gigs.html": "artiste-gigs",
+  "artiste-venue-search.html": "artiste-venue-search",
+  "artiste-calendar.html": "artiste-calendar",
+  "artiste-earnings.html": "artiste-earnings",
+  "artiste-fan-list.html": "artiste-fan-list"
+};
+const SPONSOR_SECTION_BY_PAGE = {
+  "sponsor-dashboard.html": "sponsor-home",
+  "sponsor-sponsorships.html": "sponsor-sponsorships",
+  "sponsor-event-discovery.html": "sponsor-event-discovery",
+  "sponsor-proposals.html": "sponsor-proposals",
+  "sponsor-analytics.html": "sponsor-analytics"
+};
+const INFLUENCER_SECTION_BY_PAGE = {
+  "influencer-dashboard.html": "influencer-home",
+  "influencer-profile.html": "influencer-profile",
+  "influencer-invites.html": "influencer-invites",
+  "influencer-promo-codes.html": "influencer-promo-codes",
+  "influencer-reports.html": "influencer-reports"
 };
 const LEGACY_DEMO_EVENT_IDS = new Set(["evt-1001", "evt-1002", "evt-1003", "evt-1004", "evt-1005", "evt-1006"]);
 const LEGACY_DEMO_EVENT_TITLES = new Set([
@@ -70,7 +146,7 @@ const LEGACY_DEMO_EVENT_TITLES = new Set([
 
 function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase();
-  return ["admin", "promoter", "user"].includes(role) ? role : "";
+  return ["admin", "promoter", "user", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(role) ? role : "";
 }
 
 function normalizeEmail(value) {
@@ -126,6 +202,11 @@ function getPostAuthDestination(role, redirectPath) {
   if (safeRedirect) return safeRedirect;
   if (role === "admin") return "admin.html";
   if (role === "promoter") return "promoter-dashboard.html";
+  if (role === "venue") return "venue-dashboard.html";
+  if (role === "event_host") return "host-dashboard.html";
+  if (role === "artiste") return "artiste-dashboard.html";
+  if (role === "sponsor") return "sponsor-dashboard.html";
+  if (role === "influencer") return "influencer-dashboard.html";
   if (role === "user") return "user-portal.html";
   return "index.html";
 }
@@ -793,7 +874,7 @@ function setupAuthPage() {
   const redirectPath = sanitizeRedirectPath(url.searchParams.get("redirect"));
   const requiredRole = normalizeRole(url.searchParams.get("role"));
   const isSignupPage = currentPageName() === "signup.html";
-  const preferredSignupRole = ["user", "promoter"].includes(requiredRole) ? requiredRole : "";
+  const preferredSignupRole = ["user", "promoter", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(requiredRole) ? requiredRole : "";
 
   if (roleHintLabel) {
     if (isSignupPage) {
@@ -2739,6 +2820,1509 @@ function setupPromoterDashboard() {
   renderWizardImagePreview([]);
   setWizardStep(1);
 }
+function portalEscapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function portalStatusPillClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("approved") || normalized.includes("accepted") || normalized.includes("processed") || normalized.includes("paid") || normalized.includes("confirmed") || normalized.includes("active")) {
+    return "approved";
+  }
+  if (normalized.includes("rejected") || normalized.includes("declined") || normalized.includes("suspended")) {
+    return "rejected";
+  }
+  return "pending";
+}
+
+function portalFormatDateValue(value) {
+  if (!value) return "—";
+  const raw = String(value || "").trim();
+  if (!raw) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return formatDate(raw);
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function portalFormatDateTimeValue(value) {
+  const parsed = new Date(value || "");
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString();
+}
+
+function portalReadStorageJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback;
+    if (fallback && typeof fallback === "object") return parsed && typeof parsed === "object" ? parsed : fallback;
+    return parsed;
+  } catch {
+    return fallback;
+  }
+}
+
+function portalWriteStorageJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore local storage write failures
+  }
+}
+
+function applyGenericPortalSectionView(root, activeSectionId) {
+  const sections = root.querySelectorAll(".promoter-main > .promoter-section");
+  sections.forEach((section) => {
+    section.hidden = section.id !== activeSectionId;
+  });
+}
+
+function setGenericPortalSidebarActiveLink(root, pageName) {
+  const links = root.querySelectorAll(".promoter-sidebar-nav a");
+  links.forEach((link) => {
+    const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+    if (!href || href.startsWith("#")) return;
+    const targetPage = href.split("/").pop();
+    const isActive = targetPage === pageName;
+    link.classList.toggle("active", isActive);
+    if (isActive) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+}
+
+function setupVenuePortal() {
+  const root = document.querySelector("#venue-portal");
+  if (!root) return;
+  const venuePageName = currentPageName();
+  const activeSectionId = VENUE_SECTION_BY_PAGE[venuePageName] || "venue-home";
+  const authUser = readAuthSession()?.user || {};
+  const authEmail = normalizeEmail(authUser?.email);
+  const identityKey = authEmail || "default";
+  const profileForm = root.querySelector("#venue-profile-form");
+  const profileStatus = root.querySelector("#venue-profile-status");
+  const settingsForm = root.querySelector("#venue-settings-form");
+  const settingsStatus = root.querySelector("#venue-settings-status");
+  const bookingRequestsBody = root.querySelector("#venue-booking-requests-body");
+  const bookingHistoryBody = root.querySelector("#venue-booking-history-body");
+  const earningsSummary = root.querySelector("#venue-earnings-summary");
+  const earningsBody = root.querySelector("#venue-earnings-body");
+  const blockedDateInput = root.querySelector("#venue-block-date");
+  const blockedDatesList = root.querySelector("#venue-calendar-blocked");
+  const addBlockedDateButton = root.querySelector("[data-venue-block-date]");
+  const sidebarToggle = root.querySelector("[data-venue-sidebar-toggle]");
+  const logoutButton = root.querySelector("[data-venue-logout]");
+  const blockedDatesStorageKey = `booqdat_venue_blocked_dates_${identityKey}`;
+
+  let venueProfileData = {};
+  let venueRequests = [];
+  let blockedDates = portalReadStorageJson(blockedDatesStorageKey, [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  function setStatus(target, message, isError = false) {
+    if (!target) return;
+    target.textContent = String(message || "");
+    target.style.color = isError ? "#b3261e" : "";
+  }
+
+  function parseAmenityList(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function uniqueSortedDates(values) {
+    return [...new Set((Array.isArray(values) ? values : []).map((item) => String(item || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  function renderBlockedDates() {
+    if (!blockedDatesList) return;
+    if (!blockedDates.length) {
+      blockedDatesList.innerHTML = `<li class="muted">No blocked dates yet.</li>`;
+      return;
+    }
+    blockedDatesList.innerHTML = blockedDates.map((dateValue) => `
+      <li>
+        <strong>${portalEscapeHtml(portalFormatDateValue(dateValue))}</strong>
+        <button class="btn btn-secondary btn-sm" type="button" data-venue-unblock-date="${portalEscapeHtml(dateValue)}">Remove</button>
+      </li>
+    `).join("");
+  }
+
+  function applyVenueProfileForm(profileData = {}) {
+    if (!profileForm) return;
+    if (profileForm.elements?.venueName) profileForm.elements.venueName.value = String(profileData?.venueName || authUser?.name || "");
+    if (profileForm.elements?.capacity) profileForm.elements.capacity.value = String(Math.max(1, Math.floor(toFiniteNumber(profileData?.capacity, 1))));
+    if (profileForm.elements?.address) profileForm.elements.address.value = String(profileData?.address || "");
+    if (profileForm.elements?.city) profileForm.elements.city.value = String(profileData?.city || "");
+    if (profileForm.elements?.state) profileForm.elements.state.value = String(profileData?.state || profileData?.provinceState || "");
+    if (profileForm.elements?.country) profileForm.elements.country.value = String(profileData?.country || "");
+    if (profileForm.elements?.mapsEmbed) profileForm.elements.mapsEmbed.value = String(profileData?.mapsEmbed || "");
+    if (profileForm.elements?.hourlyRate) profileForm.elements.hourlyRate.value = String(Math.max(0, toFiniteNumber(profileData?.hourlyRate, 0)));
+    if (profileForm.elements?.dailyRate) profileForm.elements.dailyRate.value = String(Math.max(0, toFiniteNumber(profileData?.dailyRate, 0)));
+    if (profileForm.elements?.weekendSurcharge) profileForm.elements.weekendSurcharge.value = String(Math.max(0, toFiniteNumber(profileData?.weekendSurcharge, 0)));
+    if (profileForm.elements?.cleaningFee) profileForm.elements.cleaningFee.value = String(Math.max(0, toFiniteNumber(profileData?.cleaningFee, 0)));
+    if (profileForm.elements?.amenities) {
+      const amenities = Array.isArray(profileData?.amenities) ? profileData.amenities : parseAmenityList(profileData?.amenities || "");
+      profileForm.elements.amenities.value = amenities.join(", ");
+    }
+    if (profileForm.elements?.description) profileForm.elements.description.value = String(profileData?.description || "");
+    if (profileForm.elements?.rules) profileForm.elements.rules.value = String(profileData?.rules || "");
+    if (profileForm.elements?.cancellationPolicy) profileForm.elements.cancellationPolicy.value = String(profileData?.cancellationPolicy || "");
+    if (profileForm.elements?.isPublished) profileForm.elements.isPublished.checked = profileData?.isPublished !== false;
+  }
+
+  function applyVenueSettingsForm(profile = {}) {
+    if (!settingsForm) return;
+    if (settingsForm.elements?.name) settingsForm.elements.name.value = String(profile?.name || profile?.contactName || authUser?.name || "");
+    if (settingsForm.elements?.email) settingsForm.elements.email.value = String(profile?.email || authUser?.email || "");
+    if (settingsForm.elements?.phone) settingsForm.elements.phone.value = String(profile?.phone || "");
+    if (settingsForm.elements?.notifySales) settingsForm.elements.notifySales.checked = profile?.notifySales !== false;
+    if (settingsForm.elements?.notifyPayouts) settingsForm.elements.notifyPayouts.checked = profile?.notifyPayouts !== false;
+  }
+
+  function renderVenueTablesAndKpis() {
+    const rows = Array.isArray(venueRequests) ? venueRequests : [];
+    const sortedRows = [...rows].sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+
+    if (bookingRequestsBody) {
+      if (!sortedRows.length) {
+        bookingRequestsBody.innerHTML = `<tr><td colspan="8">No booking requests yet.</td></tr>`;
+      } else {
+        bookingRequestsBody.innerHTML = sortedRows.map((item) => {
+          const status = String(item?.status || "Pending");
+          const isPending = status.toLowerCase().includes("pending");
+          const requestId = String(item?.requestId || "");
+          const roleLabel = String(item?.requesterRoleLabel || item?.requesterRole || "Requester");
+          return `
+            <tr>
+              <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Event")}</td>
+              <td>${portalEscapeHtml(portalFormatDateValue(item?.data?.eventDate))}</td>
+              <td>${portalEscapeHtml(item?.requesterEmail || "—")}</td>
+              <td>${portalEscapeHtml(roleLabel)}</td>
+              <td>${Math.max(0, Math.floor(toFiniteNumber(item?.data?.estimatedAttendees, 0))).toLocaleString()}</td>
+              <td>${usd(Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)))}</td>
+              <td><span class="status-pill ${portalStatusPillClass(status)}">${portalEscapeHtml(status)}</span></td>
+              <td>
+                <div class="event-action-row">
+                  <button class="btn btn-secondary btn-sm" type="button" data-venue-request-action="accept" data-request-id="${portalEscapeHtml(requestId)}" ${isPending ? "" : "disabled"}>Accept</button>
+                  <button class="btn btn-secondary btn-sm" type="button" data-venue-request-action="decline" data-request-id="${portalEscapeHtml(requestId)}" ${isPending ? "" : "disabled"}>Decline</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
+    const historyRows = sortedRows.filter((item) => !String(item?.status || "").toLowerCase().includes("pending"));
+    if (bookingHistoryBody) {
+      bookingHistoryBody.innerHTML = historyRows.length
+        ? historyRows.map((item) => {
+          const status = String(item?.status || "Pending");
+          const contractLabel = String(status).toLowerCase().includes("accepted")
+            ? `Sent ${portalFormatDateTimeValue(item?.actedAt || item?.createdAt)}`
+            : "Not sent";
+          return `
+            <tr>
+              <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Event")}</td>
+              <td>${portalEscapeHtml(portalFormatDateValue(item?.data?.eventDate))}</td>
+              <td>${portalEscapeHtml(item?.requesterEmail || "—")}</td>
+              <td><span class="status-pill ${portalStatusPillClass(status)}">${portalEscapeHtml(status)}</span></td>
+              <td>${portalEscapeHtml(contractLabel)}</td>
+            </tr>
+          `;
+        }).join("")
+        : `<tr><td colspan="5">No completed bookings yet.</td></tr>`;
+    }
+
+    const earningsRows = sortedRows.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    const earningsTotal = earningsRows.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)), 0);
+    if (earningsSummary) {
+      earningsSummary.textContent = earningsRows.length
+        ? `${earningsRows.length.toLocaleString()} accepted booking${earningsRows.length === 1 ? "" : "s"} • Estimated ${usd(earningsTotal)}`
+        : "No earnings data yet.";
+    }
+    if (earningsBody) {
+      earningsBody.innerHTML = earningsRows.length
+        ? earningsRows.map((item) => {
+          const status = String(item?.status || "Accepted");
+          return `
+            <tr>
+              <td>${portalEscapeHtml(portalFormatDateValue(item?.actedAt || item?.createdAt))}</td>
+              <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Event")}</td>
+              <td><span class="status-pill ${portalStatusPillClass(status)}">${portalEscapeHtml(status)}</span></td>
+              <td>${usd(Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)))}</td>
+            </tr>
+          `;
+        }).join("")
+        : `<tr><td colspan="4">No earnings records yet.</td></tr>`;
+    }
+
+    const now = new Date();
+    const acceptedRows = sortedRows.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    const acceptedThisMonth = acceptedRows.filter((item) => {
+      const dt = new Date(item?.actedAt || item?.createdAt || "");
+      if (Number.isNaN(dt.getTime())) return false;
+      return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+    }).length;
+    const pendingCount = sortedRows.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const occupancyRate = sortedRows.length ? Math.round((acceptedRows.length / sortedRows.length) * 100) : 0;
+    const upcomingCount = acceptedRows.filter((item) => {
+      const dateRaw = String(item?.data?.eventDate || "").trim();
+      if (!dateRaw) return false;
+      const dt = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? new Date(`${dateRaw}T00:00:00`) : new Date(dateRaw);
+      if (Number.isNaN(dt.getTime())) return false;
+      return dt >= new Date(new Date().toDateString());
+    }).length;
+    const kpiValues = {
+      "bookings-month": acceptedThisMonth.toLocaleString(),
+      revenue: usd(earningsTotal),
+      occupancy: `${Math.max(0, occupancyRate)}%`,
+      upcoming: upcomingCount.toLocaleString()
+    };
+    Object.entries(kpiValues).forEach(([key, value]) => {
+      const target = root.querySelector(`[data-venue-kpi="${key}"]`);
+      if (target) target.textContent = value;
+    });
+
+    const pendingBadge = root.querySelector('[data-venue-kpi="bookings-month"]');
+    if (pendingBadge && pendingCount > 0) {
+      pendingBadge.setAttribute("title", `${pendingCount} pending booking request${pendingCount === 1 ? "" : "s"}`);
+    }
+  }
+
+  async function loadVenueProfile() {
+    const response = await apiRequest("/portal/profile?role=venue", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok || !response?.profile) {
+      applyVenueProfileForm({});
+      applyVenueSettingsForm({});
+      return;
+    }
+    const profile = response.profile;
+    const data = profile?.data && typeof profile.data === "object" ? profile.data : {};
+    venueProfileData = { ...data };
+    applyVenueProfileForm(data);
+    applyVenueSettingsForm({
+      ...data,
+      name: profile?.name || data?.contactName || "",
+      email: profile?.email || authEmail,
+      phone: profile?.phone || data?.phone || "",
+      notifySales: profile?.notifySales !== false,
+      notifyPayouts: profile?.notifyPayouts !== false
+    });
+  }
+
+  async function loadVenueRequests() {
+    const response = await apiRequest("/venues/requests", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      if (bookingRequestsBody) {
+        bookingRequestsBody.innerHTML = `<tr><td colspan="8">${portalEscapeHtml(response?.error || "Unable to load booking requests right now.")}</td></tr>`;
+      }
+      venueRequests = [];
+      renderVenueTablesAndKpis();
+      return;
+    }
+    venueRequests = Array.isArray(response.requests) ? response.requests : [];
+    renderVenueTablesAndKpis();
+  }
+
+  if (profileForm && profileStatus) {
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!profileForm.reportValidity()) return;
+      const formData = new FormData(profileForm);
+      const venueName = String(formData.get("venueName") || "").trim();
+      const capacity = Math.max(1, Math.floor(toFiniteNumber(formData.get("capacity"), 1)));
+      const country = String(formData.get("country") || "").trim();
+      const city = String(formData.get("city") || "").trim();
+      const payloadData = {
+        ...venueProfileData,
+        venueName,
+        capacity,
+        address: String(formData.get("address") || "").trim(),
+        city,
+        state: String(formData.get("state") || "").trim(),
+        country,
+        mapsEmbed: String(formData.get("mapsEmbed") || "").trim(),
+        hourlyRate: Math.max(0, toFiniteNumber(formData.get("hourlyRate"), 0)),
+        dailyRate: Math.max(0, toFiniteNumber(formData.get("dailyRate"), 0)),
+        weekendSurcharge: Math.max(0, toFiniteNumber(formData.get("weekendSurcharge"), 0)),
+        cleaningFee: Math.max(0, toFiniteNumber(formData.get("cleaningFee"), 0)),
+        amenities: parseAmenityList(formData.get("amenities")),
+        description: String(formData.get("description") || "").trim(),
+        rules: String(formData.get("rules") || "").trim(),
+        cancellationPolicy: String(formData.get("cancellationPolicy") || "").trim(),
+        isPublished: Boolean(formData.get("isPublished"))
+      };
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "venue",
+          name: venueName || authUser?.name || "Venue",
+          email: authEmail,
+          country,
+          location: [city, country].filter(Boolean).join(", "),
+          data: payloadData
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        setStatus(profileStatus, response?.error || "Unable to save venue profile right now.", true);
+        return;
+      }
+      venueProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : payloadData;
+      applyVenueProfileForm(venueProfileData);
+      setStatus(profileStatus, "Venue profile saved.");
+    });
+  }
+
+  if (settingsForm && settingsStatus) {
+    settingsForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!settingsForm.reportValidity()) return;
+      const formData = new FormData(settingsForm);
+      const payload = {
+        role: "venue",
+        name: String(formData.get("name") || authUser?.name || "Venue").trim(),
+        email: String(formData.get("email") || authEmail || "").trim().toLowerCase(),
+        phone: String(formData.get("phone") || "").trim(),
+        notifySales: Boolean(formData.get("notifySales")),
+        notifyPayouts: Boolean(formData.get("notifyPayouts")),
+        data: {
+          ...venueProfileData,
+          contactName: String(formData.get("name") || "").trim(),
+          phone: String(formData.get("phone") || "").trim()
+        }
+      };
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: payload,
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        setStatus(settingsStatus, response?.error || "Unable to save settings right now.", true);
+        return;
+      }
+      venueProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : payload.data;
+      setStatus(settingsStatus, "Venue settings saved.");
+    });
+  }
+
+  if (addBlockedDateButton && blockedDateInput) {
+    addBlockedDateButton.addEventListener("click", () => {
+      const nextDate = String(blockedDateInput.value || "").trim();
+      if (!nextDate) return;
+      blockedDates = uniqueSortedDates([...blockedDates, nextDate]);
+      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      blockedDateInput.value = "";
+      renderBlockedDates();
+    });
+  }
+
+  root.addEventListener("click", async (event) => {
+    const removeBlockedDateButton = event.target.closest("[data-venue-unblock-date]");
+    if (removeBlockedDateButton) {
+      const dateValue = String(removeBlockedDateButton.dataset.venueUnblockDate || "").trim();
+      blockedDates = blockedDates.filter((item) => String(item || "").trim() !== dateValue);
+      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      renderBlockedDates();
+      return;
+    }
+
+    const requestActionButton = event.target.closest("[data-venue-request-action]");
+    if (!requestActionButton) return;
+    const requestId = String(requestActionButton.dataset.requestId || "").trim();
+    const action = String(requestActionButton.dataset.venueRequestAction || "").trim().toLowerCase();
+    if (!requestId || !["accept", "decline"].includes(action)) return;
+    requestActionButton.disabled = true;
+    let reason = "";
+    if (action === "decline") {
+      reason = String(window.prompt("Add a decline reason (optional):", "") || "").trim();
+    }
+    const response = await apiRequest(`/venues/requests/${encodeURIComponent(requestId)}/status`, {
+      method: "POST",
+      body: {
+        status: action === "accept" ? "accepted" : "declined",
+        reason
+      },
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      requestActionButton.disabled = false;
+      if (earningsSummary) {
+        earningsSummary.textContent = response?.error || "Unable to update booking request right now.";
+      }
+      return;
+    }
+    if (earningsSummary) {
+      earningsSummary.textContent = `Booking request ${requestId} was ${action === "accept" ? "accepted" : "declined"}.`;
+    }
+    await loadVenueRequests();
+  });
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-open");
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=venue";
+    });
+  }
+
+  applyGenericPortalSectionView(root, activeSectionId);
+  setGenericPortalSidebarActiveLink(root, venuePageName);
+  renderBlockedDates();
+  renderVenueTablesAndKpis();
+  void loadVenueProfile();
+  void loadVenueRequests();
+}
+
+function setupHostPortal() {
+  const root = document.querySelector("#host-portal");
+  if (!root) return;
+  const hostPageName = currentPageName();
+  const activeSectionId = HOST_SECTION_BY_PAGE[hostPageName] || "host-home";
+  const authUser = readAuthSession()?.user || {};
+  const authEmail = normalizeEmail(authUser?.email);
+  const identityKey = authEmail || "default";
+  const hostEventsStorageKey = `booqdat_host_events_${identityKey}`;
+  const hostBudgetStorageKey = `booqdat_host_budget_${identityKey}`;
+  const hostEventForm = root.querySelector("#host-event-form");
+  const hostEventStatus = root.querySelector("#host-event-status");
+  const hostEventsBody = root.querySelector("#host-events-body");
+  const hostVenueFilterForm = root.querySelector("#host-venue-filter-form");
+  const hostVenueSearchStatus = root.querySelector("#host-venue-search-status");
+  const hostVenueResults = root.querySelector("#host-venue-results");
+  const hostCalendarBody = root.querySelector("#host-calendar-body");
+  const hostBudgetForm = root.querySelector("#host-budget-form");
+  const hostBudgetStatus = root.querySelector("#host-budget-status");
+  const hostReportsBody = root.querySelector("#host-reports-body");
+  const sidebarToggle = root.querySelector("[data-host-sidebar-toggle]");
+  const logoutButton = root.querySelector("[data-host-logout]");
+
+  let hostEvents = portalReadStorageJson(hostEventsStorageKey, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: String(item?.id || `host-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+      eventName: String(item?.eventName || "").trim(),
+      eventDate: String(item?.eventDate || "").trim(),
+      estimatedAttendees: Math.max(1, Math.floor(toFiniteNumber(item?.estimatedAttendees, 1))),
+      budget: Math.max(0, toFiniteNumber(item?.budget, 0)),
+      status: String(item?.status || "Planning")
+    }))
+    .filter((item) => item.eventName);
+  let hostBudgetPlan = portalReadStorageJson(hostBudgetStorageKey, {
+    budgetNotes: "",
+    sponsorTargets: ""
+  });
+  let hostRequests = [];
+  let hostProfileData = {};
+
+  function persistHostEvents() {
+    portalWriteStorageJson(hostEventsStorageKey, hostEvents);
+  }
+
+  function setStatus(target, message, isError = false) {
+    if (!target) return;
+    target.textContent = String(message || "");
+    target.style.color = isError ? "#b3261e" : "";
+  }
+
+  function eventMatchRequest(eventItem, requests) {
+    const normalizedEventName = String(eventItem?.eventName || "").trim().toLowerCase();
+    if (!normalizedEventName) return null;
+    return (Array.isArray(requests) ? requests : []).find((request) => String(request?.data?.eventName || "").trim().toLowerCase() === normalizedEventName) || null;
+  }
+
+  function updateHostKpis() {
+    const pendingCount = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const acceptedRequests = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    const budgetTotal = hostEvents.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
+    const values = {
+      events: hostEvents.length.toLocaleString(),
+      pending: pendingCount.toLocaleString(),
+      accepted: acceptedRequests.length.toLocaleString(),
+      budget: usd(budgetTotal)
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const target = root.querySelector(`[data-host-kpi="${key}"]`);
+      if (target) target.textContent = value;
+    });
+  }
+
+  function renderHostEvents() {
+    if (!hostEventsBody) return;
+    if (!hostEvents.length) {
+      hostEventsBody.innerHTML = `<tr><td colspan="5">No hosted events yet.</td></tr>`;
+      return;
+    }
+    hostEventsBody.innerHTML = hostEvents
+      .sort((a, b) => String(a?.eventDate || "").localeCompare(String(b?.eventDate || "")))
+      .map((item) => {
+        const matchedRequest = eventMatchRequest(item, hostRequests);
+        const resolvedStatus = matchedRequest?.status || item?.status || "Planning";
+        return `
+          <tr>
+            <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
+            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.estimatedAttendees, 0))).toLocaleString()}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.budget, 0)))}</td>
+            <td><span class="status-pill ${portalStatusPillClass(resolvedStatus)}">${portalEscapeHtml(resolvedStatus)}</span></td>
+          </tr>
+        `;
+      }).join("");
+  }
+
+  function renderHostCalendar() {
+    if (!hostCalendarBody) return;
+    if (!hostEvents.length) {
+      hostCalendarBody.innerHTML = `<tr><td colspan="4">No calendar entries yet.</td></tr>`;
+      return;
+    }
+    hostCalendarBody.innerHTML = hostEvents
+      .sort((a, b) => String(a?.eventDate || "").localeCompare(String(b?.eventDate || "")))
+      .map((item) => {
+        const matchedRequest = eventMatchRequest(item, hostRequests);
+        return `
+          <tr>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
+            <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
+            <td>${portalEscapeHtml(matchedRequest?.venueEmail || "Venue TBD")}</td>
+            <td><span class="status-pill ${portalStatusPillClass(matchedRequest?.status || item?.status || "Planning")}">${portalEscapeHtml(matchedRequest?.status || item?.status || "Planning")}</span></td>
+          </tr>
+        `;
+      }).join("");
+  }
+
+  function renderHostReports() {
+    if (!hostReportsBody) return;
+    const pendingCount = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const acceptedRequests = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    const plannedBudget = hostEvents.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
+    const proposedBookingSpend = acceptedRequests.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)), 0);
+    hostReportsBody.innerHTML = `
+      <tr><td>Upcoming hosted events</td><td>${hostEvents.length.toLocaleString()}</td></tr>
+      <tr><td>Pending venue requests</td><td>${pendingCount.toLocaleString()}</td></tr>
+      <tr><td>Accepted venue bookings</td><td>${acceptedRequests.length.toLocaleString()}</td></tr>
+      <tr><td>Planned event budget</td><td>${usd(plannedBudget)}</td></tr>
+      <tr><td>Accepted booking spend</td><td>${usd(proposedBookingSpend)}</td></tr>
+    `;
+  }
+
+  function renderHostVenueSearchResults(venues) {
+    if (!hostVenueResults) return;
+    const rows = Array.isArray(venues) ? venues : [];
+    if (!rows.length) {
+      hostVenueResults.innerHTML = `<article class="promoter-card"><p>No venues matched the current filters.</p></article>`;
+      return;
+    }
+    hostVenueResults.innerHTML = rows.map((venue) => `
+      <article class="promoter-card">
+        <h3>${portalEscapeHtml(venue?.venueName || "Venue")}</h3>
+        <p>${portalEscapeHtml(formatLocationLine(venue) || "Location TBA")}</p>
+        <p><strong>Capacity:</strong> ${Math.max(0, Math.floor(toFiniteNumber(venue?.capacity, 0))).toLocaleString()}</p>
+        <p><strong>Rates:</strong> Hourly ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.hourlyRate, 0)))} • Daily ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.dailyRate, 0)))}</p>
+        <p class="muted">${portalEscapeHtml(Array.isArray(venue?.amenities) && venue.amenities.length ? venue.amenities.join(", ") : "No amenities listed")}</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-host-request-venue-email="${portalEscapeHtml(venue?.email || "")}" data-host-request-venue-name="${portalEscapeHtml(venue?.venueName || "Venue")}">Request Booking</button>
+      </article>
+    `).join("");
+  }
+
+  function renderHostPortal() {
+    renderHostEvents();
+    renderHostCalendar();
+    renderHostReports();
+    updateHostKpis();
+  }
+
+  async function loadHostRequests() {
+    const response = await apiRequest("/venues/requests", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    hostRequests = response?.ok && Array.isArray(response.requests) ? response.requests : [];
+    renderHostPortal();
+  }
+
+  async function loadHostProfile() {
+    const response = await apiRequest("/portal/profile?role=event_host", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok || !response?.profile) {
+      if (hostBudgetForm) {
+        if (hostBudgetForm.elements?.budgetNotes) hostBudgetForm.elements.budgetNotes.value = String(hostBudgetPlan?.budgetNotes || "");
+        if (hostBudgetForm.elements?.sponsorTargets) hostBudgetForm.elements.sponsorTargets.value = String(hostBudgetPlan?.sponsorTargets || "");
+      }
+      return;
+    }
+    hostProfileData = response.profile?.data && typeof response.profile.data === "object" ? response.profile.data : {};
+    const budgetNotes = String(hostProfileData?.hostBudgetNotes || hostBudgetPlan?.budgetNotes || "");
+    const sponsorTargets = String(hostProfileData?.hostSponsorTargets || hostBudgetPlan?.sponsorTargets || "");
+    hostBudgetPlan = { budgetNotes, sponsorTargets };
+    portalWriteStorageJson(hostBudgetStorageKey, hostBudgetPlan);
+    if (hostBudgetForm) {
+      if (hostBudgetForm.elements?.budgetNotes) hostBudgetForm.elements.budgetNotes.value = budgetNotes;
+      if (hostBudgetForm.elements?.sponsorTargets) hostBudgetForm.elements.sponsorTargets.value = sponsorTargets;
+    }
+  }
+
+  if (hostEventForm && hostEventStatus) {
+    hostEventForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!hostEventForm.reportValidity()) return;
+      const formData = new FormData(hostEventForm);
+      const nextEvent = {
+        id: `host-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        eventName: String(formData.get("eventName") || "").trim(),
+        eventDate: String(formData.get("eventDate") || "").trim(),
+        estimatedAttendees: Math.max(1, Math.floor(toFiniteNumber(formData.get("estimatedAttendees"), 1))),
+        budget: Math.max(0, toFiniteNumber(formData.get("budget"), 0)),
+        status: "Planning"
+      };
+      if (!nextEvent.eventName || !nextEvent.eventDate) {
+        setStatus(hostEventStatus, "Event name and date are required.", true);
+        return;
+      }
+      hostEvents.unshift(nextEvent);
+      persistHostEvents();
+      hostEventForm.reset();
+      setStatus(hostEventStatus, `Hosted event added: ${nextEvent.eventName}`);
+      renderHostPortal();
+    });
+  }
+
+  if (hostVenueFilterForm && hostVenueSearchStatus) {
+    hostVenueFilterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(hostVenueFilterForm);
+      const params = new URLSearchParams();
+      const city = String(formData.get("city") || "").trim();
+      const country = String(formData.get("country") || "").trim();
+      const minCapacity = Math.max(0, Math.floor(toFiniteNumber(formData.get("minCapacity"), 0)));
+      const maxPrice = Math.max(0, toFiniteNumber(formData.get("maxPrice"), 0));
+      if (city) params.set("city", city);
+      if (country) params.set("country", country);
+      if (minCapacity > 0) params.set("minCapacity", String(minCapacity));
+      if (maxPrice > 0) params.set("maxPrice", String(maxPrice));
+      const response = await apiRequest(`/venues/marketplace${params.toString() ? `?${params}` : ""}`, {
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setStatus(hostVenueSearchStatus, response?.error || "Unable to search venues right now.", true);
+        renderHostVenueSearchResults([]);
+        return;
+      }
+      const venues = Array.isArray(response.venues) ? response.venues : [];
+      renderHostVenueSearchResults(venues);
+      setStatus(hostVenueSearchStatus, `${venues.length.toLocaleString()} venue${venues.length === 1 ? "" : "s"} found.`);
+    });
+  }
+
+  root.addEventListener("click", async (event) => {
+    const requestButton = event.target.closest("[data-host-request-venue-email]");
+    if (!requestButton) return;
+    const venueEmail = String(requestButton.dataset.hostRequestVenueEmail || "").trim().toLowerCase();
+    const venueName = String(requestButton.dataset.hostRequestVenueName || "Venue").trim();
+    if (!venueEmail) return;
+    if (!hostEvents.length) {
+      setStatus(hostVenueSearchStatus, "Add a hosted event first, then request a venue.", true);
+      return;
+    }
+    const fallbackEvent = hostEvents[0];
+    const eventNameInput = String(window.prompt("Event name for this booking request:", fallbackEvent?.eventName || "") || "").trim();
+    if (!eventNameInput) return;
+    const matchedEvent = hostEvents.find((item) => String(item?.eventName || "").trim().toLowerCase() === eventNameInput.toLowerCase()) || fallbackEvent;
+    const eventDateInput = String(window.prompt("Event date (YYYY-MM-DD):", matchedEvent?.eventDate || "") || "").trim();
+    if (!eventDateInput) return;
+    const attendeesInput = String(window.prompt("Estimated attendees:", String(Math.max(1, Math.floor(toFiniteNumber(matchedEvent?.estimatedAttendees, 1))))) || "").trim();
+    const priceInput = String(window.prompt("Proposed booking price (USD):", String(Math.max(0, Math.floor(toFiniteNumber(matchedEvent?.budget, 0))))) || "").trim();
+    const message = String(window.prompt("Optional message to venue:", `Requesting ${venueName} for ${eventNameInput}`) || "").trim();
+    const estimatedAttendees = Math.max(1, Math.floor(toFiniteNumber(attendeesInput, 1)));
+    const proposedPrice = Math.max(1, toFiniteNumber(priceInput, 0));
+    const response = await apiRequest("/venues/requests", {
+      method: "POST",
+      body: {
+        venueEmail,
+        eventName: eventNameInput,
+        eventDate: eventDateInput,
+        estimatedAttendees,
+        proposedPrice,
+        message
+      },
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      setStatus(hostVenueSearchStatus, response?.error || "Unable to submit venue request.", true);
+      return;
+    }
+    setStatus(hostVenueSearchStatus, `Venue request sent to ${venueName}.`);
+    await loadHostRequests();
+  });
+
+  if (hostBudgetForm && hostBudgetStatus) {
+    hostBudgetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(hostBudgetForm);
+      const budgetNotes = String(formData.get("budgetNotes") || "").trim();
+      const sponsorTargets = String(formData.get("sponsorTargets") || "").trim();
+      hostBudgetPlan = { budgetNotes, sponsorTargets };
+      portalWriteStorageJson(hostBudgetStorageKey, hostBudgetPlan);
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "event_host",
+          data: {
+            ...hostProfileData,
+            hostBudgetNotes: budgetNotes,
+            hostSponsorTargets: sponsorTargets
+          }
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setStatus(hostBudgetStatus, response?.error || "Saved locally, but cloud profile update failed.", true);
+        return;
+      }
+      hostProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : {
+          ...hostProfileData,
+          hostBudgetNotes: budgetNotes,
+          hostSponsorTargets: sponsorTargets
+        };
+      setStatus(hostBudgetStatus, "Budget and sponsor plan saved.");
+    });
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-open");
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=event_host";
+    });
+  }
+
+  applyGenericPortalSectionView(root, activeSectionId);
+  setGenericPortalSidebarActiveLink(root, hostPageName);
+  renderHostVenueSearchResults([]);
+  renderHostPortal();
+  void loadHostProfile();
+  void loadHostRequests();
+}
+
+function setupArtistePortal() {
+  const root = document.querySelector("#artiste-portal");
+  if (!root) return;
+  const artistePageName = currentPageName();
+  const activeSectionId = ARTISTE_SECTION_BY_PAGE[artistePageName] || "artiste-home";
+  const authUser = readAuthSession()?.user || {};
+  const authEmail = normalizeEmail(authUser?.email);
+  const profileForm = root.querySelector("#artiste-profile-form");
+  const profileStatus = root.querySelector("#artiste-profile-status");
+  const gigsBody = root.querySelector("#artiste-gigs-body");
+  const venueFilterForm = root.querySelector("#artiste-venue-filter-form");
+  const venueSearchStatus = root.querySelector("#artiste-venue-search-status");
+  const venueResults = root.querySelector("#artiste-venue-results");
+  const calendarBody = root.querySelector("#artiste-calendar-body");
+  const earningsBody = root.querySelector("#artiste-earnings-body");
+  const fansBody = root.querySelector("#artiste-fans-body");
+  const sidebarToggle = root.querySelector("[data-artiste-sidebar-toggle]");
+  const logoutButton = root.querySelector("[data-artiste-logout]");
+
+  let artisteProfileData = {};
+  let artisteRequests = [];
+
+  function setStatus(target, message, isError = false) {
+    if (!target) return;
+    target.textContent = String(message || "");
+    target.style.color = isError ? "#b3261e" : "";
+  }
+
+  function updateArtisteKpis() {
+    const upcomingGigs = artisteRequests.filter((item) => {
+      const status = String(item?.status || "").toLowerCase();
+      if (!status.includes("accepted")) return false;
+      const dateRaw = String(item?.data?.eventDate || "").trim();
+      if (!dateRaw) return false;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? new Date(`${dateRaw}T00:00:00`) : new Date(dateRaw);
+      if (Number.isNaN(date.getTime())) return false;
+      return date >= new Date(new Date().toDateString());
+    }).length;
+    const pendingRequests = artisteRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const totalEarnings = artisteRequests
+      .filter((item) => String(item?.status || "").toLowerCase().includes("accepted"))
+      .reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)), 0);
+    const fans = Array.isArray(artisteProfileData?.fans) ? artisteProfileData.fans : [];
+    const values = {
+      gigs: upcomingGigs.toLocaleString(),
+      pending: pendingRequests.toLocaleString(),
+      earnings: usd(totalEarnings),
+      fans: fans.length.toLocaleString()
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const target = root.querySelector(`[data-artiste-kpi="${key}"]`);
+      if (target) target.textContent = value;
+    });
+  }
+
+  function renderArtisteTables() {
+    const sorted = [...artisteRequests].sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+    if (gigsBody) {
+      gigsBody.innerHTML = sorted.length
+        ? sorted.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Gig")}</td>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.data?.eventDate))}</td>
+            <td>${portalEscapeHtml(item?.venueEmail || "Venue TBD")}</td>
+            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Pending")}">${portalEscapeHtml(item?.status || "Pending")}</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="4">No gigs yet.</td></tr>`;
+    }
+    if (calendarBody) {
+      calendarBody.innerHTML = sorted.length
+        ? sorted.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.data?.eventDate))}</td>
+            <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Gig")}</td>
+            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Pending")}">${portalEscapeHtml(item?.status || "Pending")}</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="3">No scheduled gigs.</td></tr>`;
+    }
+    const earningsRows = sorted.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    if (earningsBody) {
+      earningsBody.innerHTML = earningsRows.length
+        ? earningsRows.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.actedAt || item?.createdAt))}</td>
+            <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Gig")}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)))}</td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="3">No earnings records yet.</td></tr>`;
+    }
+    const fans = Array.isArray(artisteProfileData?.fans) ? artisteProfileData.fans : [];
+    if (fansBody) {
+      fansBody.innerHTML = fans.length
+        ? fans.map((fan) => `
+          <tr>
+            <td>${portalEscapeHtml(fan?.name || "Fan")}</td>
+            <td>${portalEscapeHtml(fan?.email || "—")}</td>
+            <td>${portalEscapeHtml(fan?.sourceEvent || "—")}</td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="3">No fans tracked yet.</td></tr>`;
+    }
+    updateArtisteKpis();
+  }
+
+  function renderArtisteVenueResults(venues) {
+    if (!venueResults) return;
+    const rows = Array.isArray(venues) ? venues : [];
+    if (!rows.length) {
+      venueResults.innerHTML = `<article class="promoter-card"><p>No venues matched the current filters.</p></article>`;
+      return;
+    }
+    venueResults.innerHTML = rows.map((venue) => `
+      <article class="promoter-card">
+        <h3>${portalEscapeHtml(venue?.venueName || "Venue")}</h3>
+        <p>${portalEscapeHtml(formatLocationLine(venue) || "Location TBA")}</p>
+        <p><strong>Capacity:</strong> ${Math.max(0, Math.floor(toFiniteNumber(venue?.capacity, 0))).toLocaleString()}</p>
+        <p><strong>Rates:</strong> Hourly ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.hourlyRate, 0)))} • Daily ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.dailyRate, 0)))}</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-artiste-request-venue-email="${portalEscapeHtml(venue?.email || "")}" data-artiste-request-venue-name="${portalEscapeHtml(venue?.venueName || "Venue")}">Request This Venue</button>
+      </article>
+    `).join("");
+  }
+
+  async function loadArtisteProfile() {
+    const response = await apiRequest("/portal/profile?role=artiste", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok || !response?.profile) return;
+    const profile = response.profile;
+    artisteProfileData = profile?.data && typeof profile.data === "object" ? profile.data : {};
+    if (profileForm) {
+      if (profileForm.elements?.name) profileForm.elements.name.value = String(artisteProfileData?.name || profile?.name || authUser?.name || "");
+      if (profileForm.elements?.bio) profileForm.elements.bio.value = String(artisteProfileData?.bio || "");
+      if (profileForm.elements?.videos) profileForm.elements.videos.value = String(artisteProfileData?.videos || "");
+      if (profileForm.elements?.techSpecs) profileForm.elements.techSpecs.value = String(artisteProfileData?.techSpecs || "");
+      if (profileForm.elements?.riderPdf) profileForm.elements.riderPdf.value = String(artisteProfileData?.riderPdf || "");
+    }
+    renderArtisteTables();
+  }
+
+  async function loadArtisteRequests() {
+    const response = await apiRequest("/venues/requests", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    artisteRequests = response?.ok && Array.isArray(response.requests) ? response.requests : [];
+    renderArtisteTables();
+  }
+
+  if (profileForm && profileStatus) {
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!profileForm.reportValidity()) return;
+      const formData = new FormData(profileForm);
+      const payloadData = {
+        ...artisteProfileData,
+        name: String(formData.get("name") || "").trim(),
+        bio: String(formData.get("bio") || "").trim(),
+        videos: String(formData.get("videos") || "").trim(),
+        techSpecs: String(formData.get("techSpecs") || "").trim(),
+        riderPdf: String(formData.get("riderPdf") || "").trim()
+      };
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "artiste",
+          name: payloadData.name || authUser?.name || "Artiste",
+          email: authEmail,
+          data: payloadData
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        setStatus(profileStatus, response?.error || "Unable to save artiste profile right now.", true);
+        return;
+      }
+      artisteProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : payloadData;
+      setStatus(profileStatus, "Artiste profile saved.");
+      renderArtisteTables();
+    });
+  }
+
+  if (venueFilterForm && venueSearchStatus) {
+    venueFilterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(venueFilterForm);
+      const params = new URLSearchParams();
+      const city = String(formData.get("city") || "").trim();
+      const country = String(formData.get("country") || "").trim();
+      const minCapacity = Math.max(0, Math.floor(toFiniteNumber(formData.get("minCapacity"), 0)));
+      const maxPrice = Math.max(0, toFiniteNumber(formData.get("maxPrice"), 0));
+      if (city) params.set("city", city);
+      if (country) params.set("country", country);
+      if (minCapacity > 0) params.set("minCapacity", String(minCapacity));
+      if (maxPrice > 0) params.set("maxPrice", String(maxPrice));
+      const response = await apiRequest(`/venues/marketplace${params.toString() ? `?${params}` : ""}`, {
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setStatus(venueSearchStatus, response?.error || "Unable to search venues right now.", true);
+        renderArtisteVenueResults([]);
+        return;
+      }
+      const venues = Array.isArray(response.venues) ? response.venues : [];
+      renderArtisteVenueResults(venues);
+      setStatus(venueSearchStatus, `${venues.length.toLocaleString()} venue${venues.length === 1 ? "" : "s"} found.`);
+    });
+  }
+
+  root.addEventListener("click", async (event) => {
+    const requestButton = event.target.closest("[data-artiste-request-venue-email]");
+    if (!requestButton) return;
+    const venueEmail = String(requestButton.dataset.artisteRequestVenueEmail || "").trim().toLowerCase();
+    const venueName = String(requestButton.dataset.artisteRequestVenueName || "Venue").trim();
+    if (!venueEmail) return;
+    const latestRequest = artisteRequests[0] || {};
+    const eventName = String(window.prompt("Gig / event name:", String(latestRequest?.data?.eventName || "")) || "").trim();
+    if (!eventName) return;
+    const eventDate = String(window.prompt("Event date (YYYY-MM-DD):", String(latestRequest?.data?.eventDate || "")) || "").trim();
+    if (!eventDate) return;
+    const attendeesRaw = String(window.prompt("Estimated attendees:", String(Math.max(1, Math.floor(toFiniteNumber(latestRequest?.data?.estimatedAttendees, 100))))) || "").trim();
+    const proposedPriceRaw = String(window.prompt("Proposed price (USD):", String(Math.max(1, Math.floor(toFiniteNumber(latestRequest?.data?.proposedPrice, 500))))) || "").trim();
+    const message = String(window.prompt("Optional message to venue:", `Booking inquiry from artiste profile for ${eventName}`) || "").trim();
+    const estimatedAttendees = Math.max(1, Math.floor(toFiniteNumber(attendeesRaw, 1)));
+    const proposedPrice = Math.max(1, toFiniteNumber(proposedPriceRaw, 0));
+    const response = await apiRequest("/venues/requests", {
+      method: "POST",
+      body: {
+        venueEmail,
+        eventName,
+        eventDate,
+        estimatedAttendees,
+        proposedPrice,
+        message
+      },
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      setStatus(venueSearchStatus, response?.error || "Unable to submit venue request.", true);
+      return;
+    }
+    setStatus(venueSearchStatus, `Venue request sent to ${venueName}.`);
+    await loadArtisteRequests();
+  });
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-open");
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=artiste";
+    });
+  }
+
+  applyGenericPortalSectionView(root, activeSectionId);
+  setGenericPortalSidebarActiveLink(root, artistePageName);
+  renderArtisteVenueResults([]);
+  renderArtisteTables();
+  void loadArtisteProfile();
+  void loadArtisteRequests();
+}
+
+function setupSponsorPortal() {
+  const root = document.querySelector("#sponsor-portal");
+  if (!root) return;
+  const sponsorPageName = currentPageName();
+  const activeSectionId = SPONSOR_SECTION_BY_PAGE[sponsorPageName] || "sponsor-home";
+  const authEmail = normalizeEmail(readAuthSession()?.user?.email);
+  const identityKey = authEmail || "default";
+  const sponsorStateStorageKey = `booqdat_sponsor_state_${identityKey}`;
+  const sponsorshipsBody = root.querySelector("#sponsor-sponsorships-body");
+  const discoveryFilterForm = root.querySelector("#sponsor-discovery-filter-form");
+  const discoveryResults = root.querySelector("#sponsor-discovery-results");
+  const proposalForm = root.querySelector("#sponsor-proposal-form");
+  const proposalStatus = root.querySelector("#sponsor-proposal-status");
+  const proposalsBody = root.querySelector("#sponsor-proposals-body");
+  const analyticsBody = root.querySelector("#sponsor-analytics-body");
+  const sidebarToggle = root.querySelector("[data-sponsor-sidebar-toggle]");
+  const logoutButton = root.querySelector("[data-sponsor-logout]");
+
+  let sponsorState = portalReadStorageJson(sponsorStateStorageKey, {
+    proposals: [],
+    sponsorships: []
+  });
+  if (!Array.isArray(sponsorState?.proposals)) sponsorState.proposals = [];
+  if (!Array.isArray(sponsorState?.sponsorships)) sponsorState.sponsorships = [];
+
+  function persistSponsorState() {
+    portalWriteStorageJson(sponsorStateStorageKey, sponsorState);
+  }
+
+  function setStatus(message, isError = false) {
+    if (!proposalStatus) return;
+    proposalStatus.textContent = String(message || "");
+    proposalStatus.style.color = isError ? "#b3261e" : "";
+  }
+
+  function normalizeProposalStatus(status) {
+    const normalized = String(status || "").trim();
+    return normalized || "Pending Review";
+  }
+
+  function updateSponsorKpis() {
+    const proposals = sponsorState.proposals.map((item) => ({ ...item, status: normalizeProposalStatus(item?.status) }));
+    const accepted = proposals.filter((item) => String(item?.status || "").toLowerCase().includes("accepted")).length;
+    const pending = proposals.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const impressions = (accepted * 45000) + (pending * 12000);
+    const totalBudget = proposals.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
+    const roi = totalBudget > 0 ? Math.round(((impressions * 0.02) / totalBudget) * 100) : 0;
+    const values = {
+      active: accepted.toLocaleString(),
+      pending: pending.toLocaleString(),
+      impressions: impressions.toLocaleString(),
+      roi: `${Math.max(0, roi)}%`
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const target = root.querySelector(`[data-sponsor-kpi="${key}"]`);
+      if (target) target.textContent = value;
+    });
+  }
+
+  function renderSponsorTables() {
+    const proposals = sponsorState.proposals
+      .map((item) => ({ ...item, status: normalizeProposalStatus(item?.status) }))
+      .sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+    const acceptedRows = proposals.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    if (sponsorshipsBody) {
+      sponsorshipsBody.innerHTML = acceptedRows.length
+        ? acceptedRows.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(item?.eventName || "Campaign")}</td>
+            <td>${portalEscapeHtml(item?.packageName || "Standard Package")}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.budget, 0)))}</td>
+            <td><span class="status-pill approved">Active</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="4">No sponsorship records yet.</td></tr>`;
+    }
+    if (proposalsBody) {
+      proposalsBody.innerHTML = proposals.length
+        ? proposals.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.createdAt))}</td>
+            <td>${portalEscapeHtml(item?.eventName || "Campaign")}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.budget, 0)))}</td>
+            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Pending Review")}">${portalEscapeHtml(item?.status || "Pending Review")}</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="4">No proposals sent yet.</td></tr>`;
+    }
+
+    const impressions = proposals.reduce((sum, item) => sum + (String(item?.status || "").toLowerCase().includes("accepted") ? 45000 : 12000), 0);
+    const leads = Math.round(impressions * 0.016);
+    const budgetTotal = proposals.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
+    const roiPercent = budgetTotal > 0 ? Math.round(((leads * 5) / budgetTotal) * 100) : 0;
+    if (analyticsBody) {
+      analyticsBody.innerHTML = `
+        <tr><td>Impressions</td><td>${impressions.toLocaleString()}</td></tr>
+        <tr><td>Leads</td><td>${leads.toLocaleString()}</td></tr>
+        <tr><td>ROI</td><td>${Math.max(0, roiPercent)}%</td></tr>
+      `;
+    }
+    updateSponsorKpis();
+  }
+
+  function renderSponsorDiscovery(events) {
+    if (!discoveryResults) return;
+    const rows = Array.isArray(events) ? events : [];
+    if (!rows.length) {
+      discoveryResults.innerHTML = `<article class="promoter-card"><p>No events matched the current filters.</p></article>`;
+      return;
+    }
+    discoveryResults.innerHTML = rows.map((eventItem) => `
+      <article class="promoter-card">
+        <h3>${portalEscapeHtml(eventItem?.title || "Event")}</h3>
+        <p>${portalEscapeHtml(portalFormatDateValue(eventItem?.date))} • ${portalEscapeHtml(formatLocationLine(eventItem) || "Location TBA")}</p>
+        <p><strong>Category:</strong> ${portalEscapeHtml(eventItem?.category || "—")}</p>
+        <p><strong>Expected Attendance:</strong> ${Math.max(0, Math.floor(toFiniteNumber(eventItem?.capacity, 0))).toLocaleString()}</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-sponsor-fill-proposal-event="${portalEscapeHtml(eventItem?.title || "")}" data-sponsor-fill-proposal-budget="${Math.max(0, Math.round(toFiniteNumber(eventItem?.price, 0) * 150))}">Use for Proposal</button>
+      </article>
+    `).join("");
+  }
+
+  function runSponsorDiscoveryFromForm() {
+    if (!discoveryFilterForm) return;
+    const formData = new FormData(discoveryFilterForm);
+    const city = String(formData.get("city") || "").trim().toLowerCase();
+    const category = String(formData.get("category") || "").trim().toLowerCase();
+    const minAttendance = Math.max(0, Math.floor(toFiniteNumber(formData.get("minAttendance"), 0)));
+    const maxBudget = Math.max(0, toFiniteNumber(formData.get("maxBudget"), 0));
+    const events = getAllEvents().filter((eventItem) => {
+      const cityMatch = !city || String(eventItem?.city || "").trim().toLowerCase() === city;
+      const categoryMatch = !category || String(eventItem?.category || "").trim().toLowerCase().includes(category);
+      const attendanceMatch = !minAttendance || Math.max(0, Math.floor(toFiniteNumber(eventItem?.capacity, 0))) >= minAttendance;
+      const budgetMatch = !maxBudget || Math.max(0, toFiniteNumber(eventItem?.price, 0)) <= maxBudget;
+      return cityMatch && categoryMatch && attendanceMatch && budgetMatch;
+    });
+    renderSponsorDiscovery(events.slice(0, 12));
+  }
+
+  if (discoveryFilterForm) {
+    discoveryFilterForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      runSponsorDiscoveryFromForm();
+    });
+  }
+
+  if (proposalForm) {
+    proposalForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!proposalForm.reportValidity()) return;
+      const formData = new FormData(proposalForm);
+      const proposal = {
+        id: `sprop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        createdAt: new Date().toISOString(),
+        eventName: String(formData.get("eventName") || "").trim(),
+        proposalNotes: String(formData.get("proposalNotes") || "").trim(),
+        budget: Math.max(0, toFiniteNumber(formData.get("budget"), 0)),
+        status: "Pending Review"
+      };
+      sponsorState.proposals.unshift(proposal);
+      persistSponsorState();
+      proposalForm.reset();
+      setStatus(`Proposal submitted for ${proposal.eventName}.`);
+      renderSponsorTables();
+    });
+  }
+
+  root.addEventListener("click", (event) => {
+    const useForProposalButton = event.target.closest("[data-sponsor-fill-proposal-event]");
+    if (!useForProposalButton || !proposalForm) return;
+    const eventName = String(useForProposalButton.dataset.sponsorFillProposalEvent || "").trim();
+    const budget = Math.max(0, toFiniteNumber(useForProposalButton.dataset.sponsorFillProposalBudget, 0));
+    if (proposalForm.elements?.eventName) proposalForm.elements.eventName.value = eventName;
+    if (proposalForm.elements?.budget) proposalForm.elements.budget.value = String(budget);
+    setStatus(`Proposal form pre-filled for ${eventName}.`);
+  });
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-open");
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=sponsor";
+    });
+  }
+
+  applyGenericPortalSectionView(root, activeSectionId);
+  setGenericPortalSidebarActiveLink(root, sponsorPageName);
+  runSponsorDiscoveryFromForm();
+  renderSponsorTables();
+}
+
+function setupInfluencerPortal() {
+  const root = document.querySelector("#influencer-portal");
+  if (!root) return;
+  const influencerPageName = currentPageName();
+  const activeSectionId = INFLUENCER_SECTION_BY_PAGE[influencerPageName] || "influencer-home";
+  const authUser = readAuthSession()?.user || {};
+  const authEmail = normalizeEmail(authUser?.email);
+  const identityKey = authEmail || "default";
+  const codesStorageKey = `booqdat_influencer_codes_${identityKey}`;
+  const invitesStorageKey = `booqdat_influencer_invites_${identityKey}`;
+  const profileForm = root.querySelector("#influencer-profile-form");
+  const profileStatus = root.querySelector("#influencer-profile-status");
+  const invitesBody = root.querySelector("#influencer-invites-body");
+  const codeForm = root.querySelector("#influencer-code-form");
+  const codeStatus = root.querySelector("#influencer-code-status");
+  const codesBody = root.querySelector("#influencer-codes-body");
+  const reportsBody = root.querySelector("#influencer-reports-body");
+  const sidebarToggle = root.querySelector("[data-influencer-sidebar-toggle]");
+  const logoutButton = root.querySelector("[data-influencer-logout]");
+
+  let influencerProfileData = {};
+  let promoCodes = portalReadStorageJson(codesStorageKey, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      code: String(item?.code || "").trim().toUpperCase(),
+      commission: Math.max(0, Math.min(100, Math.floor(toFiniteNumber(item?.commission, 10)))),
+      sales: Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))),
+      status: String(item?.status || "Active"),
+      createdAt: item?.createdAt || new Date().toISOString()
+    }))
+    .filter((item) => item.code);
+  let invites = portalReadStorageJson(invitesStorageKey, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      eventName: String(item?.eventName || "").trim(),
+      eventDate: String(item?.eventDate || "").trim(),
+      requester: String(item?.requester || "").trim(),
+      status: String(item?.status || "Pending")
+    }))
+    .filter((item) => item.eventName);
+
+  function persistInfluencerData() {
+    portalWriteStorageJson(codesStorageKey, promoCodes);
+    portalWriteStorageJson(invitesStorageKey, invites);
+  }
+
+  function setStatus(target, message, isError = false) {
+    if (!target) return;
+    target.textContent = String(message || "");
+    target.style.color = isError ? "#b3261e" : "";
+  }
+
+  function updateInfluencerKpis() {
+    const inviteCount = invites.filter((item) => !String(item?.status || "").toLowerCase().includes("declined")).length;
+    const codeCount = promoCodes.length;
+    const sales = promoCodes.reduce((sum, item) => sum + Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))), 0);
+    const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
+    const reach = followers + (sales * 250);
+    const values = {
+      invites: inviteCount.toLocaleString(),
+      codes: codeCount.toLocaleString(),
+      sales: sales.toLocaleString(),
+      reach: reach.toLocaleString()
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const target = root.querySelector(`[data-influencer-kpi="${key}"]`);
+      if (target) target.textContent = value;
+    });
+  }
+
+  function renderInfluencerTables() {
+    if (invitesBody) {
+      invitesBody.innerHTML = invites.length
+        ? invites.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
+            <td>${portalEscapeHtml(item?.requester || "Campaign Team")}</td>
+            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Pending")}">${portalEscapeHtml(item?.status || "Pending")}</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="4">No invites yet.</td></tr>`;
+    }
+    if (codesBody) {
+      codesBody.innerHTML = promoCodes.length
+        ? promoCodes.map((item) => `
+          <tr>
+            <td>${portalEscapeHtml(item?.code || "")}</td>
+            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.commission, 0))).toLocaleString()}%</td>
+            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))).toLocaleString()}</td>
+            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Active")}">${portalEscapeHtml(item?.status || "Active")}</span></td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="4">No promo codes created yet.</td></tr>`;
+    }
+
+    const sales = promoCodes.reduce((sum, item) => sum + Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))), 0);
+    const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
+    const reach = followers + (sales * 250);
+    const clicks = Math.round(reach * 0.09);
+    if (reportsBody) {
+      reportsBody.innerHTML = `
+        <tr><td>Reach</td><td>${reach.toLocaleString()}</td></tr>
+        <tr><td>Clicks</td><td>${clicks.toLocaleString()}</td></tr>
+        <tr><td>Ticket Sales</td><td>${sales.toLocaleString()}</td></tr>
+      `;
+    }
+    updateInfluencerKpis();
+  }
+
+  async function loadInfluencerProfile() {
+    const response = await apiRequest("/portal/profile?role=influencer", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok || !response?.profile) return;
+    const profile = response.profile;
+    influencerProfileData = profile?.data && typeof profile.data === "object" ? profile.data : {};
+    if (profileForm) {
+      if (profileForm.elements?.name) profileForm.elements.name.value = String(influencerProfileData?.name || profile?.name || authUser?.name || "");
+      if (profileForm.elements?.niche) profileForm.elements.niche.value = String(influencerProfileData?.niche || "");
+      if (profileForm.elements?.followers) profileForm.elements.followers.value = String(Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0))));
+      if (profileForm.elements?.rates) profileForm.elements.rates.value = String(influencerProfileData?.rates || "");
+    }
+    renderInfluencerTables();
+  }
+
+  if (profileForm && profileStatus) {
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!profileForm.reportValidity()) return;
+      const formData = new FormData(profileForm);
+      const payloadData = {
+        ...influencerProfileData,
+        name: String(formData.get("name") || "").trim(),
+        niche: String(formData.get("niche") || "").trim(),
+        followers: Math.max(0, Math.floor(toFiniteNumber(formData.get("followers"), 0))),
+        rates: String(formData.get("rates") || "").trim()
+      };
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "influencer",
+          name: payloadData.name || authUser?.name || "Influencer",
+          email: authEmail,
+          data: payloadData
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        setStatus(profileStatus, response?.error || "Unable to save influencer profile right now.", true);
+        return;
+      }
+      influencerProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : payloadData;
+      setStatus(profileStatus, "Influencer profile saved.");
+      renderInfluencerTables();
+    });
+  }
+
+  if (codeForm && codeStatus) {
+    codeForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!codeForm.reportValidity()) return;
+      const formData = new FormData(codeForm);
+      const code = String(formData.get("code") || "").trim().toUpperCase();
+      const commission = Math.max(0, Math.min(100, Math.floor(toFiniteNumber(formData.get("commission"), 10))));
+      if (!code) {
+        setStatus(codeStatus, "Promo code is required.", true);
+        return;
+      }
+      if (promoCodes.some((item) => String(item?.code || "").trim().toUpperCase() === code)) {
+        setStatus(codeStatus, "That promo code already exists.", true);
+        return;
+      }
+      promoCodes.unshift({
+        code,
+        commission,
+        sales: 0,
+        status: "Active",
+        createdAt: new Date().toISOString()
+      });
+      persistInfluencerData();
+      codeForm.reset();
+      if (codeForm.elements?.commission) codeForm.elements.commission.value = "10";
+      setStatus(codeStatus, `Promo code ${code} created.`);
+      renderInfluencerTables();
+    });
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-open");
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await logoutCurrentSession();
+      window.location.href = "login.html?role=influencer";
+    });
+  }
+
+  applyGenericPortalSectionView(root, activeSectionId);
+  setGenericPortalSidebarActiveLink(root, influencerPageName);
+  persistInfluencerData();
+  renderInfluencerTables();
+  void loadInfluencerProfile();
+}
 
 function setupAdminDashboard() {
   const dashboardRoot = document.querySelector("#admin-dashboard");
@@ -2752,6 +4336,9 @@ function setupAdminDashboard() {
   const pendingEventsBody = dashboardRoot.querySelector("#admin-pending-events-body");
   const payoutQueueBody = dashboardRoot.querySelector("#admin-payout-queue-body");
   const disputesBody = dashboardRoot.querySelector("#admin-disputes-body");
+  const venuesBody = dashboardRoot.querySelector("#admin-venues-body");
+  const bookingRequestsBody = dashboardRoot.querySelector("#admin-booking-requests-body");
+  const partnersBody = dashboardRoot.querySelector("#admin-partners-body");
   const activityFeed = dashboardRoot.querySelector("#admin-activity-feed");
   const feeSettingsForm = dashboardRoot.querySelector("#admin-fee-settings-form");
   const feeSettingsStatus = dashboardRoot.querySelector("#admin-fee-settings-status");
@@ -2770,7 +4357,8 @@ function setupAdminDashboard() {
 
   const approvals = {
     promoter: 0,
-    event: 0
+    event: 0,
+    venueRequest: 0
   };
   function readPromoterSelectionFromUrl() {
     try {
@@ -2795,9 +4383,13 @@ function setupAdminDashboard() {
     pendingEvents: [],
     payoutQueue: [],
     disputes: [],
+    venueRecords: [],
+    bookingRequests: [],
+    partnerRoleRecords: [],
     counts: {
       pendingPromoters: 0,
-      pendingEvents: 0
+      pendingEvents: 0,
+      pendingVenueRequests: 0
     }
   };
 
@@ -2888,9 +4480,12 @@ function setupAdminDashboard() {
     const pendingPromotersFromRows = opsState.promoterApprovals.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
     const pendingPromoters = Math.max(0, toFiniteNumber(opsState.counts?.pendingPromoters, pendingPromotersFromRows));
     const pendingEvents = Math.max(0, toFiniteNumber(opsState.counts?.pendingEvents, opsState.pendingEvents.length));
+    const pendingVenueRequestsFromRows = opsState.bookingRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
+    const pendingVenueRequests = Math.max(0, toFiniteNumber(opsState.counts?.pendingVenueRequests, pendingVenueRequestsFromRows));
     approvals.promoter = pendingPromoters;
     approvals.event = pendingEvents;
-    return pendingPromoters + pendingEvents;
+    approvals.venueRequest = pendingVenueRequests;
+    return pendingPromoters + pendingEvents + pendingVenueRequests;
   }
   function deriveMetrics() {
     const now = new Date();
@@ -3332,9 +4927,76 @@ function setupAdminDashboard() {
       </tr>
     `).join("");
   }
+  function renderVenueRecordsTable() {
+    if (!venuesBody) return;
+    const rows = Array.isArray(opsState.venueRecords) ? opsState.venueRecords : [];
+    if (!rows.length) {
+      venuesBody.innerHTML = `<tr><td colspan="6">No venue records available yet.</td></tr>`;
+      return;
+    }
+    venuesBody.innerHTML = rows.map((item) => {
+      const isPublished = item?.isPublished !== false;
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Venue")}</td>
+          <td>${escapeHtml(item?.email || "—")}</td>
+          <td>${escapeHtml(item?.city || "—")}</td>
+          <td>${escapeHtml(item?.country || "—")}</td>
+          <td>${Math.max(0, toFiniteNumber(item?.capacity, 0)).toLocaleString()}</td>
+          <td><span class="status-pill ${isPublished ? "approved" : "pending"}">${isPublished ? "Yes" : "No"}</span></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderBookingRequestsTable() {
+    if (!bookingRequestsBody) return;
+    const rows = Array.isArray(opsState.bookingRequests) ? opsState.bookingRequests : [];
+    if (!rows.length) {
+      bookingRequestsBody.innerHTML = `<tr><td colspan="7">No booking requests available yet.</td></tr>`;
+      return;
+    }
+    bookingRequestsBody.innerHTML = rows.map((item) => {
+      const status = String(item?.status || "Pending");
+      const requesterRoleLabel = String(item?.requesterRoleLabel || item?.requesterRole || "").trim();
+      return `
+        <tr>
+          <td>${escapeHtml(item?.requestId || "—")}</td>
+          <td>${escapeHtml(item?.eventName || "Untitled Event")}<br><small>${escapeHtml(item?.eventDate || "Date TBA")}</small></td>
+          <td>${escapeHtml(item?.requesterEmail || "—")}${requesterRoleLabel ? `<br><small>${escapeHtml(requesterRoleLabel)}</small>` : ""}</td>
+          <td>${escapeHtml(item?.venueEmail || "—")}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>${Math.max(0, toFiniteNumber(item?.estimatedAttendees, 0)).toLocaleString()}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(item?.proposedPrice, 0)))}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderPartnerRoleRecordsTable() {
+    if (!partnersBody) return;
+    const rows = Array.isArray(opsState.partnerRoleRecords) ? opsState.partnerRoleRecords : [];
+    if (!rows.length) {
+      partnersBody.innerHTML = `<tr><td colspan="6">No partner accounts available yet.</td></tr>`;
+      return;
+    }
+    partnersBody.innerHTML = rows.map((item) => `
+      <tr>
+        <td>${escapeHtml(item?.name || "Portal User")}</td>
+        <td>${escapeHtml(item?.email || "—")}</td>
+        <td><span class="status-pill pending">${escapeHtml(item?.roleLabel || item?.role || "—")}</span></td>
+        <td>${escapeHtml(item?.country || "—")}</td>
+        <td>${escapeHtml(item?.city || "—")}</td>
+        <td>${escapeHtml(formatDateTime(item?.createdAt))}</td>
+      </tr>
+    `).join("");
+  }
 
   function renderOpsTables() {
     renderPromoterListTable();
+    renderVenueRecordsTable();
+    renderBookingRequestsTable();
+    renderPartnerRoleRecordsTable();
     renderAttendeeRecordsTable();
     renderPendingEventsTable();
     renderPayoutQueueTable();
@@ -3355,9 +5017,12 @@ function setupAdminDashboard() {
       pendingEvents: Array.isArray(response.pendingEvents) ? response.pendingEvents : [],
       payoutQueue: Array.isArray(response.payoutQueue) ? response.payoutQueue : [],
       disputes: Array.isArray(response.disputes) ? response.disputes : [],
+      venueRecords: Array.isArray(response.venueRecords) ? response.venueRecords : [],
+      bookingRequests: Array.isArray(response.bookingRequests) ? response.bookingRequests : [],
+      partnerRoleRecords: Array.isArray(response.partnerRoleRecords) ? response.partnerRoleRecords : [],
       counts: response.counts && typeof response.counts === "object"
         ? response.counts
-        : { pendingPromoters: 0, pendingEvents: 0 }
+        : { pendingPromoters: 0, pendingEvents: 0, pendingVenueRequests: 0 }
     };
     renderOpsTables();
     return true;
@@ -3406,7 +5071,7 @@ function setupAdminDashboard() {
     if (ticketSplit) ticketSplit.textContent = `Today ${metrics.ticketsToday.toLocaleString()} • This month ${metrics.ticketsMonth.toLocaleString()}`;
 
     const pendingBreakdown = dashboardRoot.querySelector('[data-kpi-detail="pending-breakdown"]');
-    if (pendingBreakdown) pendingBreakdown.textContent = `Promoters ${approvals.promoter} • Events ${approvals.event}`;
+    if (pendingBreakdown) pendingBreakdown.textContent = `Promoters ${approvals.promoter} • Events ${approvals.event} • Bookings ${approvals.venueRequest}`;
 
     const profitModel = dashboardRoot.querySelector('[data-kpi-detail="profit-model"]');
     if (profitModel) {
@@ -4238,6 +5903,11 @@ async function initializeClientApp() {
     setupUserPortal();
     setupAdminDashboard();
     setupPromoterDashboard();
+    setupVenuePortal();
+    setupHostPortal();
+    setupArtistePortal();
+    setupSponsorPortal();
+    setupInfluencerPortal();
   } finally {
     revealPageAfterAuthGuard();
   }

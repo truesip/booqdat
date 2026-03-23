@@ -5,7 +5,7 @@
 
   function normalizeRole(value) {
     const role = String(value || "").trim().toLowerCase();
-    return ["admin", "promoter", "user"].includes(role) ? role : "";
+    return ["admin", "promoter", "user", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(role) ? role : "";
   }
 
   function normalizeEmail(value) {
@@ -29,6 +29,11 @@
     if (safeRedirect) return safeRedirect;
     if (role === "admin") return "admin.html";
     if (role === "promoter") return "promoter-dashboard.html";
+    if (role === "venue") return "venue-dashboard.html";
+    if (role === "event_host") return "host-dashboard.html";
+    if (role === "artiste") return "artiste-dashboard.html";
+    if (role === "sponsor") return "sponsor-dashboard.html";
+    if (role === "influencer") return "influencer-dashboard.html";
     if (role === "user") return "user-portal.html";
     return "index.html";
   }
@@ -129,7 +134,7 @@
     const requiredRole = normalizeRole(url.searchParams.get("role"));
     const redirectPath = sanitizeRedirectPath(url.searchParams.get("redirect"));
     const isSignupPage = currentPageName() === "signup.html";
-    const preferredSignupRole = ["user", "promoter"].includes(requiredRole) ? requiredRole : "";
+    const preferredSignupRole = ["user", "promoter", "venue", "event_host", "artiste", "sponsor", "influencer"].includes(requiredRole) ? requiredRole : "";
 
     if (roleHintLabel) {
       if (isSignupPage) {
