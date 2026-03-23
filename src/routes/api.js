@@ -2959,6 +2959,16 @@ function createApiRouter(env) {
         }))
         .filter((event) => event.eventId);
 
+      const eventRecords = events
+        .map((event) => ({
+          eventId: truncateText(event?.id || event?.eventId, 120),
+          title: truncateText(event?.title, 200) || "Untitled Event",
+          promoterEmail: normalizeEmail(event?.promoterEmail),
+          category: truncateText(event?.category, 120) || "—",
+          status: truncateText(event?.status, 40) || "Pending"
+        }))
+        .filter((event) => event.eventId);
+
       const attendeesByEmail = {};
       userAccounts.forEach((account) => {
         const email = normalizeEmail(account?.email);
@@ -3117,6 +3127,11 @@ function createApiRouter(env) {
       const venueRecords = venueAccounts.map((account) => {
         const email = normalizeEmail(account?.email);
         const profileData = profileMap[email] || {};
+        const accountStatus = resolvePromoterAccountStatus(account);
+        let statusLabel = promoterAccountStatusLabel(accountStatus);
+        if (statusLabel === "Approved" && profileData?.isPublished === false) {
+          statusLabel = "Pending";
+        }
         return {
           accountId: String(account?._id || ""),
           name: truncateText(profileData?.venueName || profileData?.name || account?.name, 200) || "Venue",
@@ -3126,6 +3141,7 @@ function createApiRouter(env) {
           country: truncateText(profileData?.country || profileData?.location, 120),
           capacity: Math.max(0, Math.floor(toFiniteNumber(profileData?.capacity, 0))),
           isPublished: profileData?.isPublished !== false,
+          status: statusLabel,
           createdAt: account?.createdAt || null
         };
       });
@@ -3147,12 +3163,15 @@ function createApiRouter(env) {
       const partnerRoleRecords = partnerAccounts.map((account) => {
         const email = normalizeEmail(account?.email);
         const profileData = profileMap[email] || {};
+        const accountStatus = resolvePromoterAccountStatus(account);
         return {
           accountId: String(account?._id || ""),
           name: truncateText(profileData?.name || account?.name, 200) || "Portal User",
           email,
           role: normalizeRole(account?.role),
           roleLabel: roleLabel(account?.role),
+          status: promoterAccountStatusLabel(accountStatus),
+          isActive: account?.isActive !== false,
           country: truncateText(profileData?.country || profileData?.location, 120),
           city: truncateText(profileData?.city, 120),
           createdAt: account?.createdAt || null
@@ -3193,6 +3212,7 @@ function createApiRouter(env) {
         promoterApprovals,
         attendeeRecords,
         pendingEvents,
+        eventRecords,
         payoutQueue,
         promoterPayoutDetails,
         promoterPublishedEvents,

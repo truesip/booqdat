@@ -2797,6 +2797,25 @@ function setupPromoterDashboard() {
       if (isActive) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
+
+    dashboardRoot.querySelectorAll("[data-admin-nav-group]").forEach((group) => {
+      const links = Array.from(group.querySelectorAll("a"));
+      const hasActive = links.some((link) => link.classList.contains("active"));
+      const hasPageMatch = links.some((link) => {
+        const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+        if (!href) return false;
+        try {
+          const resolved = new URL(href, window.location.origin);
+          return resolved.pathname.split("/").pop() === effectivePageName;
+        } catch {
+          return href.split("/").pop() === effectivePageName;
+        }
+      });
+      const shouldOpen = hasActive || hasPageMatch;
+      group.classList.toggle("is-open", shouldOpen);
+      const toggle = group.querySelector("[data-admin-nav-toggle]");
+      if (toggle) toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    });
   }
 
   function openQueuedEventEditorIfNeeded() {
@@ -4347,6 +4366,10 @@ function setupAdminDashboard() {
   const venuesBody = dashboardRoot.querySelector("#admin-venues-body");
   const bookingRequestsBody = dashboardRoot.querySelector("#admin-booking-requests-body");
   const partnersBody = dashboardRoot.querySelector("#admin-partners-body");
+  const eventHostsBody = dashboardRoot.querySelector("#admin-event-hosts-body");
+  const artistsBody = dashboardRoot.querySelector("#admin-artists-body");
+  const sponsorsBody = dashboardRoot.querySelector("#admin-sponsors-body");
+  const influencersBody = dashboardRoot.querySelector("#admin-influencers-body");
   const activityFeed = dashboardRoot.querySelector("#admin-activity-feed");
   const feeSettingsForm = dashboardRoot.querySelector("#admin-fee-settings-form");
   const feeSettingsStatus = dashboardRoot.querySelector("#admin-fee-settings-status");
@@ -4362,6 +4385,17 @@ function setupAdminDashboard() {
     quarter: Array(12).fill(0)
   };
   let ticketByDay = Array(7).fill(0);
+  const adminStatusFilter = readAdminStatusFilter();
+
+  function readAdminStatusFilter() {
+    try {
+      const url = new URL(window.location.href);
+      const status = normalizeLifecycleStatus(url.searchParams.get("status"));
+      return ["live", "pending", "rejected"].includes(status) ? status : "";
+    } catch {
+      return "";
+    }
+  }
 
   const approvals = {
     promoter: 0,
@@ -4389,6 +4423,7 @@ function setupAdminDashboard() {
     promoterPublishedEvents: [],
     attendeeRecords: [],
     pendingEvents: [],
+    eventRecords: [],
     payoutQueue: [],
     disputes: [],
     venueRecords: [],
@@ -4456,13 +4491,43 @@ function setupAdminDashboard() {
 
   function statusPillClass(status) {
     const normalized = String(status || "").toLowerCase();
-    if (normalized.includes("approved") || normalized.includes("processed") || normalized.includes("paid") || normalized.includes("confirmed")) {
+    if (normalized.includes("approved") || normalized.includes("processed") || normalized.includes("paid") || normalized.includes("confirmed") || normalized.includes("live") || normalized.includes("active")) {
       return "approved";
     }
     if (normalized.includes("rejected") || normalized.includes("suspended")) {
       return "rejected";
     }
     return "pending";
+  }
+
+  function adminStatusBucket(status) {
+    const normalized = normalizeLifecycleStatus(status);
+    if (!normalized) return "";
+    if (normalized.includes("reject") || normalized.includes("decline") || normalized.includes("suspend")) return "rejected";
+    if (normalized.includes("pending") || normalized.includes("review") || normalized.includes("flag")) return "pending";
+    if (normalized.includes("live") || normalized.includes("approved") || normalized.includes("active") || normalized.includes("published") || normalized === "yes") {
+      return "live";
+    }
+    return "";
+  }
+
+  function applyStatusFilter(rows, statusResolver) {
+    if (!adminStatusFilter) return rows;
+    return rows.filter((row) => adminStatusBucket(statusResolver(row)) === adminStatusFilter);
+  }
+
+  function venueStatusLabel(item) {
+    const raw = String(item?.status || "").trim();
+    if (raw) return raw;
+    if (item?.isPublished === false) return "Pending";
+    return "Approved";
+  }
+
+  function partnerStatusLabel(item) {
+    const raw = String(item?.status || item?.accountStatus || item?.approvalStatus || "").trim();
+    if (raw) return raw;
+    if (item?.isActive === false) return "Rejected";
+    return "Approved";
   }
 
   function formatDateTime(value) {
@@ -4816,7 +4881,7 @@ function setupAdminDashboard() {
   }
 
   function renderPromoterListTable() {
-    const rows = buildPromoterDirectoryRows();
+    const rows = applyStatusFilter(buildPromoterDirectoryRows(), (item) => item.status);
     if (!promoterListBody) {
       renderPromoterProfilePanel(rows);
       return;
@@ -4863,9 +4928,12 @@ function setupAdminDashboard() {
 
   function renderPendingEventsTable() {
     if (!pendingEventsBody) return;
-    const rows = Array.isArray(opsState.pendingEvents) ? opsState.pendingEvents : [];
+    const eventSource = Array.isArray(opsState.eventRecords) && opsState.eventRecords.length
+      ? opsState.eventRecords
+      : (Array.isArray(opsState.pendingEvents) ? opsState.pendingEvents : []);
+    const rows = applyStatusFilter(eventSource, (item) => item?.status);
     if (!rows.length) {
-      pendingEventsBody.innerHTML = `<tr><td colspan="5">No pending or flagged events.</td></tr>`;
+      pendingEventsBody.innerHTML = `<tr><td colspan="5">No events available yet.</td></tr>`;
       return;
     }
     pendingEventsBody.innerHTML = rows.map((item) => {
@@ -4937,13 +5005,13 @@ function setupAdminDashboard() {
   }
   function renderVenueRecordsTable() {
     if (!venuesBody) return;
-    const rows = Array.isArray(opsState.venueRecords) ? opsState.venueRecords : [];
+    const rows = applyStatusFilter(Array.isArray(opsState.venueRecords) ? opsState.venueRecords : [], venueStatusLabel);
     if (!rows.length) {
       venuesBody.innerHTML = `<tr><td colspan="6">No venue records available yet.</td></tr>`;
       return;
     }
     venuesBody.innerHTML = rows.map((item) => {
-      const isPublished = item?.isPublished !== false;
+      const status = venueStatusLabel(item);
       return `
         <tr>
           <td>${escapeHtml(item?.name || "Venue")}</td>
@@ -4951,7 +5019,7 @@ function setupAdminDashboard() {
           <td>${escapeHtml(item?.city || "—")}</td>
           <td>${escapeHtml(item?.country || "—")}</td>
           <td>${Math.max(0, toFiniteNumber(item?.capacity, 0)).toLocaleString()}</td>
-          <td><span class="status-pill ${isPublished ? "approved" : "pending"}">${isPublished ? "Yes" : "No"}</span></td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
         </tr>
       `;
     }).join("");
@@ -5000,10 +5068,111 @@ function setupAdminDashboard() {
     `).join("");
   }
 
+  function partnerRowsByRole(role) {
+    return (Array.isArray(opsState.partnerRoleRecords) ? opsState.partnerRoleRecords : [])
+      .filter((item) => normalizeRole(item?.role) === role);
+  }
+
+  function renderEventHostsTable() {
+    if (!eventHostsBody) return;
+    const rows = applyStatusFilter(partnerRowsByRole("event_host"), partnerStatusLabel);
+    if (!rows.length) {
+      eventHostsBody.innerHTML = `<tr><td colspan="7">No event hosts available yet.</td></tr>`;
+      return;
+    }
+    eventHostsBody.innerHTML = rows.map((item) => {
+      const status = partnerStatusLabel(item);
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Event Host")}</td>
+          <td>${escapeHtml(item?.email || "—")}</td>
+          <td>${escapeHtml(item?.country || "—")}</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td>—</td>
+          <td>—</td>
+          <td><button class="btn btn-secondary btn-sm" type="button" disabled>View</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderArtistsTable() {
+    if (!artistsBody) return;
+    const rows = applyStatusFilter(partnerRowsByRole("artiste"), partnerStatusLabel);
+    if (!rows.length) {
+      artistsBody.innerHTML = `<tr><td colspan="7">No artist profiles available yet.</td></tr>`;
+      return;
+    }
+    artistsBody.innerHTML = rows.map((item) => {
+      const status = partnerStatusLabel(item);
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Artist")}</td>
+          <td>${escapeHtml(item?.email || "—")}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td><button class="btn btn-secondary btn-sm" type="button" disabled>View</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderSponsorsTable() {
+    if (!sponsorsBody) return;
+    const rows = applyStatusFilter(partnerRowsByRole("sponsor"), partnerStatusLabel);
+    if (!rows.length) {
+      sponsorsBody.innerHTML = `<tr><td colspan="7">No sponsor accounts available yet.</td></tr>`;
+      return;
+    }
+    sponsorsBody.innerHTML = rows.map((item) => {
+      const status = partnerStatusLabel(item);
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Sponsor")}</td>
+          <td>${escapeHtml(item?.email || "—")}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td><button class="btn btn-secondary btn-sm" type="button" disabled>View</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderInfluencersTable() {
+    if (!influencersBody) return;
+    const rows = applyStatusFilter(partnerRowsByRole("influencer"), partnerStatusLabel);
+    if (!rows.length) {
+      influencersBody.innerHTML = `<tr><td colspan="7">No influencer profiles available yet.</td></tr>`;
+      return;
+    }
+    influencersBody.innerHTML = rows.map((item) => {
+      const status = partnerStatusLabel(item);
+      return `
+        <tr>
+          <td>${escapeHtml(item?.name || "Influencer")}</td>
+          <td>${escapeHtml(item?.email || "—")}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+          <td><button class="btn btn-secondary btn-sm" type="button" disabled>View</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
   function renderOpsTables() {
     renderPromoterListTable();
+    renderEventHostsTable();
     renderVenueRecordsTable();
     renderBookingRequestsTable();
+    renderArtistsTable();
+    renderSponsorsTable();
+    renderInfluencersTable();
     renderPartnerRoleRecordsTable();
     renderAttendeeRecordsTable();
     renderPendingEventsTable();
@@ -5023,6 +5192,7 @@ function setupAdminDashboard() {
       promoterPublishedEvents: Array.isArray(response.promoterPublishedEvents) ? response.promoterPublishedEvents : [],
       attendeeRecords: Array.isArray(response.attendeeRecords) ? response.attendeeRecords : [],
       pendingEvents: Array.isArray(response.pendingEvents) ? response.pendingEvents : [],
+      eventRecords: Array.isArray(response.eventRecords) ? response.eventRecords : [],
       payoutQueue: Array.isArray(response.payoutQueue) ? response.payoutQueue : [],
       disputes: Array.isArray(response.disputes) ? response.disputes : [],
       venueRecords: Array.isArray(response.venueRecords) ? response.venueRecords : [],
@@ -5499,6 +5669,18 @@ function setupAdminDashboard() {
     });
   }
 
+  function setupAdminNavGroups() {
+    const toggles = dashboardRoot.querySelectorAll("[data-admin-nav-toggle]");
+    toggles.forEach((button) => {
+      button.addEventListener("click", () => {
+        const group = button.closest("[data-admin-nav-group]");
+        if (!group) return;
+        const isOpen = group.classList.toggle("is-open");
+        button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
+    });
+  }
+
 
   function applyAdminSectionView() {
     const sections = dashboardRoot.querySelectorAll(".admin-main > .admin-section");
@@ -5511,12 +5693,29 @@ function setupAdminDashboard() {
     const effectivePageName = adminPageName === "admin-promoter-profile.html"
       ? "admin-promoters.html"
       : adminPageName;
+    let currentStatus = "";
+    try {
+      const url = new URL(window.location.href);
+      currentStatus = normalizeLifecycleStatus(url.searchParams.get("status"));
+    } catch {
+      currentStatus = "";
+    }
     const links = dashboardRoot.querySelectorAll(".admin-sidebar-nav a");
     links.forEach((link) => {
       const href = String(link.getAttribute("href") || "").trim().toLowerCase();
       if (!href || href.startsWith("#")) return;
-      const targetPage = href.split("/").pop();
-      const isActive = targetPage === effectivePageName;
+      let targetPage = "";
+      let targetStatus = "";
+      try {
+        const resolved = new URL(href, window.location.origin);
+        targetPage = resolved.pathname.split("/").pop();
+        targetStatus = normalizeLifecycleStatus(resolved.searchParams.get("status"));
+      } catch {
+        targetPage = href.split("/").pop();
+      }
+      const matchesPage = targetPage === effectivePageName;
+      const matchesStatus = (!targetStatus && !currentStatus) || (targetStatus && targetStatus === currentStatus);
+      const isActive = matchesPage && matchesStatus;
       link.classList.toggle("active", isActive);
       if (isActive) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
@@ -5542,6 +5741,7 @@ function setupAdminDashboard() {
   setupRangeSwitch();
   setupAdminTableActions();
   setupSidebarToggle();
+  setupAdminNavGroups();
   addActivity("Admin dashboard loaded.");
   void (async () => {
     const loaded = await loadOpsDashboard();
