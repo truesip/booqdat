@@ -745,15 +745,15 @@ blockquote cite {
   padding: 0.58rem 0.62rem;
   border-radius: 8px;
   border: none;
-  background: rgba(249, 115, 22, 0.32);
-  color: #fff4ea;
-  font-weight: 500;
+  background: rgba(249, 115, 22, 0.38) !important;
+  color: #fff8f2 !important;
+  font-weight: 600;
 }
 
 .sidebar-logout-btn:hover,
 .sidebar-logout-btn:focus-visible {
-  background: rgba(249, 115, 22, 0.45);
-  color: #fff4ea;
+  background: rgba(249, 115, 22, 0.52) !important;
+  color: #ffffff !important;
 }
 
 .admin-sidebar-toggle {
