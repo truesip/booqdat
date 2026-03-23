@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | BOOQDAT</title>
+  <meta name="description" content="BOOQDAT platform operations dashboard for admins.">
+  <script>
+    document.documentElement.classList.add("auth-pending");
+  </script>
+  <style>
+    html.auth-pending body.auth-pending {
+      background: #ffffff;
+    }
+    html.auth-pending body.auth-pending > * {
+      visibility: hidden;
+    }
+    html.auth-pending body.auth-pending::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: #ffffff url("Booqdat-logo.png") center center / 180px auto no-repeat;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: visible;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="admin-page auth-pending">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="admin.html" class="active">Dashboard</a>
+        <a href="events.html">Events</a>
+        <a href="support.html">Support</a>
+        <a href="index.html" class="btn btn-primary">Public Site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="admin-shell" id="admin-dashboard">
+    <button class="admin-sidebar-toggle" type="button" data-admin-sidebar-toggle>Menu</button>
+    <aside class="admin-sidebar" data-admin-sidebar>
+      <h2>Platform Ops</h2>
+      <nav class="admin-sidebar-nav">
+        <a href="admin.html">Dashboard</a>
+        <a href="admin-promoters.html">Promoters</a>
+        <a href="admin-event-hosts.html">Event Hosts</a>
+        <a href="admin-venues.html">Venues</a>
+        <a href="admin-booking-requests.html">Booking Requests</a>
+        <a href="admin-artists.html">Artists</a>
+        <a href="admin-sponsors.html">Sponsors</a>
+        <a href="admin-influencers.html">Influencers</a>
+        <a href="admin-attendees.html">Attendees / Users</a>
+        <a href="admin-events.html">Events</a>
+        <a href="admin-tickets-sales.html">Tickets & Sales</a>
+        <a href="admin-payments.html">Payments & Payouts</a>
+        <a href="admin-reports.html">Reports & Analytics</a>
+        <a href="admin-disputes.html">Disputes / Support Tickets</a>
+        <a href="admin-settings.html">Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-secondary sidebar-logout-btn" type="button" data-admin-logout>Log Out</button>
+      </div>
+    </aside>
+
+    <section class="admin-main">
+      <section class="admin-section" id="dashboard-home">
+        <div class="admin-section-head">
+          <div>
+            <p class="eyebrow">Platform Ops</p>
+            <h1>Admin Dashboard Overview</h1>
+            <p>Monitor revenue, approvals, events, and support operations in one place.</p>
+          </div>
+          <div class="admin-quick-actions">
+            <button class="btn btn-primary" data-quick-action="approve-all">Approve Pending</button>
+            <button class="btn btn-primary" data-quick-action="approve-venues">Approve Venues</button>
+            <button class="btn btn-secondary" data-quick-action="review-requests">Review Requests</button>
+            <button class="btn btn-secondary" data-quick-action="export-csv">Export CSV</button>
+            <button class="btn btn-secondary" data-quick-action="export-pdf">Export PDF</button>
+            <div class="action-group">
+                <button class="btn btn-sm btn-outline" data-quick-action="approve-artists">Approve Artists</button>
+                <button class="btn btn-sm btn-outline" data-quick-action="approve-sponsors">Approve Sponsors</button>
+                <button class="btn btn-sm btn-outline" data-quick-action="approve-influencers">Approve Influencers</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-kpi-grid">
+          <article class="admin-kpi-card">
+            <span>Total Revenue</span>
+            <strong data-kpi="revenue-all">$0</strong>
+            <small data-kpi-detail="revenue-split">Today $0 • Month $0</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Platform Profit</span>
+            <strong data-kpi="platform-profit">$0</strong>
+            <small data-kpi-detail="profit-model">Model 8% + $2 per settled order</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Tickets Sold</span>
+            <strong data-kpi="tickets-month">0</strong>
+            <small data-kpi-detail="tickets-split">Today 0 • This month 0</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Active Events</span>
+            <strong data-kpi="active-events">0</strong>
+            <small>Published and available for purchase</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Confirmed Venue Bookings</span>
+            <strong data-kpi="confirmed-bookings">0</strong>
+            <small>Accepted requests this month</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Total Venues</span>
+            <strong data-kpi="total-venues">0</strong>
+            <small data-kpi-detail="venue-status">Published + Draft</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>New Venues (30d)</span>
+            <strong data-kpi="new-venues">0</strong>
+            <small>Recently onboarded venues</small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Total Artists</span>
+            <strong data-kpi="total-artists">0</strong>
+            <small>New this month: <span data-kpi="new-artists">0</span></small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Total Sponsors</span>
+            <strong data-kpi="total-sponsors">0</strong>
+            <small>New this month: <span data-kpi="new-sponsors">0</span></small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Total Influencers</span>
+            <strong data-kpi="total-influencers">0</strong>
+            <small>New this month: <span data-kpi="new-influencers">0</span></small>
+          </article>
+          <article class="admin-kpi-card">
+            <span>Pending Approvals</span>
+            <strong data-kpi="pending-approvals">0</strong>
+            <small data-kpi-detail="pending-breakdown">Promoters • Event Hosts • Venues • Artists • Sponsors • Influencers</small>
+          </article>
+        </div>
+
+        <div class="admin-chart-grid">
+          <article class="admin-card">
+            <div class="card-head">
+              <h3>Revenue Over Time</h3>
+              <div class="range-switch">
+                <button class="is-active" data-revenue-range="week">Week</button>
+                <button data-revenue-range="month">Month</button>
+                <button data-revenue-range="quarter">Quarter</button>
+              </div>
+            </div>
+            <canvas id="revenue-chart" width="840" height="260"></canvas>
+          </article>
+          <article class="admin-card">
+            <div class="card-head">
+                <h3>Booking Requests Trend</h3>
+                <div class="range-switch">
+                    <button class="is-active" data-request-range="week">Week</button>
+                    <button data-request-range="month">Month</button>
+                    <button data-request-range="quarter">Quarter</button>
+                </div>
+            </div>
+            <canvas id="booking-requests-chart" width="840" height="260"></canvas>
+          </article>
+        </div>
+
+        <div class="admin-chart-grid three-col">
+            <article class="admin-card small-card">
+                <h3>Venue Occupancy Rate</h3>
+                <strong data-stat="venue-occupancy" style="font-size: 2rem; display: block; margin-top: 1rem;">0%</strong>
+                <small class="muted">Based on available dates</small>
+            </article>
+            <article class="admin-card small-card">
+                <h3>Top 5 Cities</h3>
+                <div id="top-cities" class="bar-list"></div>
+            </article>
+             <article class="admin-card small-card">
+                <h3>Role Distribution</h3>
+                <div id="role-distribution-chart" class="chart-container" style="height: 180px;"></div>
+            </article>
+        </div>
+
+        <div class="admin-chart-grid">
+          <article class="admin-card">
+            <h3>Ticket Sales by Day</h3>
+            <div id="ticket-sales-bars" class="bar-list"></div>
+          </article>
+          <article class="admin-card">
+            <h3>Top Categories</h3>
+            <div id="top-categories" class="bar-list"></div>
+          </article>
+        </div>
+
+        <article class="admin-card admin-activity-card">
+          <h3>Recent Activity Feed</h3>
+          <ul id="admin-activity-feed" class="activity-feed"></ul>
+        </article>
+      </section>
+
+      <section class="admin-section" id="promoters-section">
+        <h2>Promoters</h2>
+        <article class="admin-card">
+          <h3>Promoter List</h3>
+          <p class="muted">Click any promoter row to open that promoter profile page.</p>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Promoter</th>
+                  <th>Country</th>
+                  <th>Status</th>
+                  <th>Tickets Sold</th>
+                  <th>Revenue</th>
+                  <th>Published Events</th>
+                </tr>
+              </thead>
+              <tbody id="admin-promoter-list-body">
+                <tr>
+                  <td colspan="6">No promoters available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="event-hosts-section">
+        <h2>Event Hosts</h2>
+        <article class="admin-card">
+          <h3>Event Host List</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Host Name</th>
+                  <th>Email</th>
+                  <th>Country</th>
+                  <th>Status</th>
+                  <th>Events Hosted</th>
+                  <th>Budget</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-event-hosts-body">
+                <tr>
+                  <td colspan="7">No event hosts available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+      <section class="admin-section" id="venues-section">
+        <h2>Venues</h2>
+        <article class="admin-card">
+          <h3>All Venues</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Venue</th>
+                  <th>Email</th>
+                  <th>City</th>
+                  <th>Country</th>
+                  <th>Capacity</th>
+                  <th>Published</th>
+                </tr>
+              </thead>
+              <tbody id="admin-venues-body">
+                <tr>
+                  <td colspan="6">No venue records available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+      <section class="admin-section" id="booking-requests-section">
+        <h2>Booking Requests</h2>
+        <article class="admin-card">
+          <h3>Platform-wide Venue Booking Requests</h3>
+          <div class="admin-filters" style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+            <select id="booking-request-role-filter" class="form-input" style="width: auto;">
+              <option value="">All Requesters</option>
+              <option value="promoter">Promoters</option>
+              <option value="artist">Artists</option>
+              <option value="sponsor">Sponsors</option>
+              <option value="influencer">Influencers</option>
+              <option value="event_host">Event Hosts</option>
+            </select>
+            <input type="text" id="booking-request-venue-filter" class="form-input" placeholder="Filter by Venue..." style="width: auto;">
+            <select id="booking-request-status-filter" class="form-input" style="width: auto;">
+               <option value="">All Statuses</option>
+               <option value="pending">Pending</option>
+               <option value="accepted">Accepted</option>
+               <option value="declined">Declined</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Request #</th>
+                  <th>Event</th>
+                  <th>Requester</th>
+                  <th>Venue</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Proposed Price</th>
+                </tr>
+              </thead>
+              <tbody id="admin-booking-requests-body">
+                <tr>
+                  <td colspan="7">No booking requests available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+      <section class="admin-section" id="artists-section">
+        <h2>Artists</h2>
+        <article class="admin-card">
+          <h3>Artist Profiles</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Artist Name</th>
+                  <th>Email</th>
+                  <th>Genre</th>
+                  <th>Followers</th>
+                  <th>Gigs Booked</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-artists-body">
+                <tr>
+                  <td colspan="7">No artist profiles available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="sponsors-section">
+        <h2>Sponsors</h2>
+        <article class="admin-card">
+          <h3>Sponsor Accounts</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Company Name</th>
+                  <th>Email</th>
+                  <th>Industry</th>
+                  <th>Budget Range</th>
+                  <th>Active Proposals</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-sponsors-body">
+                <tr>
+                  <td colspan="7">No sponsor accounts available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="influencers-section">
+        <h2>Influencers</h2>
+        <article class="admin-card">
+          <h3>Influencer Profiles</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Handle/Name</th>
+                  <th>Email</th>
+                  <th>Niche</th>
+                  <th>Followers</th>
+                  <th>Promo Codes</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-influencers-body">
+                <tr>
+                  <td colspan="7">No influencer profiles available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+      <section class="admin-section" id="promoter-profile-section">
+        <h2>Promoter Profile</h2>
+        <article class="admin-card">
+          <div class="event-action-row" style="margin-bottom:0.55rem;">
+            <a class="btn btn-secondary btn-sm" href="admin-promoters.html">Back to Promoters</a>
+          </div>
+          <div id="admin-promoter-profile-panel" class="admin-promoter-profile-panel">
+            <p class="muted">Click a promoter in the list to view profile details, payout details, revenue, and published events.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="attendees-section">
+        <h2>Attendees / Users</h2>
+        <article class="admin-card">
+          <h3>Recent Attendee Records</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Orders</th>
+                  <th>Last Purchase</th>
+                </tr>
+              </thead>
+              <tbody id="admin-attendee-records-body">
+                <tr>
+                  <td colspan="4">No attendee records available yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="events-section">
+        <h2>Events</h2>
+        <article class="admin-card">
+          <h3>Pending / Flagged Events</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Promoter</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-pending-events-body">
+                <tr>
+                  <td colspan="5">No pending or flagged events.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="tickets-sales-section">
+        <h2>Tickets & Sales</h2>
+        <article class="admin-card">
+          <h3>Sales Snapshot</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Tickets Sold</th>
+                  <th>Gross Sales</th>
+                  <th>Sell-through</th>
+                </tr>
+              </thead>
+              <tbody id="sales-snapshot-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="payments-section">
+        <h2>Payments & Payouts</h2>
+        <article class="admin-card">
+          <h3>Upcoming Payout Queue</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Promoter</th>
+                  <th>Amount</th>
+                  <th>Payout Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-payout-queue-body">
+                <tr>
+                  <td colspan="5">No payout items in queue.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="reports-section">
+        <h2>Reports & Analytics</h2>
+        <article class="admin-card">
+          <h3>Export Center</h3>
+          <p>Download ticket sales, promoter performance, and payout data for finance and compliance workflows.</p>
+          <div class="admin-quick-actions">
+            <button class="btn btn-primary" data-quick-action="export-csv">Export Reports (CSV)</button>
+            <button class="btn btn-secondary" data-quick-action="export-pdf">Export Summary (PDF)</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="disputes-section">
+        <h2>Disputes / Support Tickets</h2>
+        <article class="admin-card">
+          <h3>Open Cases</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Case #</th>
+                  <th>Type</th>
+                  <th>Related Event</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-disputes-body">
+                <tr>
+                  <td colspan="6">No open dispute cases.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-section" id="settings-section">
+        <h2>Settings</h2>
+        <div class="admin-settings-grid">
+          <article class="admin-card">
+            <h3>Fee Configuration</h3>
+            <form class="stack" id="admin-fee-settings-form">
+              <label>
+                Platform Fee (%)
+                <input type="number" name="platformFeePercent" value="8" min="0" max="30" step="0.1">
+              </label>
+              <label>
+                Fixed Processing Fee (USD)
+                <input type="number" name="fixedProcessingFeeUsd" value="2" min="0" max="100" step="0.01">
+              </label>
+              <button type="submit" class="btn btn-primary">Save Fee Settings</button>
+            </form>
+            <p id="admin-fee-settings-status" class="status"></p>
+          </article>
+          <article class="admin-card">
+            <h3>Payment Gateways</h3>
+            <form class="stack">
+              <label class="checkbox-line"><input type="checkbox" checked disabled> NYVAPAY</label>
+              <p class="muted">ACH (Manual Review) has been removed. NYVAPAY is currently the active gateway.</p>
+            </form>
+          </article>
+          <article class="admin-card">
+            <h3>Legal & Site Content</h3>
+            <ul class="admin-link-list">
+              <li><a href="terms.html">Terms of Service</a></li>
+              <li><a href="privacy.html">Privacy Policy</a></li>
+              <li><a href="refund-policy.html">Refund Policy</a></li>
+              <li><a href="support.html">Support Content</a></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/auth-runtime.js?v=20260321-2358"></script>
+  <script src="assets/app.js?v=20260321-2358"></script>
+</body>
+</html>

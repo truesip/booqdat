@@ -1,0 +1,133 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    document.documentElement.classList.add("auth-pending");
+  </script>
+  <style>
+    html.auth-pending body.auth-pending {
+      background: #ffffff;
+    }
+    html.auth-pending body.auth-pending > * {
+      visibility: hidden;
+    }
+    html.auth-pending body.auth-pending::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: #ffffff url("Booqdat-logo.png") center center / 180px auto no-repeat;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: visible;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+
+<title>Sponsor Portal | BOOQDAT</title>
+<meta name="description" content="Sponsor portal for event discovery, proposals, and campaign ROI.">
+<body class="auth-pending">
+
+<header class="site-header">
+  <div class="container nav-shell">
+    <a href="index.html" class="logo" aria-label="BOOQDAT home">
+      <img src="Booqdat-logo.png" alt="BOOQDAT">
+    </a>
+    <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">?</button>
+    <nav class="site-nav" data-mobile-nav>
+      <a href="sponsor-dashboard.html" class="active">Sponsor Portal</a>
+      <a href="events.html">Browse Events</a>
+      <a href="support.html">Support</a>
+      <a href="index.html" class="btn btn-primary">Public Site</a>
+    </nav>
+  </div>
+</header>
+
+  <main class="promoter-shell" id="sponsor-portal">
+    <button class="promoter-sidebar-toggle" type="button" data-sponsor-sidebar-toggle>Menu</button>
+    <aside class="promoter-sidebar">
+      <h2>Sponsor Portal</h2>
+      <nav class="promoter-sidebar-nav">
+        <a href="sponsor-dashboard.html">Dashboard</a>
+        <a href="sponsor-sponsorships.html">My Sponsorships</a>
+        <a href="sponsor-event-discovery.html">Event Discovery</a>
+        <a href="sponsor-proposals.html">Proposal Requests</a>
+        <a href="sponsor-analytics.html">Analytics</a>
+      </nav>
+      <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-sponsor-logout>Log Out</button></div>
+    </aside>
+    <section class="promoter-main">
+      <section class="promoter-section" id="sponsor-home">
+        <p class="eyebrow">Sponsor Dashboard</p>
+        <h1>Track sponsorship reach and impact</h1>
+        <div class="promoter-kpi-grid">
+          <article class="promoter-kpi-card"><span>Active Sponsorships</span><strong data-sponsor-kpi="active">0</strong></article>
+          <article class="promoter-kpi-card"><span>Pending Proposals</span><strong data-sponsor-kpi="pending">0</strong></article>
+          <article class="promoter-kpi-card"><span>Estimated Impressions</span><strong data-sponsor-kpi="impressions">0</strong></article>
+          <article class="promoter-kpi-card"><span>ROI</span><strong data-sponsor-kpi="roi">0%</strong></article>
+        </div>
+      </section>
+      <section class="promoter-section" id="sponsor-sponsorships">
+        <h2>My Sponsorships</h2>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Package</th><th>Budget</th><th>Status</th></tr></thead><tbody id="sponsor-sponsorships-body"><tr><td colspan="4">No sponsorship records yet.</td></tr></tbody></table></div>
+      </section>
+      <section class="promoter-section" id="sponsor-event-discovery">
+        <h2>Event Discovery</h2>
+        <form id="sponsor-discovery-filter-form" class="split">
+          <label>City<input name="city" type="text"></label>
+          <label>Category<input name="category" type="text"></label>
+          <label>Min Attendance<input name="minAttendance" type="number" min="0" step="1"></label>
+          <label>Max Budget (USD)<input name="maxBudget" type="number" min="0" step="1"></label>
+          <button class="btn btn-secondary" type="submit">Find Events</button>
+        </form>
+        <div id="sponsor-discovery-results" class="promoter-events-grid"></div>
+      </section>
+      <section class="promoter-section" id="sponsor-proposals">
+        <h2>Proposal Requests</h2>
+        <form id="sponsor-proposal-form" class="stack">
+          <label>Event / Campaign Name<input name="eventName" type="text" required></label>
+          <label>Proposal Notes<textarea name="proposalNotes" rows="3"></textarea></label>
+          <label>Budget (USD)<input name="budget" type="number" min="0" step="1" required></label>
+          <button class="btn btn-primary" type="submit">Send Sponsorship Proposal</button>
+        </form>
+        <p id="sponsor-proposal-status" class="status"></p>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Event</th><th>Budget</th><th>Status</th></tr></thead><tbody id="sponsor-proposals-body"><tr><td colspan="4">No proposals sent yet.</td></tr></tbody></table></div>
+      </section>
+      <section class="promoter-section" id="sponsor-analytics">
+        <h2>Analytics (ROI & Impressions)</h2>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody id="sponsor-analytics-body"><tr><td>Impressions</td><td>0</td></tr><tr><td>Leads</td><td>0</td></tr><tr><td>ROI</td><td>0%</td></tr></tbody></table></div>
+      </section>
+    </section>
+  </main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <strong>BOOQDAT USA LLC</strong>
+      <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+      <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+    </div>
+    <nav class="footer-links">
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="support.html">Support</a>
+      <a href="refund-policy.html">Refund Policy</a>
+    </nav>
+  </div>
+  <div class="container footer-bottom">
+    <small>? <span data-year></span> BOOQDAT USA LLC</small>
+  </div>
+</footer>
+
+  <script src="assets/auth-runtime.js?v=20260323-portal"></script>
+  <script src="assets/app.js?v=20260323-portal"></script>
+</body>
+</html>

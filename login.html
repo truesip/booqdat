@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log In | BOOQDAT</title>
+  <meta name="description" content="Log into your BOOQDAT promoter account.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="events.html">Browse Events</a>
+        <a href="promoters.html">For Promoters</a>
+        <a href="login.html" class="active">Log In</a>
+        <a href="signup.html" class="btn btn-primary">Sign Up</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container auth-wrap">
+        <article class="form-card auth-card">
+          <h1>Account Access</h1>
+          <p class="muted" id="auth-role-hint">Sign in to access your dashboard.</p>
+          <form id="auth-login-form" class="stack">
+            <label>
+              Email
+              <input name="email" type="email" required placeholder="you@company.com">
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" required minlength="8" placeholder="••••••••">
+            </label>
+            <button class="btn btn-primary" type="submit">Sign In</button>
+          </form>
+          <p id="auth-login-status" class="status"></p>
+          <p class="auth-foot">Need an account? <a href="signup.html">Create one here</a>.</p>
+          <p class="auth-foot">Already approved? <a href="promoter-dashboard.html">Go to promoter dashboard</a>.</p>
+          <p class="auth-foot">Venue owner? <a href="venue-dashboard.html">Open venue portal</a>.</p>
+          <p class="auth-foot">Event host? <a href="host-dashboard.html">Open host portal</a>.</p>
+          <p class="auth-foot">Artiste? <a href="artiste-dashboard.html">Open artiste portal</a>.</p>
+          <p class="auth-foot">Sponsor? <a href="sponsor-dashboard.html">Open sponsor portal</a>.</p>
+          <p class="auth-foot">Influencer? <a href="influencer-dashboard.html">Open influencer portal</a>.</p>
+          <p class="auth-foot">Ticket buyer? <a href="user-portal.html">Open user portal</a>.</p>
+          <p class="auth-foot">Platform operator? <a href="admin.html">Open admin dashboard</a>.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/auth-runtime.js?v=20260321-2358"></script>
+  <script src="assets/auth-guard.js?v=20260321-2358"></script>
+  <script src="assets/app.js?v=20260321-2358"></script>
+</body>
+</html>
