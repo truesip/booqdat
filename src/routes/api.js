@@ -2715,6 +2715,7 @@ function createApiRouter(env) {
             stateProvince: truncateText(payoutAccount?.stateProvince || payoutAccount?.provinceState || payoutAccount?.state, 120),
             accountHolderName: truncateText(payoutAccount?.accountHolderName || payoutAccount?.holder, 200),
             country: truncateText(payoutAccount?.country, 120),
+            bankAccountNumber: truncateText(payoutAccount?.bankAccountNumber, 120),
             bankAccountNumberMasked: accountNumber ? `••••${accountNumber.slice(-4)}` : "",
             routingNumber: truncateText(payoutAccount?.routingNumber, 120),
             swiftCode: truncateText(payoutAccount?.swiftCode, 120),

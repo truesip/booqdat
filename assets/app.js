@@ -2983,9 +2983,8 @@ function setupAdminDashboard() {
     const bankName = String(payoutAccount?.bankName || "").trim();
     const holder = String(payoutAccount?.accountHolderName || payoutAccount?.holder || "").trim();
     const schedule = String(payoutAccount?.schedule || "").trim().toLowerCase() === "monthly" ? "Monthly" : "Weekly";
-    const accountNumber = String(payoutAccount?.bankAccountNumber || "").replace(/\s+/g, "");
-    const accountSuffix = accountNumber ? `••••${accountNumber.slice(-4)}` : String(payoutAccount?.bankAccountNumberMasked || "");
-    const parts = [bankName, holder, accountSuffix, schedule].filter(Boolean);
+    const accountNumber = String(payoutAccount?.bankAccountNumber || payoutAccount?.bankAccountNumberMasked || "").trim();
+    const parts = [bankName, holder, accountNumber, schedule].filter(Boolean);
     return parts.length ? parts.join(" • ") : "Saved";
   }
 
@@ -3480,9 +3479,23 @@ function setupAdminDashboard() {
   }
 
   function renderTicketSalesBars() {
+    const target = dashboardRoot.querySelector("#ticket-sales-bars");
+    if (!target) return;
     const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const mapData = Object.fromEntries(labels.map((label, i) => [label, ticketByDay[i]]));
-    renderBarList("#ticket-sales-bars", mapData);
+    const rows = labels.map((label, i) => ({
+      label,
+      value: Math.max(0, toFiniteNumber(ticketByDay[i], 0))
+    }));
+    const top = Math.max(1, ...rows.map((row) => row.value));
+    target.innerHTML = rows.map((row) => {
+      const width = Math.max(12, Math.round((row.value / top) * 100));
+      return `
+        <div class="bar-item">
+          <div class="bar-item-head"><span>${row.label}</span><strong>${row.value}</strong></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+        </div>
+      `;
+    }).join("");
   }
 
   function drawRevenueChart(range = "week") {
