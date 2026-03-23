@@ -696,6 +696,9 @@ blockquote cite {
   border: 1px solid #4f2f1b;
   padding: 1rem;
   color: #ffebdc;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 116px);
 }
 
 .admin-sidebar h2 {
@@ -724,6 +727,16 @@ blockquote cite {
 .admin-sidebar-nav a[aria-current="page"] {
   background: rgba(249, 115, 22, 0.32);
   color: #fff4ea;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.sidebar-logout-btn {
+  width: 100%;
 }
 
 .admin-sidebar-toggle {
@@ -1014,6 +1027,9 @@ blockquote cite {
   border: 1px solid #4f2f1b;
   padding: 1rem;
   color: #ffebdc;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 116px);
 }
 
 .promoter-sidebar h2 {
@@ -1334,6 +1350,18 @@ blockquote cite {
 
 .admin-promoter-events-block h5 {
   margin-bottom: 0.35rem;
+}
+
+.admin-promoter-events-table {
+  min-width: 760px;
+}
+
+.admin-promoter-events-table td strong {
+  display: block;
+}
+
+.admin-promoter-events-table td small {
+  color: #8a6149;
 }
 
 .admin-promoter-events-list {
@@ -1844,10 +1872,11 @@ blockquote cite {
 
   .admin-sidebar {
     display: none;
+    min-height: auto;
   }
 
   .admin-shell.sidebar-open .admin-sidebar {
-    display: block;
+    display: flex;
   }
 
   .admin-section-head {
@@ -1870,10 +1899,11 @@ blockquote cite {
 
   .promoter-sidebar {
     display: none;
+    min-height: auto;
   }
 
   .promoter-shell.sidebar-open .promoter-sidebar {
-    display: block;
+    display: flex;
   }
 
   .promoter-section-head {

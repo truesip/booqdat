@@ -2555,7 +2555,11 @@ function createApiRouter(env) {
           eventId: truncateText(event?.id || event?.eventId, 120),
           title: truncateText(event?.title, 200) || "Untitled Event",
           date: truncateText(event?.date, 40),
-          status: truncateText(event?.status, 40) || "Live"
+          status: truncateText(event?.status, 40) || "Live",
+          city: truncateText(event?.city, 120),
+          state: truncateText(event?.state, 120),
+          country: truncateText(event?.country, 120),
+          venue: truncateText(event?.venue, 200)
         });
       });
 
@@ -2650,6 +2654,7 @@ function createApiRouter(env) {
         .sort((a, b) => String(a.payoutDate || "").localeCompare(String(b.payoutDate || "")))
         .slice(0, 30);
       const promoterMetricsByEmail = {};
+      const eventPerformanceById = {};
       orders.forEach((order) => {
         if (!isSettledOrderData(order)) return;
         const promoterEmail = normalizeEmail(order?.promoterEmail);
@@ -2664,10 +2669,21 @@ function createApiRouter(env) {
         const qty = Math.max(1, Math.floor(toFiniteNumber(order?.quantity, 1)));
         const total = toPositiveAmount(order?.total);
         const payoutStatus = normalizeLifecycleStatus(order?.payoutStatus);
+        const eventId = truncateText(order?.eventId, 120);
         promoterMetricsByEmail[promoterEmail].ticketsSold += qty;
         promoterMetricsByEmail[promoterEmail].revenue += total;
         if (payoutStatus === "processed") {
           promoterMetricsByEmail[promoterEmail].payouts += total;
+        }
+        if (eventId) {
+          if (!eventPerformanceById[eventId]) {
+            eventPerformanceById[eventId] = {
+              ticketsSold: 0,
+              revenue: 0
+            };
+          }
+          eventPerformanceById[eventId].ticketsSold += qty;
+          eventPerformanceById[eventId].revenue += total;
         }
       });
       const promoterEmails = new Set([
@@ -2711,14 +2727,24 @@ function createApiRouter(env) {
         const account = accountByEmail[email] || null;
         const profileData = profileMap[email] || {};
         const publishedEvents = ensureArray(publishedEventsByPromoter[email]);
+        const eventsWithPerformance = publishedEvents
+          .map((event) => {
+            const eventId = truncateText(event?.eventId, 120);
+            const performance = eventId ? eventPerformanceById[eventId] : null;
+            return {
+              ...event,
+              ticketsSold: Math.max(0, Math.floor(toFiniteNumber(performance?.ticketsSold, 0))),
+              revenue: toPositiveAmount(performance?.revenue)
+            };
+          })
+          .sort((a, b) => String(b?.date || "").localeCompare(String(a?.date || "")));
         return {
           accountId: account ? String(account._id) : "",
           promoterName: truncateText(account?.name || profileData?.name, 200) || email || "Unknown promoter",
           promoterEmail: email,
           country: truncateText(profileData?.country || profileData?.location, 120) || "—",
-          publishedEventsCount: publishedEvents.length,
-          events: publishedEvents
-            .sort((a, b) => String(b?.date || "").localeCompare(String(a?.date || "")))
+          publishedEventsCount: eventsWithPerformance.length,
+          events: eventsWithPerformance
         };
       })
         .sort((a, b) => b.publishedEventsCount - a.publishedEventsCount);

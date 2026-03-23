@@ -3139,7 +3139,44 @@ function setupAdminDashboard() {
     const payoutAddress = payoutAddressParts.length ? payoutAddressParts.join(", ") : "";
     const publishedEvents = Array.isArray(selected.publishedEvents) ? selected.publishedEvents : [];
     const publishedEventsMarkup = publishedEvents.length
-      ? `<ul class="admin-promoter-events-list">${publishedEvents.map((eventItem) => `<li>${escapeHtml(eventItem?.title || eventItem?.eventId || "Untitled Event")}<small>${escapeHtml(formatDateTime(eventItem?.date) || "Date TBA")}</small></li>`).join("")}</ul>`
+      ? `
+        <div class="table-wrap">
+          <table class="data-table admin-promoter-events-table">
+            <thead>
+              <tr>
+                <th>Event Preview</th>
+                <th>Date</th>
+                <th>Tickets Sold</th>
+                <th>Revenue</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${publishedEvents.map((eventItem) => {
+                const title = escapeHtml(eventItem?.title || eventItem?.eventId || "Untitled Event");
+                const venue = String(eventItem?.venue || "").trim();
+                const location = [eventItem?.city, eventItem?.state, eventItem?.country]
+                  .map((part) => String(part || "").trim())
+                  .filter(Boolean)
+                  .join(", ");
+                const previewMeta = [venue, location].filter(Boolean).join(" • ");
+                const status = String(eventItem?.status || "Live");
+                const ticketsSold = Math.max(0, toFiniteNumber(eventItem?.ticketsSold, 0));
+                const revenue = Math.max(0, toFiniteNumber(eventItem?.revenue, 0));
+                return `
+                  <tr>
+                    <td><strong>${title}</strong>${previewMeta ? `<br><small>${escapeHtml(previewMeta)}</small>` : ""}</td>
+                    <td>${escapeHtml(formatDateTime(eventItem?.date) || "Date TBA")}</td>
+                    <td>${ticketsSold.toLocaleString()}</td>
+                    <td>${usd(revenue)}</td>
+                    <td><span class="status-pill ${statusPillClass(status)}">${escapeHtml(status)}</span></td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      `
       : `<p class="muted">No published events yet.</p>`;
     promoterProfilePanel.innerHTML = `
       <div class="admin-promoter-profile-head">
