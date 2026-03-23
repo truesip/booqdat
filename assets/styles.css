@@ -731,12 +731,29 @@ blockquote cite {
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 0.85rem;
+  padding-top: 1.25rem;
+  padding-bottom: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-logout-btn {
   width: 100%;
+  display: inline-flex;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: left;
+  padding: 0.58rem 0.62rem;
+  border-radius: 8px;
+  border: none;
+  background: rgba(249, 115, 22, 0.32);
+  color: #fff4ea;
+  font-weight: 500;
+}
+
+.sidebar-logout-btn:hover,
+.sidebar-logout-btn:focus-visible {
+  background: rgba(249, 115, 22, 0.45);
+  color: #fff4ea;
 }
 
 .admin-sidebar-toggle {
