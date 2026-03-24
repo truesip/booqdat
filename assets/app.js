@@ -4854,13 +4854,6 @@ function setupInfluencerPortal() {
     });
   }
 
-  function updatePromoCodeCommission(requestId) {
-    if (!codeForm) return;
-    const commissionInput = codeForm.elements?.commissionPercent;
-    if (!commissionInput) return;
-    const match = approvedInvites().find((item) => item.id === requestId);
-    commissionInput.value = match ? String(Math.max(0, Math.floor(toFiniteNumber(match.commissionPercent, 0)))) : "0";
-  }
 
   function renderPromoCodeFormOptions() {
     if (!codeForm) return;
@@ -4870,14 +4863,12 @@ function setupInfluencerPortal() {
     const approved = approvedInvites();
     if (!approved.length) {
       select.innerHTML = `<option value="">No approved events</option>`;
-      updatePromoCodeCommission("");
       return;
     }
     select.innerHTML = approved.map((item) => `
-      <option value="${portalEscapeHtml(item.id)}">${portalEscapeHtml(item.eventName || "Event")} (${portalEscapeHtml(portalFormatDateValue(item.eventDate))})</option>
+      <option value="${portalEscapeHtml(item.id)}">${portalEscapeHtml(item.eventName || "Event")} (${portalEscapeHtml(portalFormatDateValue(item.eventDate))}) • ${Math.max(0, Math.floor(toFiniteNumber(item.commissionPercent, 0)))}%</option>
     `).join("");
     if (currentValue) select.value = currentValue;
-    updatePromoCodeCommission(select.value);
   }
 
   function renderInfluencerTables() {
@@ -5098,12 +5089,6 @@ function setupInfluencerPortal() {
   }
 
   if (codeForm && codeStatus) {
-    const requestSelect = codeForm.elements?.requestId;
-    if (requestSelect && "addEventListener" in requestSelect) {
-      requestSelect.addEventListener("change", () => {
-        updatePromoCodeCommission(requestSelect.value);
-      });
-    }
     codeForm.addEventListener("submit", (event) => {
       event.preventDefault();
       if (!codeForm.reportValidity()) return;
