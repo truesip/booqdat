@@ -348,7 +348,26 @@ function applyBootstrapPayloadToLocalState(data) {
     setLocalStorageJsonSafely(STORAGE_KEYS.customEvents, filterLegacyDemoEvents(data.events));
   }
   if (Array.isArray(data.promoterEvents)) {
-    setLocalStorageJsonSafely(STORAGE_KEYS.promoterDashboardEvents, filterLegacyDemoEvents(data.promoterEvents));
+    const incoming = filterLegacyDemoEvents(data.promoterEvents);
+    let shouldWrite = incoming.length > 0;
+    if (!shouldWrite) {
+      try {
+        const existingRaw = localStorage.getItem(STORAGE_KEYS.promoterDashboardEvents);
+        if (!existingRaw) {
+          shouldWrite = true;
+        } else {
+          const existingParsed = JSON.parse(existingRaw);
+          if (!Array.isArray(existingParsed) || existingParsed.length === 0) {
+            shouldWrite = true;
+          }
+        }
+      } catch {
+        shouldWrite = true;
+      }
+    }
+    if (shouldWrite) {
+      setLocalStorageJsonSafely(STORAGE_KEYS.promoterDashboardEvents, incoming);
+    }
   }
   if (canHydrateOrderScope && Array.isArray(data.orders)) {
     setLocalStorageJsonSafely(STORAGE_KEYS.buyerOrders, filterLegacyDemoOrders(data.orders));
