@@ -68,6 +68,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "sponsor-analytics.html": ["sponsor", "admin"],
   "influencer-dashboard.html": ["influencer", "admin"],
   "influencer-profile.html": ["influencer", "admin"],
+  "influencer-settings.html": ["influencer", "admin"],
   "influencer-invites.html": ["influencer", "admin"],
   "influencer-promo-codes.html": ["influencer", "admin"],
   "influencer-reports.html": ["influencer", "admin"]
@@ -137,6 +138,7 @@ const SPONSOR_SECTION_BY_PAGE = {
 const INFLUENCER_SECTION_BY_PAGE = {
   "influencer-dashboard.html": "influencer-home",
   "influencer-profile.html": "influencer-profile",
+  "influencer-settings.html": "influencer-settings",
   "influencer-invites.html": "influencer-invites",
   "influencer-promo-codes.html": "influencer-promo-codes",
   "influencer-reports.html": "influencer-reports"
@@ -3004,6 +3006,7 @@ function setupVenuePortal() {
     target.style.color = isError ? "#b3261e" : "";
   }
 
+
   function parseAmenityList(value) {
     return String(value || "")
       .split(",")
@@ -4381,14 +4384,22 @@ function setupInfluencerPortal() {
   const profileForm = root.querySelector("#influencer-profile-form");
   const profileStatus = root.querySelector("#influencer-profile-status");
   const invitesBody = root.querySelector("#influencer-invites-body");
+  const invitesStatus = root.querySelector("#influencer-invites-status");
+  const submissionCard = root.querySelector("#influencer-submission-card");
+  const submissionForm = root.querySelector("#influencer-submission-form");
+  const submissionStatus = root.querySelector("#influencer-submission-status");
+  const submissionMeta = root.querySelector("#influencer-submission-meta");
   const codeForm = root.querySelector("#influencer-code-form");
   const codeStatus = root.querySelector("#influencer-code-status");
   const codesBody = root.querySelector("#influencer-codes-body");
   const reportsBody = root.querySelector("#influencer-reports-body");
+  const bankForm = root.querySelector("#influencer-bank-form");
+  const bankStatus = root.querySelector("#influencer-bank-status");
   const sidebarToggle = root.querySelector("[data-influencer-sidebar-toggle]");
   const logoutButton = root.querySelector("[data-influencer-logout]");
 
   let influencerProfileData = {};
+  let activeInviteId = "";
   let promoCodes = portalReadStorageJson(codesStorageKey, [])
     .filter((item) => item && typeof item === "object")
     .map((item) => ({
@@ -4401,12 +4412,25 @@ function setupInfluencerPortal() {
     .filter((item) => item.code);
   let invites = portalReadStorageJson(invitesStorageKey, [])
     .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      eventName: String(item?.eventName || "").trim(),
-      eventDate: String(item?.eventDate || "").trim(),
-      requester: String(item?.requester || "").trim(),
-      status: String(item?.status || "Pending")
-    }))
+    .map((item) => {
+      const submission = item?.submission && typeof item.submission === "object" ? item.submission : {};
+      return {
+        id: String(item?.id || `inf-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+        eventName: String(item?.eventName || "").trim(),
+        eventDate: String(item?.eventDate || "").trim(),
+        requester: String(item?.requester || "").trim(),
+        fee: Math.max(0, toFiniteNumber(item?.fee, 0)),
+        status: String(item?.status || "Pending"),
+        submission: {
+          videoUrl: String(submission?.videoUrl || "").trim(),
+          imageUrl: String(submission?.imageUrl || "").trim(),
+          message: String(submission?.message || "").trim(),
+          submittedAt: submission?.submittedAt || ""
+        },
+        decisionAt: item?.decisionAt || "",
+        paidAmount: Math.max(0, toFiniteNumber(item?.paidAmount, 0))
+      };
+    })
     .filter((item) => item.eventName);
 
   function persistInfluencerData() {
@@ -4420,16 +4444,77 @@ function setupInfluencerPortal() {
     target.style.color = isError ? "#b3261e" : "";
   }
 
+  function inviteStatusLabel(invite) {
+    return String(invite?.status || "Pending");
+  }
+
+  function inviteRevenueAmount(invite) {
+    const status = inviteStatusLabel(invite).toLowerCase();
+    if (!status.includes("approved") && !status.includes("paid")) return 0;
+    const amount = toFiniteNumber(invite?.paidAmount, 0);
+    return Math.max(0, amount || toFiniteNumber(invite?.fee, 0));
+  }
+
+  function isInviteClosed(status) {
+    const normalized = String(status || "").toLowerCase();
+    return normalized.includes("declined") || normalized.includes("rejected");
+  }
+
+  function openSubmissionCard(invite) {
+    if (!submissionCard || !submissionForm || !invite) return;
+    activeInviteId = invite.id;
+    submissionCard.hidden = false;
+    if (submissionMeta) {
+      const statusLabel = inviteStatusLabel(invite);
+      submissionMeta.textContent = `${invite.eventName || "Event"} • ${portalFormatDateValue(invite.eventDate)} • ${usd(Math.max(0, toFiniteNumber(invite.fee, 0)))} • ${statusLabel}`;
+    }
+    if (submissionForm.elements?.inviteId) submissionForm.elements.inviteId.value = activeInviteId;
+    if (submissionForm.elements?.videoUrl) submissionForm.elements.videoUrl.value = invite.submission?.videoUrl || "";
+    if (submissionForm.elements?.imageUrl) submissionForm.elements.imageUrl.value = invite.submission?.imageUrl || "";
+    if (submissionForm.elements?.message) submissionForm.elements.message.value = invite.submission?.message || "";
+    const status = inviteStatusLabel(invite).toLowerCase();
+    const isLocked = status.includes("approved") || status.includes("rejected") || status.includes("declined");
+    submissionForm.querySelectorAll("input, textarea, button").forEach((field) => {
+      if (field.name === "inviteId") return;
+      field.disabled = isLocked;
+    });
+    if (submissionStatus) {
+      if (isLocked) {
+        submissionStatus.textContent = `Submission ${status}.`;
+      } else if (status.includes("submitted")) {
+        submissionStatus.textContent = "Submission sent. You can update content before the promoter responds.";
+      } else {
+        submissionStatus.textContent = "";
+      }
+    }
+    submissionCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function applyInfluencerBankForm(profile = {}) {
+    if (!bankForm) return;
+    if (bankForm.elements?.bankName) bankForm.elements.bankName.value = String(profile?.bankName || "");
+    if (bankForm.elements?.bankAddress) bankForm.elements.bankAddress.value = String(profile?.bankAddress || "");
+    if (bankForm.elements?.city) bankForm.elements.city.value = String(profile?.city || "");
+    if (bankForm.elements?.stateProvince) bankForm.elements.stateProvince.value = String(profile?.stateProvince || "");
+    if (bankForm.elements?.country) bankForm.elements.country.value = String(profile?.country || "");
+    if (bankForm.elements?.accountHolderName) bankForm.elements.accountHolderName.value = String(profile?.accountHolderName || "");
+    if (bankForm.elements?.bankAccountNumber) bankForm.elements.bankAccountNumber.value = String(profile?.bankAccountNumber || "");
+    if (bankForm.elements?.routingNumber) bankForm.elements.routingNumber.value = String(profile?.routingNumber || "");
+    if (bankForm.elements?.swiftCode) bankForm.elements.swiftCode.value = String(profile?.swiftCode || "");
+  }
+
   function updateInfluencerKpis() {
-    const inviteCount = invites.filter((item) => !String(item?.status || "").toLowerCase().includes("declined")).length;
+    const inviteCount = invites.filter((item) => !isInviteClosed(item?.status)).length;
     const codeCount = promoCodes.length;
     const sales = promoCodes.reduce((sum, item) => sum + Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))), 0);
     const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
     const reach = followers + (sales * 250);
+    const revenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0);
     const values = {
       invites: inviteCount.toLocaleString(),
       codes: codeCount.toLocaleString(),
       sales: sales.toLocaleString(),
+      revenue: usd(revenue),
       reach: reach.toLocaleString()
     };
     Object.entries(values).forEach(([key, value]) => {
@@ -4441,15 +4526,53 @@ function setupInfluencerPortal() {
   function renderInfluencerTables() {
     if (invitesBody) {
       invitesBody.innerHTML = invites.length
-        ? invites.map((item) => `
+        ? invites.map((item) => {
+          const statusLabel = inviteStatusLabel(item);
+          const statusValue = statusLabel.toLowerCase();
+          const requestId = portalEscapeHtml(item?.id || "");
+          let actions = `<span class="muted">—</span>`;
+          if (statusValue.includes("pending")) {
+            actions = `
+              <div class="event-action-row">
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="accept" data-request-id="${requestId}">Accept</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="decline" data-request-id="${requestId}">Decline</button>
+              </div>
+            `;
+          } else if (statusValue.includes("accepted")) {
+            actions = `
+              <div class="event-action-row">
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="submit" data-request-id="${requestId}">Submit Content</button>
+              </div>
+            `;
+          } else if (statusValue.includes("submitted")) {
+            actions = `
+              <div class="event-action-row">
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="view" data-request-id="${requestId}">View</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="approve" data-request-id="${requestId}">Mark Approved</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="reject" data-request-id="${requestId}">Mark Rejected</button>
+              </div>
+            `;
+          } else if (statusValue.includes("approved")) {
+            actions = `
+              <div class="event-action-row">
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="view" data-request-id="${requestId}">View</button>
+              </div>
+            `;
+          } else if (statusValue.includes("declined") || statusValue.includes("rejected")) {
+            actions = `<span class="muted">Closed</span>`;
+          }
+          return `
           <tr>
             <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
             <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
             <td>${portalEscapeHtml(item?.requester || "Campaign Team")}</td>
-            <td><span class="status-pill ${portalStatusPillClass(item?.status || "Pending")}">${portalEscapeHtml(item?.status || "Pending")}</span></td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.fee, 0)))}</td>
+            <td><span class="status-pill ${portalStatusPillClass(statusLabel)}">${portalEscapeHtml(statusLabel)}</span></td>
+            <td>${actions}</td>
           </tr>
-        `).join("")
-        : `<tr><td colspan="4">No invites yet.</td></tr>`;
+        `;
+        }).join("")
+        : `<tr><td colspan="6">No invites yet.</td></tr>`;
     }
     if (codesBody) {
       codesBody.innerHTML = promoCodes.length
@@ -4468,11 +4591,13 @@ function setupInfluencerPortal() {
     const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
     const reach = followers + (sales * 250);
     const clicks = Math.round(reach * 0.09);
+    const revenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0);
     if (reportsBody) {
       reportsBody.innerHTML = `
         <tr><td>Reach</td><td>${reach.toLocaleString()}</td></tr>
         <tr><td>Clicks</td><td>${clicks.toLocaleString()}</td></tr>
         <tr><td>Ticket Sales</td><td>${sales.toLocaleString()}</td></tr>
+        <tr><td>Revenue</td><td>${usd(revenue)}</td></tr>
       `;
     }
     updateInfluencerKpis();
@@ -4492,6 +4617,7 @@ function setupInfluencerPortal() {
       if (profileForm.elements?.followers) profileForm.elements.followers.value = String(Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0))));
       if (profileForm.elements?.rates) profileForm.elements.rates.value = String(influencerProfileData?.rates || "");
     }
+    applyInfluencerBankForm(influencerProfileData);
     renderInfluencerTables();
   }
 
@@ -4526,7 +4652,74 @@ function setupInfluencerPortal() {
         ? response.profile.data
         : payloadData;
       setStatus(profileStatus, "Influencer profile saved.");
+      applyInfluencerBankForm(influencerProfileData);
       renderInfluencerTables();
+    });
+  }
+
+  if (bankForm && bankStatus) {
+    bankForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!bankForm.reportValidity()) return;
+      const formData = new FormData(bankForm);
+      const payloadData = {
+        ...influencerProfileData,
+        bankName: String(formData.get("bankName") || "").trim(),
+        bankAddress: String(formData.get("bankAddress") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        stateProvince: String(formData.get("stateProvince") || "").trim(),
+        country: String(formData.get("country") || "").trim(),
+        accountHolderName: String(formData.get("accountHolderName") || "").trim(),
+        bankAccountNumber: String(formData.get("bankAccountNumber") || "").trim(),
+        routingNumber: String(formData.get("routingNumber") || "").trim(),
+        swiftCode: String(formData.get("swiftCode") || "").trim()
+      };
+      const profileName = payloadData.name || influencerProfileData?.name || authUser?.name || "Influencer";
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "influencer",
+          name: profileName,
+          email: authEmail,
+          data: payloadData
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok || !response?.profile) {
+        setStatus(bankStatus, response?.error || "Unable to save bank details right now.", true);
+        return;
+      }
+      influencerProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : payloadData;
+      setStatus(bankStatus, "Bank details saved.");
+      renderInfluencerTables();
+    });
+  }
+
+  if (submissionForm && submissionStatus) {
+    submissionForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!submissionForm.reportValidity()) return;
+      const formData = new FormData(submissionForm);
+      const inviteId = String(formData.get("inviteId") || "").trim();
+      const invite = invites.find((item) => item.id === inviteId);
+      if (!invite) {
+        setStatus(submissionStatus, "Select a valid request to submit.", true);
+        return;
+      }
+      invite.submission = {
+        videoUrl: String(formData.get("videoUrl") || "").trim(),
+        imageUrl: String(formData.get("imageUrl") || "").trim(),
+        message: String(formData.get("message") || "").trim(),
+        submittedAt: new Date().toISOString()
+      };
+      invite.status = "Submitted";
+      persistInfluencerData();
+      setStatus(submissionStatus, "Submission sent to promoter.");
+      renderInfluencerTables();
+      openSubmissionCard(invite);
     });
   }
 
@@ -4559,6 +4752,50 @@ function setupInfluencerPortal() {
       renderInfluencerTables();
     });
   }
+
+  root.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-influencer-request-action]");
+    if (!actionButton) return;
+    const action = String(actionButton.dataset.influencerRequestAction || "").trim().toLowerCase();
+    const requestId = String(actionButton.dataset.requestId || "").trim();
+    if (!requestId) return;
+    const invite = invites.find((item) => item.id === requestId);
+    if (!invite) return;
+
+    if (action === "accept") {
+      invite.status = "Accepted";
+      setStatus(invitesStatus, `Accepted invite for ${invite.eventName}.`);
+    }
+    if (action === "decline") {
+      invite.status = "Declined";
+      setStatus(invitesStatus, `Declined invite for ${invite.eventName}.`);
+    }
+    if (action === "submit") {
+      openSubmissionCard(invite);
+      return;
+    }
+    if (action === "view") {
+      openSubmissionCard(invite);
+      return;
+    }
+    if (action === "approve") {
+      if (!invite.submission?.videoUrl || !invite.submission?.imageUrl) {
+        setStatus(invitesStatus, "Submission required before promoter approval.", true);
+        return;
+      }
+      invite.status = "Approved";
+      invite.paidAmount = Math.max(0, toFiniteNumber(invite.fee, 0));
+      invite.decisionAt = new Date().toISOString();
+      setStatus(invitesStatus, `Promoter approved ${invite.eventName}.`);
+    }
+    if (action === "reject") {
+      invite.status = "Rejected";
+      invite.decisionAt = new Date().toISOString();
+      setStatus(invitesStatus, `Promoter rejected ${invite.eventName}.`, true);
+    }
+    persistInfluencerData();
+    renderInfluencerTables();
+  });
 
   if (sidebarToggle) {
     sidebarToggle.addEventListener("click", () => {

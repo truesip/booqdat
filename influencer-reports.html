@@ -56,6 +56,7 @@
       <nav class="promoter-sidebar-nav">
         <a href="influencer-dashboard.html">Dashboard</a>
         <a href="influencer-profile.html">My Profile</a>
+        <a href="influencer-settings.html">Settings</a>
         <a href="influencer-invites.html">Event Invites & Requests</a>
         <a href="influencer-promo-codes.html">Promo Codes I Created</a>
         <a href="influencer-reports.html">Performance Reports</a>
@@ -70,6 +71,7 @@
           <article class="promoter-kpi-card"><span>Active Invites</span><strong data-influencer-kpi="invites">0</strong></article>
           <article class="promoter-kpi-card"><span>Promo Codes</span><strong data-influencer-kpi="codes">0</strong></article>
           <article class="promoter-kpi-card"><span>Ticket Sales</span><strong data-influencer-kpi="sales">0</strong></article>
+          <article class="promoter-kpi-card"><span>Revenue Earned</span><strong data-influencer-kpi="revenue">$0</strong></article>
           <article class="promoter-kpi-card"><span>Estimated Reach</span><strong data-influencer-kpi="reach">0</strong></article>
         </div>
       </section>
@@ -86,9 +88,104 @@
         </form>
         <p id="influencer-profile-status" class="status"></p>
       </section>
+      <section class="promoter-section" id="influencer-settings">
+        <h2>Settings</h2>
+        <article class="promoter-card">
+          <h3>Bank Transfer Details</h3>
+          <form id="influencer-bank-form" class="stack">
+            <label>
+              Bank Name
+              <input name="bankName" type="text" required placeholder="Global Bank Plc">
+            </label>
+            <label>
+              Bank Address
+              <input name="bankAddress" type="text" required placeholder="123 Finance Street">
+            </label>
+            <div class="split">
+              <label>
+                City
+                <input name="city" type="text" required placeholder="Lagos">
+              </label>
+              <label>
+                Province / State
+                <input name="stateProvince" type="text" required placeholder="Lagos State">
+              </label>
+            </div>
+            <label>
+              Country
+              <input name="country" type="text" required placeholder="Nigeria">
+            </label>
+            <label>
+              Account Holder Name
+              <input name="accountHolderName" type="text" required placeholder="Business account holder">
+            </label>
+            <label>
+              Bank Account Number
+              <input name="bankAccountNumber" type="text" required placeholder="0123456789">
+            </label>
+            <div class="split">
+              <label>
+                Routing Number
+                <input name="routingNumber" type="text" required placeholder="110000000">
+              </label>
+              <label>
+                Swift Code
+                <input name="swiftCode" type="text" required placeholder="BOFAUS3N">
+              </label>
+            </div>
+            <button class="btn btn-primary" type="submit">Save Bank Details</button>
+          </form>
+          <p id="influencer-bank-status" class="status"></p>
+        </article>
+      </section>
       <section class="promoter-section" id="influencer-invites">
-        <h2>Event Invites & Requests</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Date</th><th>Requester</th><th>Status</th></tr></thead><tbody id="influencer-invites-body"><tr><td colspan="4">No invites yet.</td></tr></tbody></table></div>
+        <div class="promoter-section-head">
+          <div>
+            <h2>Event Invites & Requests</h2>
+            <p class="muted">Promoters send paid requests for event promotion. Accept, submit content, and track approvals.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Date</th>
+                <th>Promoter</th>
+                <th>Fee</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="influencer-invites-body"><tr><td colspan="6">No invites yet.</td></tr></tbody>
+          </table>
+        </div>
+        <p id="influencer-invites-status" class="status"></p>
+        <article class="promoter-card" id="influencer-submission-card" hidden>
+          <div class="promoter-section-head">
+            <div>
+              <h3>Submit Promo Content</h3>
+              <p id="influencer-submission-meta" class="muted"></p>
+            </div>
+          </div>
+          <form id="influencer-submission-form" class="stack">
+            <input name="inviteId" type="hidden">
+            <label>
+              Video URL
+              <input name="videoUrl" type="url" required placeholder="https://example.com/video">
+            </label>
+            <label>
+              Image URL
+              <input name="imageUrl" type="url" required placeholder="https://example.com/image">
+            </label>
+            <label>
+              Message to promoter
+              <textarea name="message" rows="3" placeholder="Share campaign notes or posting schedule."></textarea>
+            </label>
+            <button class="btn btn-primary" type="submit">Submit to Promoter</button>
+          </form>
+          <p id="influencer-submission-status" class="status"></p>
+        </article>
       </section>
       <section class="promoter-section" id="influencer-promo-codes">
         <h2>Promo Codes I Created</h2>
@@ -102,7 +199,7 @@
       </section>
       <section class="promoter-section" id="influencer-reports">
         <h2>Performance Reports</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody id="influencer-reports-body"><tr><td>Reach</td><td>0</td></tr><tr><td>Clicks</td><td>0</td></tr><tr><td>Ticket Sales</td><td>0</td></tr></tbody></table></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody id="influencer-reports-body"><tr><td>Reach</td><td>0</td></tr><tr><td>Clicks</td><td>0</td></tr><tr><td>Ticket Sales</td><td>0</td></tr><tr><td>Revenue</td><td>$0</td></tr></tbody></table></div>
       </section>
     </section>
   </main>
