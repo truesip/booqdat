@@ -46,6 +46,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "venue-booking-requests.html": ["venue", "admin"],
   "venue-bookings-history.html": ["venue", "admin"],
   "venue-earnings.html": ["venue", "admin"],
+  "venue-payout-history.html": ["venue", "admin"],
   "venue-settings.html": ["venue", "admin"],
   "host-dashboard.html": ["event_host", "admin"],
   "host-events.html": ["event_host", "admin"],
@@ -106,6 +107,7 @@ const VENUE_SECTION_BY_PAGE = {
   "venue-booking-requests.html": "venue-booking-requests",
   "venue-bookings-history.html": "venue-bookings-history",
   "venue-earnings.html": "venue-earnings",
+  "venue-payout-history.html": "venue-earnings",
   "venue-settings.html": "venue-settings"
 };
 const HOST_SECTION_BY_PAGE = {
@@ -2938,19 +2940,31 @@ function setupVenuePortal() {
   const profileStatus = root.querySelector("#venue-profile-status");
   const settingsForm = root.querySelector("#venue-settings-form");
   const settingsStatus = root.querySelector("#venue-settings-status");
+  const venueImageInput = root.querySelector("#venue-image-uploads");
+  const venueImagePreview = root.querySelector("#venue-image-preview");
   const bookingRequestsBody = root.querySelector("#venue-booking-requests-body");
   const bookingHistoryBody = root.querySelector("#venue-booking-history-body");
   const earningsSummary = root.querySelector("#venue-earnings-summary");
   const earningsBody = root.querySelector("#venue-earnings-body");
   const blockedDateInput = root.querySelector("#venue-block-date");
   const blockedDatesList = root.querySelector("#venue-calendar-blocked");
+  const calendarGrid = root.querySelector("#venue-calendar-grid");
+  const calendarLabel = root.querySelector("[data-venue-calendar-label]");
+  const calendarPrevButton = root.querySelector("[data-venue-calendar-prev]");
+  const calendarNextButton = root.querySelector("[data-venue-calendar-next]");
+  const calendarStatus = root.querySelector("#venue-calendar-status");
   const addBlockedDateButton = root.querySelector("[data-venue-block-date]");
   const sidebarToggle = root.querySelector("[data-venue-sidebar-toggle]");
   const logoutButton = root.querySelector("[data-venue-logout]");
   const blockedDatesStorageKey = `booqdat_venue_blocked_dates_${identityKey}`;
+  const MAX_VENUE_IMAGE_UPLOADS = 6;
+  const MAX_VENUE_IMAGE_BYTES = 2 * 1024 * 1024;
 
   let venueProfileData = {};
   let venueRequests = [];
+  let venueImageGallery = [];
+  let pendingVenueImages = [];
+  let calendarAnchorDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   let blockedDates = portalReadStorageJson(blockedDatesStorageKey, [])
     .map((item) => String(item || "").trim())
     .filter(Boolean);
@@ -2968,23 +2982,140 @@ function setupVenuePortal() {
       .filter(Boolean);
   }
 
+  function normalizeVenueImages(value) {
+    return normalizeImageList(value).filter(Boolean).slice(0, MAX_VENUE_IMAGE_UPLOADS);
+  }
+
+  function renderVenueImagePreview(images = []) {
+    if (!venueImagePreview) return;
+    const list = Array.isArray(images) ? images.filter(Boolean) : [];
+    if (!list.length) {
+      venueImagePreview.innerHTML = `<p class="muted">No venue photos yet. Upload JPG or PNG images to show your space.</p>`;
+      return;
+    }
+    venueImagePreview.innerHTML = `
+      <div class="wizard-image-grid">
+        ${list.map((url, index) => `<img src="${portalEscapeHtml(url)}" alt="Venue photo ${index + 1}" loading="lazy">`).join("")}
+      </div>
+    `;
+  }
+
+  function readVenueImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Unable to read image file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function collectVenueUploadedImages() {
+    if (!venueImageInput || !("files" in venueImageInput)) return { ok: true, images: [] };
+    const files = Array.from(venueImageInput.files || [])
+      .filter((file) => String(file?.type || "").toLowerCase().startsWith("image/"))
+      .slice(0, MAX_VENUE_IMAGE_UPLOADS);
+    for (const file of files) {
+      if (Number(file?.size || 0) > MAX_VENUE_IMAGE_BYTES) {
+        return { ok: false, error: `"${file.name}" exceeds 2MB. Please upload a smaller image.` };
+      }
+    }
+    try {
+      const images = await Promise.all(files.map((file) => readVenueImageFileAsDataUrl(file)));
+      return { ok: true, images: normalizeVenueImages(images) };
+    } catch {
+      return { ok: false, error: "Unable to process uploaded images. Please try again." };
+    }
+  }
+
+  async function updateVenueImagePreviewFromUploads() {
+    const result = await collectVenueUploadedImages();
+    if (!result.ok) {
+      if (profileStatus) setStatus(profileStatus, result.error, true);
+      return;
+    }
+    pendingVenueImages = result.images;
+    if (pendingVenueImages.length) {
+      renderVenueImagePreview(pendingVenueImages);
+    } else {
+      renderVenueImagePreview(venueImageGallery);
+    }
+  }
+
   function uniqueSortedDates(values) {
     return [...new Set((Array.isArray(values) ? values : []).map((item) => String(item || "").trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
   }
 
+  function toDateKey(value) {
+    if (!value) return "";
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+
+  function getBookedDates() {
+    const rows = Array.isArray(venueRequests) ? venueRequests : [];
+    const accepted = rows.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    return new Set(accepted.map((item) => toDateKey(item?.data?.eventDate || item?.eventDate)).filter(Boolean));
+  }
+
+  function renderVenueCalendar() {
+    if (!calendarGrid || !calendarLabel) return;
+    const bookedDates = getBookedDates();
+    const activeMonth = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth(), 1);
+    const year = activeMonth.getFullYear();
+    const month = activeMonth.getMonth();
+    calendarLabel.textContent = activeMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const firstOfMonth = new Date(year, month, 1);
+    const startOffset = (firstOfMonth.getDay() + 6) % 7;
+    const startDate = new Date(year, month, 1 - startOffset);
+    const todayKey = toDateKey(new Date());
+    const cells = dayLabels.map((label) => `<div class="venue-calendar-cell is-header">${label}</div>`);
+    for (let i = 0; i < 42; i += 1) {
+      const current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+      const dateKey = toDateKey(current);
+      const isCurrentMonth = current.getMonth() === month;
+      const isBooked = bookedDates.has(dateKey);
+      const isBlocked = blockedDates.includes(dateKey);
+      const classes = ["venue-calendar-cell"];
+      if (!isCurrentMonth) classes.push("is-muted");
+      if (dateKey === todayKey) classes.push("is-today");
+      if (isBooked) classes.push("is-booked");
+      else if (isBlocked) classes.push("is-blocked");
+      const statusLabel = isBooked ? "Booked" : isBlocked ? "Blocked" : "";
+      cells.push(`
+        <button class="${classes.join(" ")}" type="button" data-venue-date="${dateKey}" ${!isCurrentMonth ? "tabindex=\"-1\"" : ""}>
+          <span class="venue-calendar-date">${current.getDate()}</span>
+          ${statusLabel ? `<span class="venue-calendar-meta">${statusLabel}</span>` : "<span class=\"venue-calendar-meta\">&nbsp;</span>"}
+        </button>
+      `);
+    }
+    calendarGrid.innerHTML = cells.join("");
+  }
+
   function renderBlockedDates() {
     if (!blockedDatesList) return;
-    if (!blockedDates.length) {
+    const bookedDates = getBookedDates();
+    const merged = uniqueSortedDates([...blockedDates, ...bookedDates]);
+    if (!merged.length) {
       blockedDatesList.innerHTML = `<li class="muted">No blocked dates yet.</li>`;
       return;
     }
-    blockedDatesList.innerHTML = blockedDates.map((dateValue) => `
-      <li>
-        <strong>${portalEscapeHtml(portalFormatDateValue(dateValue))}</strong>
-        <button class="btn btn-secondary btn-sm" type="button" data-venue-unblock-date="${portalEscapeHtml(dateValue)}">Remove</button>
-      </li>
-    `).join("");
+    blockedDatesList.innerHTML = merged.map((dateValue) => {
+      const isBooked = bookedDates.has(dateValue);
+      return `
+        <li>
+          <strong>${portalEscapeHtml(portalFormatDateValue(dateValue))}</strong>
+          ${isBooked ? `<span class="status-pill approved">Booked</span>` : `<button class="btn btn-secondary btn-sm" type="button" data-venue-unblock-date="${portalEscapeHtml(dateValue)}">Remove</button>`}
+        </li>
+      `;
+    }).join("");
+    renderVenueCalendar();
   }
 
   function applyVenueProfileForm(profileData = {}) {
@@ -3008,6 +3139,9 @@ function setupVenuePortal() {
     if (profileForm.elements?.rules) profileForm.elements.rules.value = String(profileData?.rules || "");
     if (profileForm.elements?.cancellationPolicy) profileForm.elements.cancellationPolicy.value = String(profileData?.cancellationPolicy || "");
     if (profileForm.elements?.isPublished) profileForm.elements.isPublished.checked = profileData?.isPublished !== false;
+    venueImageGallery = normalizeVenueImages(profileData?.imageGallery || profileData?.images || []);
+    pendingVenueImages = [];
+    renderVenueImagePreview(venueImageGallery);
   }
 
   function applyVenueSettingsForm(profile = {}) {
@@ -3017,6 +3151,12 @@ function setupVenuePortal() {
     if (settingsForm.elements?.phone) settingsForm.elements.phone.value = String(profile?.phone || "");
     if (settingsForm.elements?.notifySales) settingsForm.elements.notifySales.checked = profile?.notifySales !== false;
     if (settingsForm.elements?.notifyPayouts) settingsForm.elements.notifyPayouts.checked = profile?.notifyPayouts !== false;
+    if (settingsForm.elements?.payoutBankName) settingsForm.elements.payoutBankName.value = String(profile?.payoutBankName || "");
+    if (settingsForm.elements?.payoutAccountHolder) settingsForm.elements.payoutAccountHolder.value = String(profile?.payoutAccountHolder || "");
+    if (settingsForm.elements?.payoutAccountNumber) settingsForm.elements.payoutAccountNumber.value = String(profile?.payoutAccountNumber || "");
+    if (settingsForm.elements?.payoutRoutingNumber) settingsForm.elements.payoutRoutingNumber.value = String(profile?.payoutRoutingNumber || "");
+    if (settingsForm.elements?.payoutSwiftCode) settingsForm.elements.payoutSwiftCode.value = String(profile?.payoutSwiftCode || "");
+    if (settingsForm.elements?.payoutBankAddress) settingsForm.elements.payoutBankAddress.value = String(profile?.payoutBankAddress || "");
   }
 
   function renderVenueTablesAndKpis() {
@@ -3128,6 +3268,8 @@ function setupVenuePortal() {
     if (pendingBadge && pendingCount > 0) {
       pendingBadge.setAttribute("title", `${pendingCount} pending booking request${pendingCount === 1 ? "" : "s"}`);
     }
+    renderBlockedDates();
+    renderVenueCalendar();
   }
 
   async function loadVenueProfile() {
@@ -3180,6 +3322,12 @@ function setupVenuePortal() {
       const capacity = Math.max(1, Math.floor(toFiniteNumber(formData.get("capacity"), 1)));
       const country = String(formData.get("country") || "").trim();
       const city = String(formData.get("city") || "").trim();
+      const uploadResult = await collectVenueUploadedImages();
+      if (!uploadResult.ok) {
+        setStatus(profileStatus, uploadResult.error, true);
+        return;
+      }
+      const imageGallery = uploadResult.images.length ? uploadResult.images : venueImageGallery;
       const payloadData = {
         ...venueProfileData,
         venueName,
@@ -3197,7 +3345,9 @@ function setupVenuePortal() {
         description: String(formData.get("description") || "").trim(),
         rules: String(formData.get("rules") || "").trim(),
         cancellationPolicy: String(formData.get("cancellationPolicy") || "").trim(),
-        isPublished: Boolean(formData.get("isPublished"))
+        isPublished: Boolean(formData.get("isPublished")),
+        imageGallery,
+        images: imageGallery
       };
       const response = await apiRequest("/portal/profile", {
         method: "POST",
@@ -3219,8 +3369,17 @@ function setupVenuePortal() {
       venueProfileData = response.profile?.data && typeof response.profile.data === "object"
         ? response.profile.data
         : payloadData;
+      venueImageGallery = normalizeVenueImages(venueProfileData?.imageGallery || venueProfileData?.images || imageGallery);
+      pendingVenueImages = [];
+      if (venueImageInput && "value" in venueImageInput) venueImageInput.value = "";
       applyVenueProfileForm(venueProfileData);
       setStatus(profileStatus, "Venue profile saved.");
+    });
+  }
+
+  if (venueImageInput) {
+    venueImageInput.addEventListener("change", () => {
+      void updateVenueImagePreviewFromUploads();
     });
   }
 
@@ -3239,7 +3398,13 @@ function setupVenuePortal() {
         data: {
           ...venueProfileData,
           contactName: String(formData.get("name") || "").trim(),
-          phone: String(formData.get("phone") || "").trim()
+          phone: String(formData.get("phone") || "").trim(),
+          payoutBankName: String(formData.get("payoutBankName") || "").trim(),
+          payoutAccountHolder: String(formData.get("payoutAccountHolder") || "").trim(),
+          payoutAccountNumber: String(formData.get("payoutAccountNumber") || "").trim(),
+          payoutRoutingNumber: String(formData.get("payoutRoutingNumber") || "").trim(),
+          payoutSwiftCode: String(formData.get("payoutSwiftCode") || "").trim(),
+          payoutBankAddress: String(formData.get("payoutBankAddress") || "").trim()
         }
       };
       const response = await apiRequest("/portal/profile", {
@@ -3267,6 +3432,7 @@ function setupVenuePortal() {
       portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
       blockedDateInput.value = "";
       renderBlockedDates();
+      renderVenueCalendar();
     });
   }
 
@@ -3276,6 +3442,27 @@ function setupVenuePortal() {
       const dateValue = String(removeBlockedDateButton.dataset.venueUnblockDate || "").trim();
       blockedDates = blockedDates.filter((item) => String(item || "").trim() !== dateValue);
       portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      renderBlockedDates();
+      return;
+    }
+    const calendarCell = event.target.closest("[data-venue-date]");
+    if (calendarCell) {
+      const dateKey = String(calendarCell.dataset.venueDate || "").trim();
+      if (!dateKey) return;
+      const bookedDates = getBookedDates();
+      if (bookedDates.has(dateKey)) {
+        if (calendarStatus) setStatus(calendarStatus, "This date is booked and cannot be unblocked.", true);
+        return;
+      }
+      if (blockedDates.includes(dateKey)) {
+        blockedDates = blockedDates.filter((item) => item !== dateKey);
+        portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+        if (calendarStatus) setStatus(calendarStatus, `Removed block for ${portalFormatDateValue(dateKey)}.`);
+      } else {
+        blockedDates = uniqueSortedDates([...blockedDates, dateKey]);
+        portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+        if (calendarStatus) setStatus(calendarStatus, `Blocked ${portalFormatDateValue(dateKey)}.`);
+      }
       renderBlockedDates();
       return;
     }
@@ -3312,6 +3499,19 @@ function setupVenuePortal() {
     await loadVenueRequests();
   });
 
+  if (calendarPrevButton) {
+    calendarPrevButton.addEventListener("click", () => {
+      calendarAnchorDate = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth() - 1, 1);
+      renderVenueCalendar();
+    });
+  }
+  if (calendarNextButton) {
+    calendarNextButton.addEventListener("click", () => {
+      calendarAnchorDate = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth() + 1, 1);
+      renderVenueCalendar();
+    });
+  }
+
   if (sidebarToggle) {
     sidebarToggle.addEventListener("click", () => {
       root.classList.toggle("sidebar-open");
@@ -3326,7 +3526,6 @@ function setupVenuePortal() {
 
   applyGenericPortalSectionView(root, activeSectionId);
   setGenericPortalSidebarActiveLink(root, venuePageName);
-  renderBlockedDates();
   renderVenueTablesAndKpis();
   void loadVenueProfile();
   void loadVenueRequests();

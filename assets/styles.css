@@ -1089,6 +1089,120 @@ blockquote cite {
   font-weight: 600;
 }
 
+.venue-calendar-card {
+  margin-top: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.9rem;
+}
+
+.venue-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+
+.venue-calendar-head strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.venue-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.venue-calendar-cell {
+  border: 1px solid #f3dfce;
+  background: #fff;
+  border-radius: 10px;
+  min-height: 70px;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  cursor: pointer;
+  font: inherit;
+}
+
+.venue-calendar-cell.is-header {
+  min-height: auto;
+  padding: 0.35rem;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #8a6149;
+  background: #fff8f1;
+  border: 1px dashed #f4c9aa;
+  cursor: default;
+}
+
+.venue-calendar-cell.is-muted {
+  opacity: 0.45;
+}
+
+.venue-calendar-cell.is-blocked {
+  background: #fff0e8;
+  border-color: #f4b88d;
+}
+
+.venue-calendar-cell.is-booked {
+  background: #ffe8d8;
+  border-color: #f59e0b;
+}
+
+.venue-calendar-cell.is-today {
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
+}
+
+.venue-calendar-date {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #4b2a1a;
+}
+
+.venue-calendar-meta {
+  font-size: 0.74rem;
+  color: #8a6149;
+}
+
+.venue-calendar-legend {
+  margin-top: 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+  color: #8a6149;
+}
+
+.venue-calendar-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.venue-calendar-dot.is-available {
+  background: #fff;
+  border: 1px solid #f3dfce;
+}
+
+.venue-calendar-dot.is-blocked {
+  background: #f97316;
+}
+
+.venue-calendar-dot.is-booked {
+  background: #f59e0b;
+}
+
 .promoter-shell {
   width: min(1280px, 96%);
   margin: 1.3rem auto 0;

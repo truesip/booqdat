@@ -60,6 +60,7 @@
         <a href="venue-booking-requests.html">Booking Requests</a>
         <a href="venue-bookings-history.html">Bookings History</a>
         <a href="venue-earnings.html">Earnings & Payouts</a>
+        <a href="venue-payout-history.html">Payout History</a>
         <a href="venue-settings.html">Settings</a>
       </nav>
       <div class="sidebar-footer">
@@ -93,6 +94,12 @@
             <label>Country<input name="country" type="text" required></label>
             <label>Google Maps Embed URL<input name="mapsEmbed" type="url"></label>
           </div>
+          <label>Venue Photos (up to 6 images, 2MB each)
+            <input id="venue-image-uploads" name="venueImageUploads" type="file" accept="image/*" multiple>
+          </label>
+          <div id="venue-image-preview" class="wizard-image-preview">
+            <p class="muted">No venue photos yet. Upload JPG or PNG images to show your space.</p>
+          </div>
           <div class="split">
             <label>Hourly Rate (USD)<input name="hourlyRate" type="number" min="0" step="1"></label>
             <label>Daily Rate (USD)<input name="dailyRate" type="number" min="0" step="1"></label>
@@ -117,7 +124,24 @@
           <label>Block Date<input id="venue-block-date" type="date"></label>
           <button class="btn btn-secondary" type="button" data-venue-block-date>Add Blocked Date</button>
         </div>
+        <div class="venue-calendar-card">
+          <div class="venue-calendar-head">
+            <button class="btn btn-secondary btn-sm" type="button" data-venue-calendar-prev>‹</button>
+            <div>
+              <strong data-venue-calendar-label>Month</strong>
+              <small class="muted">Click a date to block/unblock.</small>
+            </div>
+            <button class="btn btn-secondary btn-sm" type="button" data-venue-calendar-next>›</button>
+          </div>
+          <div id="venue-calendar-grid" class="venue-calendar-grid"></div>
+          <div class="venue-calendar-legend">
+            <span><span class="venue-calendar-dot is-available"></span>Available</span>
+            <span><span class="venue-calendar-dot is-blocked"></span>Blocked</span>
+            <span><span class="venue-calendar-dot is-booked"></span>Booked</span>
+          </div>
+        </div>
         <ul id="venue-calendar-blocked" class="admin-link-list"></ul>
+        <p id="venue-calendar-status" class="status"></p>
       </section>
       <section class="promoter-section" id="venue-booking-requests">
         <h2>Booking Requests</h2>
@@ -157,6 +181,21 @@
           <label>Phone<input name="phone" type="text"></label>
           <label class="checkbox-line"><input name="notifySales" type="checkbox" checked> Booking notifications</label>
           <label class="checkbox-line"><input name="notifyPayouts" type="checkbox" checked> Earnings notifications</label>
+          <div class="form-card">
+            <h3>Payout Bank Details</h3>
+            <div class="split">
+              <label>Bank Name<input name="payoutBankName" type="text" placeholder="Bank of America"></label>
+              <label>Account Holder Name<input name="payoutAccountHolder" type="text" placeholder="John Doe"></label>
+            </div>
+            <div class="split">
+              <label>Account Number<input name="payoutAccountNumber" type="text" inputmode="numeric" placeholder="••••••••"></label>
+              <label>Routing Number<input name="payoutRoutingNumber" type="text" inputmode="numeric" placeholder="123456789"></label>
+            </div>
+            <div class="split">
+              <label>SWIFT Code<input name="payoutSwiftCode" type="text" placeholder="BOFAUS3N"></label>
+              <label>Bank Address<input name="payoutBankAddress" type="text" placeholder="Bank address"></label>
+            </div>
+          </div>
           <button class="btn btn-primary" type="submit">Save Settings</button>
         </form>
         <p id="venue-settings-status" class="status"></p>
