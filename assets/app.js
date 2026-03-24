@@ -34,6 +34,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "promoter-events.html": ["promoter", "admin"],
   "promoter-create.html": ["promoter", "admin"],
   "promoter-analytics.html": ["promoter", "admin"],
+  "promoter-influencers.html": ["promoter", "admin"],
   "promoter-payouts.html": ["promoter", "admin"],
   "promoter-settings.html": ["promoter", "admin"],
   "promoter-support.html": ["promoter", "admin"],
@@ -97,6 +98,7 @@ const PROMOTER_SECTION_BY_PAGE = {
   "promoter-events.html": "promoter-events",
   "promoter-create.html": "promoter-create",
   "promoter-analytics.html": "promoter-analytics",
+  "promoter-influencers.html": "promoter-influencers",
   "promoter-payouts.html": "promoter-payouts",
   "promoter-settings.html": "promoter-settings",
   "promoter-support.html": "promoter-support"
@@ -437,6 +439,16 @@ function writeStoredEvents(events) {
     queueApiSync("events-empty", "/sync/events", { events: [] }, 150);
     return;
   }
+
+  const promoCodeFromUrl = String(url.searchParams.get("promo") || "").trim().toUpperCase();
+  const influencerHint = normalizeEmail(url.searchParams.get("inf") || "");
+  const promoCodes = readInfluencerPromoCodes();
+  const matchedPromo = promoCodeFromUrl
+    ? promoCodes.find((item) => item.code === promoCodeFromUrl && (!item.eventId || item.eventId === event.id))
+    : null;
+  const influencerEmail = matchedPromo?.influencerEmail || influencerHint;
+  const influencerName = matchedPromo?.influencerName || "";
+  const influencerCommissionPercent = matchedPromo ? Math.max(0, toFiniteNumber(matchedPromo.commissionPercent, 0)) : 0;
   filtered.forEach((event) => {
     const eventId = String(event?.id || "").trim();
     if (!eventId) return;
@@ -1645,6 +1657,11 @@ function setupPromoterDashboard() {
   const feedback = root.querySelector("#promoter-action-feedback");
   const topReferrersBody = root.querySelector("#top-referrers-body");
   const payoutHistoryBody = root.querySelector("#payout-history-body");
+  const influencerRequestForm = root.querySelector("#promoter-influencer-request-form");
+  const influencerRequestStatus = root.querySelector("#promoter-influencer-request-status");
+  const influencerRequestCommissionNote = root.querySelector("#promoter-influencer-commission-note");
+  const influencerRequestsBody = root.querySelector("#promoter-influencer-requests-body");
+  const influencerRequestsStatus = root.querySelector("#promoter-influencer-requests-status");
   const promoterLogoutButton = root.querySelector("[data-promoter-logout]");
 
   let currentStep = 1;
@@ -1883,6 +1900,8 @@ function setupPromoterDashboard() {
         ? normalizeImageList(event.imageGallery)
         : normalizeImageList(event.images),
       promoCodes: Array.isArray(event.promoCodes) ? event.promoCodes : [],
+      influencerCommissionEnabled: event?.influencerCommissionEnabled === true,
+      influencerCommissionPercent: Math.max(0, Math.min(100, toNumber(event?.influencerCommissionPercent, 0))),
       status: String(event.status || "Pending Approval"),
       ticketsSold,
       revenue: Math.max(0, toNumber(event.revenue, inferredRevenue)),
@@ -1900,6 +1919,20 @@ function setupPromoterDashboard() {
   }
 
   let promoterEvents = loadPromoterEvents();
+  let influencerRequests = readInfluencerRequests();
+
+  function promoterInfluencerRequests() {
+    const promoterEmail = currentPromoterEmail();
+    return influencerRequests.filter((request) => {
+      if (!promoterEmail) return true;
+      return normalizeEmail(request.promoterEmail) === promoterEmail;
+    });
+  }
+
+  function persistInfluencerRequests(nextRequests) {
+    influencerRequests = Array.isArray(nextRequests) ? nextRequests : [];
+    writeInfluencerRequests(influencerRequests);
+  }
 
   function persistEvents() {
     writePromoterDashboardEvents(promoterEvents);
@@ -2010,6 +2043,7 @@ function setupPromoterDashboard() {
             <div class="bar-track"><div class="bar-fill" style="width:${soldPct}%"></div></div>
           </div>
           <p class="promoter-meta"><strong>Revenue:</strong> ${usd(revenue)} • <strong>Net:</strong> ${usd(Math.round(revenue * 0.92))}</p>
+          <p class="promoter-meta"><strong>Influencer Commission:</strong> ${event.influencerCommissionEnabled ? `${event.influencerCommissionPercent}%` : "Disabled"}</p>
           <div class="event-action-row">
             <button class="btn btn-secondary" type="button" data-event-action="edit" data-event-id="${event.id}">Edit</button>
             <button class="btn btn-secondary" type="button" data-event-action="view" data-event-id="${event.id}">View Tickets</button>
@@ -2018,6 +2052,92 @@ function setupPromoterDashboard() {
             <button class="btn btn-secondary" type="button" data-event-action="pause" data-event-id="${event.id}" ${canTogglePause ? "" : "disabled"}>${pauseLabel}</button>
           </div>
         </article>
+      `;
+    }).join("");
+  }
+
+  function renderInfluencerRequestForm() {
+    if (!influencerRequestForm) return;
+    const select = influencerRequestForm.elements?.eventId;
+    if (!select) return;
+    const currentValue = String(select.value || "");
+    if (!promoterEvents.length) {
+      select.innerHTML = `<option value="">No events available</option>`;
+      if (influencerRequestCommissionNote) {
+        influencerRequestCommissionNote.textContent = "Create an event with influencer commission enabled to send requests.";
+      }
+      return;
+    }
+    select.innerHTML = promoterEvents.map((event) => {
+      const status = eventStatus(event);
+      return `<option value="${portalEscapeHtml(event.id)}">${portalEscapeHtml(event.title)} (${portalEscapeHtml(status)})</option>`;
+    }).join("");
+    if (currentValue) select.value = currentValue;
+    updateInfluencerCommissionNote(select.value);
+  }
+
+  function updateInfluencerCommissionNote(eventId) {
+    if (!influencerRequestCommissionNote) return;
+    const event = promoterEvents.find((item) => String(item.id) === String(eventId));
+    if (!event) {
+      influencerRequestCommissionNote.textContent = "Select an event to view commission settings.";
+      return;
+    }
+    if (!event.influencerCommissionEnabled || toNumber(event.influencerCommissionPercent, 0) <= 0) {
+      influencerRequestCommissionNote.textContent = "Commission is disabled for this event. Enable it in the event settings before sending requests.";
+      return;
+    }
+    influencerRequestCommissionNote.textContent = `Commission: ${event.influencerCommissionPercent}% on ticket sales from influencer promo codes.`;
+  }
+
+  function renderInfluencerRequestsTable() {
+    if (!influencerRequestsBody) return;
+    const rows = promoterInfluencerRequests()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    if (!rows.length) {
+      influencerRequestsBody.innerHTML = `<tr><td colspan="7">No influencer requests yet.</td></tr>`;
+      return;
+    }
+    influencerRequestsBody.innerHTML = rows.map((request) => {
+      const statusLabel = String(request.status || "Pending");
+      const statusValue = statusLabel.toLowerCase();
+      const commissionLabel = request.commissionEnabled ? `${request.commissionPercent}%` : "Disabled";
+      const videoLink = request.submission?.videoUrl
+        ? `<a href="${portalEscapeHtml(request.submission.videoUrl)}" target="_blank" rel="noopener">Video</a>`
+        : "—";
+      const imageLink = request.submission?.imageUrl
+        ? `<a href="${portalEscapeHtml(request.submission.imageUrl)}" target="_blank" rel="noopener">Image</a>`
+        : "—";
+      const note = request.submission?.message ? portalEscapeHtml(request.submission.message) : "";
+      const revisionNote = request.revisionNote ? `<div class="muted">Revision: ${portalEscapeHtml(request.revisionNote)}</div>` : "";
+      let actions = `<span class="muted">Awaiting influencer</span>`;
+      if (statusValue.includes("submitted")) {
+        actions = `
+          <div class="event-action-row">
+            <button class="btn btn-secondary btn-sm" type="button" data-promoter-request-action="approve" data-request-id="${portalEscapeHtml(request.id)}">Approve</button>
+            <button class="btn btn-secondary btn-sm" type="button" data-promoter-request-action="revision" data-request-id="${portalEscapeHtml(request.id)}">Request Revision</button>
+            <button class="btn btn-secondary btn-sm" type="button" data-promoter-request-action="reject" data-request-id="${portalEscapeHtml(request.id)}">Decline</button>
+          </div>
+        `;
+      } else if (statusValue.includes("revision")) {
+        actions = `<span class="muted">Awaiting revision</span>`;
+      } else if (statusValue.includes("approved") || statusValue.includes("rejected") || statusValue.includes("declined")) {
+        actions = `<span class="muted">Closed</span>`;
+      }
+      return `
+        <tr>
+          <td>${portalEscapeHtml(request.eventName || "Event")}</td>
+          <td>${portalEscapeHtml(request.influencerName || request.influencerEmail || "Influencer")}</td>
+          <td>${usd(Math.max(0, toNumber(request.fee, 0)))}</td>
+          <td>${portalEscapeHtml(commissionLabel)}</td>
+          <td><span class="status-pill ${portalStatusPillClass(statusLabel)}">${portalEscapeHtml(statusLabel)}</span></td>
+          <td>
+            ${videoLink} / ${imageLink}
+            ${note ? `<div class="muted">${note}</div>` : ""}
+            ${revisionNote}
+          </td>
+          <td>${actions}</td>
+        </tr>
       `;
     }).join("");
   }
@@ -2039,6 +2159,8 @@ function setupPromoterDashboard() {
       .split(",")
       .map((code) => code.trim().toUpperCase())
       .filter(Boolean);
+    const commissionEnabled = Boolean(formData.get("enableInfluencerCommission"));
+    const commissionPercent = Math.max(0, Math.min(100, toNumber(formData.get("influencerCommissionPercent"), 0)));
 
     const ticketTypes = [
       {
@@ -2072,7 +2194,9 @@ function setupPromoterDashboard() {
       capacity: toNumber(formData.get("capacity"), 1),
       ticketTypes: ticketTypes.length ? ticketTypes : createDefaultTicketTypes(),
       banner: String(formData.get("banner") || "").trim(),
-      promoCodes: parsePromo
+      promoCodes: parsePromo,
+      influencerCommissionEnabled: commissionEnabled,
+      influencerCommissionPercent: commissionEnabled ? commissionPercent : 0
     };
   }
 
@@ -2092,6 +2216,7 @@ function setupPromoterDashboard() {
         <li><strong>Capacity:</strong> ${data.capacity.toLocaleString()}</li>
         <li><strong>Ticket Types:</strong> ${data.ticketTypes.map((ticket) => `${ticket.name} ${usd(ticket.price)} x ${ticket.quantity}`).join(" • ")}</li>
         <li><strong>Promo Codes:</strong> ${data.promoCodes.length ? data.promoCodes.join(", ") : "None"}</li>
+        <li><strong>Influencer Commission:</strong> ${data.influencerCommissionEnabled ? `${data.influencerCommissionPercent}%` : "Disabled"}</li>
         <li><strong>Starting Price:</strong> ${lowPrice > 0 ? usd(lowPrice) : "N/A"}</li>
       </ul>
     `;
@@ -2372,6 +2497,11 @@ function setupPromoterDashboard() {
     setWizardInput("vipEnd", vip.salesEnd || "");
     setWizardInput("banner", extractImageUrl(event.banner || event.bannerUrl || ""));
     setWizardInput("promoCodes", (event.promoCodes || []).join(", "));
+    setWizardInput("influencerCommissionPercent", toNumber(event.influencerCommissionPercent, 0));
+    const commissionToggle = wizardForm?.elements?.namedItem("enableInfluencerCommission");
+    if (commissionToggle && "checked" in commissionToggle) {
+      commissionToggle.checked = Boolean(event.influencerCommissionEnabled);
+    }
     const imageUploads = wizardForm?.elements?.namedItem("imageUploads");
     if (imageUploads && "value" in imageUploads) imageUploads.value = "";
     const existingImages = normalizeImageList(event.imageGallery).length
@@ -2473,6 +2603,7 @@ function setupPromoterDashboard() {
     syncMarketplace(finalEvent);
     updatePromoterKpis();
     renderEventCards();
+    renderInfluencerRequestForm();
     renderAnalytics();
     renderPayoutHistory();
 
@@ -2572,6 +2703,104 @@ function setupPromoterDashboard() {
     });
   }
 
+  if (influencerRequestForm && influencerRequestStatus) {
+    influencerRequestForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!influencerRequestForm.reportValidity()) return;
+      const formData = new FormData(influencerRequestForm);
+      const eventId = String(formData.get("eventId") || "").trim();
+      const influencerEmail = normalizeEmail(formData.get("influencerEmail") || "");
+      const influencerName = String(formData.get("influencerName") || "").trim();
+      const fee = Math.max(0, toNumber(formData.get("fee"), 0));
+      const selectedEvent = promoterEvents.find((item) => String(item.id) === eventId);
+      if (!selectedEvent) {
+        influencerRequestStatus.textContent = "Select a valid event to send a request.";
+        return;
+      }
+      if (!selectedEvent.influencerCommissionEnabled || toNumber(selectedEvent.influencerCommissionPercent, 0) <= 0) {
+        influencerRequestStatus.textContent = "Enable influencer commission on this event before sending requests.";
+        return;
+      }
+      if (!influencerEmail) {
+        influencerRequestStatus.textContent = "Influencer email is required.";
+        return;
+      }
+      const request = normalizeInfluencerRequestRecord({
+        eventId: selectedEvent.id,
+        eventName: selectedEvent.title,
+        eventDate: selectedEvent.date,
+        promoterEmail: currentPromoterEmail(),
+        promoterName: String(readAuthSession()?.user?.name || "Promoter"),
+        influencerEmail,
+        influencerName,
+        fee,
+        status: "Pending",
+        commissionEnabled: true,
+        commissionPercent: toNumber(selectedEvent.influencerCommissionPercent, 0),
+        createdAt: new Date().toISOString()
+      });
+      const nextRequests = [request, ...readInfluencerRequests()];
+      persistInfluencerRequests(nextRequests);
+      influencerRequestForm.reset();
+      renderInfluencerRequestForm();
+      renderInfluencerRequestsTable();
+      influencerRequestStatus.textContent = `Request sent to ${influencerEmail} for ${selectedEvent.title}.`;
+    });
+
+    const eventSelect = influencerRequestForm.elements?.eventId;
+    if (eventSelect && "addEventListener" in eventSelect) {
+      eventSelect.addEventListener("change", () => {
+        updateInfluencerCommissionNote(eventSelect.value);
+      });
+    }
+  }
+
+  root.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-promoter-request-action]");
+    if (!actionButton) return;
+    const action = String(actionButton.dataset.promoterRequestAction || "").trim().toLowerCase();
+    const requestId = String(actionButton.dataset.requestId || "").trim();
+    if (!requestId) return;
+    const requests = readInfluencerRequests();
+    const idx = requests.findIndex((item) => item.id === requestId);
+    if (idx < 0) return;
+    const request = requests[idx];
+    if (action === "approve") {
+      if (!request.submission?.videoUrl || !request.submission?.imageUrl) {
+        if (influencerRequestsStatus) {
+          influencerRequestsStatus.textContent = "Submission is missing content. Ask for a revision.";
+        }
+        return;
+      }
+      request.status = "Approved";
+      request.decisionAt = new Date().toISOString();
+      request.paidAmount = Math.max(0, toNumber(request.fee, 0));
+      request.revisionNote = "";
+      if (influencerRequestsStatus) {
+        influencerRequestsStatus.textContent = `Approved submission for ${request.eventName}.`;
+      }
+    }
+    if (action === "reject") {
+      request.status = "Rejected";
+      request.decisionAt = new Date().toISOString();
+      if (influencerRequestsStatus) {
+        influencerRequestsStatus.textContent = `Declined submission for ${request.eventName}.`;
+      }
+    }
+    if (action === "revision") {
+      const note = String(window.prompt("Request a revision (optional note):", request.revisionNote || "") || "").trim();
+      request.status = "Revision Requested";
+      request.revisionNote = note;
+      if (influencerRequestsStatus) {
+        influencerRequestsStatus.textContent = `Revision requested for ${request.eventName}.`;
+      }
+    }
+    request.updatedAt = new Date().toISOString();
+    requests[idx] = request;
+    persistInfluencerRequests(requests);
+    renderInfluencerRequestsTable();
+  });
+
   if (wizardNext) {
     wizardNext.addEventListener("click", () => {
       if (!validateStep(currentStep)) return;
@@ -2604,6 +2833,18 @@ function setupPromoterDashboard() {
       const hasSelectedFiles = Boolean(imageUploads && "files" in imageUploads && imageUploads.files?.length);
       if (!hasSelectedFiles) previewFromBannerValue();
     });
+  }
+  const commissionToggle = wizardForm?.elements?.namedItem("enableInfluencerCommission");
+  const commissionPercentInput = wizardForm?.elements?.namedItem("influencerCommissionPercent");
+  function updateCommissionToggleState() {
+    if (!commissionToggle || !commissionPercentInput || !("checked" in commissionToggle)) return;
+    const isEnabled = Boolean(commissionToggle.checked);
+    commissionPercentInput.disabled = !isEnabled;
+    if (!isEnabled) commissionPercentInput.value = "0";
+  }
+  if (commissionToggle && commissionPercentInput && "addEventListener" in commissionToggle) {
+    commissionToggle.addEventListener("change", updateCommissionToggleState);
+    updateCommissionToggleState();
   }
 
   root.querySelectorAll("[data-scroll-create]").forEach((button) => {
@@ -2875,6 +3116,8 @@ function setupPromoterDashboard() {
 
   updatePromoterKpis();
   renderEventCards();
+  renderInfluencerRequestForm();
+  renderInfluencerRequestsTable();
   renderAnalytics();
   renderPayoutHistory();
   renderWizardImagePreview([]);
@@ -2937,6 +3180,79 @@ function portalWriteStorageJson(key, value) {
   } catch {
     // ignore local storage write failures
   }
+}
+
+const INFLUENCER_REQUESTS_STORAGE_KEY = "booqdat_influencer_requests";
+function normalizeInfluencerRequestRecord(item = {}) {
+  const submission = item?.submission && typeof item.submission === "object" ? item.submission : {};
+  return {
+    id: String(item?.id || `inf-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+    eventId: String(item?.eventId || "").trim(),
+    eventName: String(item?.eventName || "").trim(),
+    eventDate: String(item?.eventDate || "").trim(),
+    promoterEmail: normalizeEmail(item?.promoterEmail || ""),
+    promoterName: String(item?.promoterName || "").trim(),
+    influencerEmail: normalizeEmail(item?.influencerEmail || ""),
+    influencerName: String(item?.influencerName || "").trim(),
+    fee: Math.max(0, toFiniteNumber(item?.fee, 0)),
+    status: String(item?.status || "Pending"),
+    submission: {
+      videoUrl: String(submission?.videoUrl || "").trim(),
+      imageUrl: String(submission?.imageUrl || "").trim(),
+      message: String(submission?.message || "").trim(),
+      submittedAt: submission?.submittedAt || ""
+    },
+    revisionNote: String(item?.revisionNote || "").trim(),
+    decisionAt: item?.decisionAt || "",
+    paidAmount: Math.max(0, toFiniteNumber(item?.paidAmount, 0)),
+    commissionEnabled: item?.commissionEnabled === true,
+    commissionPercent: Math.max(0, Math.min(100, toFiniteNumber(item?.commissionPercent, 0))),
+    promoCode: String(item?.promoCode || "").trim().toUpperCase(),
+    createdAt: item?.createdAt || new Date().toISOString(),
+    updatedAt: item?.updatedAt || ""
+  };
+}
+
+function readInfluencerRequests() {
+  return portalReadStorageJson(INFLUENCER_REQUESTS_STORAGE_KEY, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => normalizeInfluencerRequestRecord(item))
+    .filter((item) => item.id && item.eventName);
+}
+
+function writeInfluencerRequests(requests) {
+  const normalized = Array.isArray(requests) ? requests.map((item) => normalizeInfluencerRequestRecord(item)) : [];
+  portalWriteStorageJson(INFLUENCER_REQUESTS_STORAGE_KEY, normalized);
+}
+
+const INFLUENCER_PROMO_CODES_STORAGE_KEY = "booqdat_influencer_promo_codes";
+function normalizeInfluencerPromoCodeRecord(item = {}) {
+  return {
+    id: String(item?.id || `inf-code-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+    code: String(item?.code || "").trim().toUpperCase(),
+    requestId: String(item?.requestId || "").trim(),
+    eventId: String(item?.eventId || "").trim(),
+    eventName: String(item?.eventName || "").trim(),
+    influencerEmail: normalizeEmail(item?.influencerEmail || ""),
+    influencerName: String(item?.influencerName || "").trim(),
+    commissionPercent: Math.max(0, Math.min(100, toFiniteNumber(item?.commissionPercent, 0))),
+    sales: Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))),
+    revenue: Math.max(0, toFiniteNumber(item?.revenue, 0)),
+    status: String(item?.status || "Active"),
+    createdAt: item?.createdAt || new Date().toISOString()
+  };
+}
+
+function readInfluencerPromoCodes() {
+  return portalReadStorageJson(INFLUENCER_PROMO_CODES_STORAGE_KEY, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => normalizeInfluencerPromoCodeRecord(item))
+    .filter((item) => item.code);
+}
+
+function writeInfluencerPromoCodes(codes) {
+  const normalized = Array.isArray(codes) ? codes.map((item) => normalizeInfluencerPromoCodeRecord(item)) : [];
+  portalWriteStorageJson(INFLUENCER_PROMO_CODES_STORAGE_KEY, normalized);
 }
 
 function applyGenericPortalSectionView(root, activeSectionId) {
@@ -4378,9 +4694,6 @@ function setupInfluencerPortal() {
   const activeSectionId = INFLUENCER_SECTION_BY_PAGE[influencerPageName] || "influencer-home";
   const authUser = readAuthSession()?.user || {};
   const authEmail = normalizeEmail(authUser?.email);
-  const identityKey = authEmail || "default";
-  const codesStorageKey = `booqdat_influencer_codes_${identityKey}`;
-  const invitesStorageKey = `booqdat_influencer_invites_${identityKey}`;
   const profileForm = root.querySelector("#influencer-profile-form");
   const profileStatus = root.querySelector("#influencer-profile-status");
   const invitesBody = root.querySelector("#influencer-invites-body");
@@ -4400,42 +4713,44 @@ function setupInfluencerPortal() {
 
   let influencerProfileData = {};
   let activeInviteId = "";
-  let promoCodes = portalReadStorageJson(codesStorageKey, [])
-    .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      code: String(item?.code || "").trim().toUpperCase(),
-      commission: Math.max(0, Math.min(100, Math.floor(toFiniteNumber(item?.commission, 10)))),
-      sales: Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))),
-      status: String(item?.status || "Active"),
-      createdAt: item?.createdAt || new Date().toISOString()
-    }))
-    .filter((item) => item.code);
-  let invites = portalReadStorageJson(invitesStorageKey, [])
-    .filter((item) => item && typeof item === "object")
-    .map((item) => {
-      const submission = item?.submission && typeof item.submission === "object" ? item.submission : {};
-      return {
-        id: String(item?.id || `inf-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-        eventName: String(item?.eventName || "").trim(),
-        eventDate: String(item?.eventDate || "").trim(),
-        requester: String(item?.requester || "").trim(),
-        fee: Math.max(0, toFiniteNumber(item?.fee, 0)),
-        status: String(item?.status || "Pending"),
-        submission: {
-          videoUrl: String(submission?.videoUrl || "").trim(),
-          imageUrl: String(submission?.imageUrl || "").trim(),
-          message: String(submission?.message || "").trim(),
-          submittedAt: submission?.submittedAt || ""
-        },
-        decisionAt: item?.decisionAt || "",
-        paidAmount: Math.max(0, toFiniteNumber(item?.paidAmount, 0))
-      };
-    })
-    .filter((item) => item.eventName);
+  let promoCodes = [];
+  let invites = [];
+  function refreshInvites() {
+    const all = readInfluencerRequests();
+    invites = authEmail
+      ? all.filter((item) => normalizeEmail(item.influencerEmail) === authEmail)
+      : all;
+  }
 
-  function persistInfluencerData() {
-    portalWriteStorageJson(codesStorageKey, promoCodes);
-    portalWriteStorageJson(invitesStorageKey, invites);
+  function refreshPromoCodes() {
+    const all = readInfluencerPromoCodes();
+    promoCodes = authEmail
+      ? all.filter((item) => normalizeEmail(item.influencerEmail) === authEmail)
+      : all;
+  }
+
+  function persistInfluencerInvites(nextInvites) {
+    const normalized = Array.isArray(nextInvites) ? nextInvites.map((item) => normalizeInfluencerRequestRecord(item)) : [];
+    const all = readInfluencerRequests();
+    const byId = new Map(normalized.map((item) => [item.id, item]));
+    const merged = all.map((item) => byId.get(item.id) || item);
+    byId.forEach((value, id) => {
+      if (!merged.some((item) => item.id === id)) merged.unshift(value);
+    });
+    writeInfluencerRequests(merged);
+    invites = normalized;
+  }
+
+  function persistInfluencerPromoCodes(nextCodes) {
+    const normalized = Array.isArray(nextCodes) ? nextCodes.map((item) => normalizeInfluencerPromoCodeRecord(item)) : [];
+    const all = readInfluencerPromoCodes();
+    const byCode = new Map(normalized.map((item) => [item.code, item]));
+    const merged = all.map((item) => byCode.get(item.code) || item);
+    byCode.forEach((value, code) => {
+      if (!merged.some((item) => item.code === code)) merged.unshift(value);
+    });
+    writeInfluencerPromoCodes(merged);
+    promoCodes = normalized;
   }
 
   function setStatus(target, message, isError = false) {
@@ -4466,7 +4781,8 @@ function setupInfluencerPortal() {
     submissionCard.hidden = false;
     if (submissionMeta) {
       const statusLabel = inviteStatusLabel(invite);
-      submissionMeta.textContent = `${invite.eventName || "Event"} • ${portalFormatDateValue(invite.eventDate)} • ${usd(Math.max(0, toFiniteNumber(invite.fee, 0)))} • ${statusLabel}`;
+      const revisionNote = invite?.revisionNote ? ` • Revision: ${invite.revisionNote}` : "";
+      submissionMeta.textContent = `${invite.eventName || "Event"} • ${portalFormatDateValue(invite.eventDate)} • ${usd(Math.max(0, toFiniteNumber(invite.fee, 0)))} • ${statusLabel}${revisionNote}`;
     }
     if (submissionForm.elements?.inviteId) submissionForm.elements.inviteId.value = activeInviteId;
     if (submissionForm.elements?.videoUrl) submissionForm.elements.videoUrl.value = invite.submission?.videoUrl || "";
@@ -4481,8 +4797,14 @@ function setupInfluencerPortal() {
     if (submissionStatus) {
       if (isLocked) {
         submissionStatus.textContent = `Submission ${status}.`;
+      } else if (status.includes("revision")) {
+        submissionStatus.textContent = invite?.revisionNote
+          ? `Revision requested: ${invite.revisionNote}`
+          : "Revision requested. Please update your content.";
       } else if (status.includes("submitted")) {
         submissionStatus.textContent = "Submission sent. You can update content before the promoter responds.";
+      } else if (status.includes("accepted")) {
+        submissionStatus.textContent = "Request accepted. Submit your promo content when ready.";
       } else {
         submissionStatus.textContent = "";
       }
@@ -4509,7 +4831,9 @@ function setupInfluencerPortal() {
     const sales = promoCodes.reduce((sum, item) => sum + Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))), 0);
     const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
     const reach = followers + (sales * 250);
-    const revenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0);
+    const requestRevenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0);
+    const promoRevenue = promoCodes.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.revenue, 0)), 0);
+    const revenue = requestRevenue + promoRevenue;
     const values = {
       invites: inviteCount.toLocaleString(),
       codes: codeCount.toLocaleString(),
@@ -4523,13 +4847,49 @@ function setupInfluencerPortal() {
     });
   }
 
+  function approvedInvites() {
+    return invites.filter((item) => {
+      const status = inviteStatusLabel(item).toLowerCase();
+      return status.includes("approved") && !String(item?.promoCode || "").trim();
+    });
+  }
+
+  function updatePromoCodeCommission(requestId) {
+    if (!codeForm) return;
+    const commissionInput = codeForm.elements?.commissionPercent;
+    if (!commissionInput) return;
+    const match = approvedInvites().find((item) => item.id === requestId);
+    commissionInput.value = match ? String(Math.max(0, Math.floor(toFiniteNumber(match.commissionPercent, 0)))) : "0";
+  }
+
+  function renderPromoCodeFormOptions() {
+    if (!codeForm) return;
+    const select = codeForm.elements?.requestId;
+    if (!select) return;
+    const currentValue = String(select.value || "");
+    const approved = approvedInvites();
+    if (!approved.length) {
+      select.innerHTML = `<option value="">No approved events</option>`;
+      updatePromoCodeCommission("");
+      return;
+    }
+    select.innerHTML = approved.map((item) => `
+      <option value="${portalEscapeHtml(item.id)}">${portalEscapeHtml(item.eventName || "Event")} (${portalEscapeHtml(portalFormatDateValue(item.eventDate))})</option>
+    `).join("");
+    if (currentValue) select.value = currentValue;
+    updatePromoCodeCommission(select.value);
+  }
+
   function renderInfluencerTables() {
+    refreshInvites();
+    refreshPromoCodes();
     if (invitesBody) {
       invitesBody.innerHTML = invites.length
         ? invites.map((item) => {
           const statusLabel = inviteStatusLabel(item);
           const statusValue = statusLabel.toLowerCase();
           const requestId = portalEscapeHtml(item?.id || "");
+          const revisionNote = item?.revisionNote ? `<div class="muted">Revision: ${portalEscapeHtml(item.revisionNote)}</div>` : "";
           let actions = `<span class="muted">—</span>`;
           if (statusValue.includes("pending")) {
             actions = `
@@ -4538,18 +4898,17 @@ function setupInfluencerPortal() {
                 <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="decline" data-request-id="${requestId}">Decline</button>
               </div>
             `;
-          } else if (statusValue.includes("accepted")) {
+          } else if (statusValue.includes("accepted") || statusValue.includes("revision")) {
+            const submitLabel = statusValue.includes("revision") ? "Update Content" : "Submit Content";
             actions = `
               <div class="event-action-row">
-                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="submit" data-request-id="${requestId}">Submit Content</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="submit" data-request-id="${requestId}">${submitLabel}</button>
               </div>
             `;
           } else if (statusValue.includes("submitted")) {
             actions = `
               <div class="event-action-row">
                 <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="view" data-request-id="${requestId}">View</button>
-                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="approve" data-request-id="${requestId}">Mark Approved</button>
-                <button class="btn btn-secondary btn-sm" type="button" data-influencer-request-action="reject" data-request-id="${requestId}">Mark Rejected</button>
               </div>
             `;
           } else if (statusValue.includes("approved")) {
@@ -4565,10 +4924,10 @@ function setupInfluencerPortal() {
           <tr>
             <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
             <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
-            <td>${portalEscapeHtml(item?.requester || "Campaign Team")}</td>
+            <td>${portalEscapeHtml(item?.promoterName || item?.promoterEmail || "Promoter")}</td>
             <td>${usd(Math.max(0, toFiniteNumber(item?.fee, 0)))}</td>
             <td><span class="status-pill ${portalStatusPillClass(statusLabel)}">${portalEscapeHtml(statusLabel)}</span></td>
-            <td>${actions}</td>
+            <td>${actions}${revisionNote}</td>
           </tr>
         `;
         }).join("")
@@ -4576,22 +4935,33 @@ function setupInfluencerPortal() {
     }
     if (codesBody) {
       codesBody.innerHTML = promoCodes.length
-        ? promoCodes.map((item) => `
+        ? promoCodes.map((item) => {
+          const eventLabel = item?.eventName || "Event";
+          const link = item?.eventId
+            ? `${window.location.origin}/checkout.html?event=${encodeURIComponent(item.eventId)}&promo=${encodeURIComponent(item.code)}${item?.influencerEmail ? `&inf=${encodeURIComponent(item.influencerEmail)}` : ""}`
+            : "";
+          const linkMarkup = link ? `<a href="${link}" target="_blank" rel="noopener">Open</a>` : "—";
+          return `
           <tr>
+            <td>${portalEscapeHtml(eventLabel)}</td>
             <td>${portalEscapeHtml(item?.code || "")}</td>
-            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.commission, 0))).toLocaleString()}%</td>
+            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.commissionPercent, 0))).toLocaleString()}%</td>
             <td>${Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))).toLocaleString()}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.revenue, 0)))}</td>
             <td><span class="status-pill ${portalStatusPillClass(item?.status || "Active")}">${portalEscapeHtml(item?.status || "Active")}</span></td>
+            <td>${linkMarkup}</td>
           </tr>
-        `).join("")
-        : `<tr><td colspan="4">No promo codes created yet.</td></tr>`;
+        `;
+        }).join("")
+        : `<tr><td colspan="7">No promo codes created yet.</td></tr>`;
     }
 
     const sales = promoCodes.reduce((sum, item) => sum + Math.max(0, Math.floor(toFiniteNumber(item?.sales, 0))), 0);
     const followers = Math.max(0, Math.floor(toFiniteNumber(influencerProfileData?.followers, 0)));
     const reach = followers + (sales * 250);
     const clicks = Math.round(reach * 0.09);
-    const revenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0);
+    const revenue = invites.reduce((sum, item) => sum + inviteRevenueAmount(item), 0)
+      + promoCodes.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.revenue, 0)), 0);
     if (reportsBody) {
       reportsBody.innerHTML = `
         <tr><td>Reach</td><td>${reach.toLocaleString()}</td></tr>
@@ -4600,6 +4970,7 @@ function setupInfluencerPortal() {
         <tr><td>Revenue</td><td>${usd(revenue)}</td></tr>
       `;
     }
+    renderPromoCodeFormOptions();
     updateInfluencerKpis();
   }
 
@@ -4702,6 +5073,7 @@ function setupInfluencerPortal() {
     submissionForm.addEventListener("submit", (event) => {
       event.preventDefault();
       if (!submissionForm.reportValidity()) return;
+      refreshInvites();
       const formData = new FormData(submissionForm);
       const inviteId = String(formData.get("inviteId") || "").trim();
       const invite = invites.find((item) => item.id === inviteId);
@@ -4716,7 +5088,9 @@ function setupInfluencerPortal() {
         submittedAt: new Date().toISOString()
       };
       invite.status = "Submitted";
-      persistInfluencerData();
+      invite.revisionNote = "";
+      invite.updatedAt = new Date().toISOString();
+      persistInfluencerInvites(invites);
       setStatus(submissionStatus, "Submission sent to promoter.");
       renderInfluencerTables();
       openSubmissionCard(invite);
@@ -4724,31 +5098,68 @@ function setupInfluencerPortal() {
   }
 
   if (codeForm && codeStatus) {
+    const requestSelect = codeForm.elements?.requestId;
+    if (requestSelect && "addEventListener" in requestSelect) {
+      requestSelect.addEventListener("change", () => {
+        updatePromoCodeCommission(requestSelect.value);
+      });
+    }
     codeForm.addEventListener("submit", (event) => {
       event.preventDefault();
       if (!codeForm.reportValidity()) return;
+      refreshInvites();
+      refreshPromoCodes();
       const formData = new FormData(codeForm);
+      const requestId = String(formData.get("requestId") || "").trim();
       const code = String(formData.get("code") || "").trim().toUpperCase();
-      const commission = Math.max(0, Math.min(100, Math.floor(toFiniteNumber(formData.get("commission"), 10))));
+      if (!requestId) {
+        setStatus(codeStatus, "Select an approved event request first.", true);
+        return;
+      }
+      const invite = invites.find((item) => item.id === requestId);
+      if (!invite) {
+        setStatus(codeStatus, "Select a valid approved request.", true);
+        return;
+      }
+      const statusValue = inviteStatusLabel(invite).toLowerCase();
+      if (!statusValue.includes("approved")) {
+        setStatus(codeStatus, "Promo codes unlock after promoter approval.", true);
+        return;
+      }
+      if (String(invite.promoCode || "").trim()) {
+        setStatus(codeStatus, "A promo code already exists for this request.", true);
+        return;
+      }
       if (!code) {
         setStatus(codeStatus, "Promo code is required.", true);
         return;
       }
-      if (promoCodes.some((item) => String(item?.code || "").trim().toUpperCase() === code)) {
+      const existingCodes = readInfluencerPromoCodes();
+      if (existingCodes.some((item) => String(item?.code || "").trim().toUpperCase() === code)) {
         setStatus(codeStatus, "That promo code already exists.", true);
         return;
       }
-      promoCodes.unshift({
+      const promoRecord = normalizeInfluencerPromoCodeRecord({
         code,
-        commission,
+        requestId: invite.id,
+        eventId: invite.eventId,
+        eventName: invite.eventName,
+        influencerEmail: authEmail || invite.influencerEmail,
+        influencerName: invite.influencerName || authUser?.name || "",
+        commissionPercent: Math.max(0, Math.floor(toFiniteNumber(invite.commissionPercent, 0))),
         sales: 0,
+        revenue: 0,
         status: "Active",
         createdAt: new Date().toISOString()
       });
-      persistInfluencerData();
+      const nextCodes = [promoRecord, ...promoCodes.filter((item) => item.code !== code)];
+      persistInfluencerPromoCodes(nextCodes);
+      invite.promoCode = code;
+      invite.updatedAt = new Date().toISOString();
+      persistInfluencerInvites(invites);
       codeForm.reset();
-      if (codeForm.elements?.commission) codeForm.elements.commission.value = "10";
-      setStatus(codeStatus, `Promo code ${code} created.`);
+      renderPromoCodeFormOptions();
+      setStatus(codeStatus, `Promo code ${code} created for ${invite.eventName || "event"}.`);
       renderInfluencerTables();
     });
   }
@@ -4759,15 +5170,18 @@ function setupInfluencerPortal() {
     const action = String(actionButton.dataset.influencerRequestAction || "").trim().toLowerCase();
     const requestId = String(actionButton.dataset.requestId || "").trim();
     if (!requestId) return;
+    refreshInvites();
     const invite = invites.find((item) => item.id === requestId);
     if (!invite) return;
 
     if (action === "accept") {
       invite.status = "Accepted";
+      invite.updatedAt = new Date().toISOString();
       setStatus(invitesStatus, `Accepted invite for ${invite.eventName}.`);
     }
     if (action === "decline") {
       invite.status = "Declined";
+      invite.updatedAt = new Date().toISOString();
       setStatus(invitesStatus, `Declined invite for ${invite.eventName}.`);
     }
     if (action === "submit") {
@@ -4778,22 +5192,7 @@ function setupInfluencerPortal() {
       openSubmissionCard(invite);
       return;
     }
-    if (action === "approve") {
-      if (!invite.submission?.videoUrl || !invite.submission?.imageUrl) {
-        setStatus(invitesStatus, "Submission required before promoter approval.", true);
-        return;
-      }
-      invite.status = "Approved";
-      invite.paidAmount = Math.max(0, toFiniteNumber(invite.fee, 0));
-      invite.decisionAt = new Date().toISOString();
-      setStatus(invitesStatus, `Promoter approved ${invite.eventName}.`);
-    }
-    if (action === "reject") {
-      invite.status = "Rejected";
-      invite.decisionAt = new Date().toISOString();
-      setStatus(invitesStatus, `Promoter rejected ${invite.eventName}.`, true);
-    }
-    persistInfluencerData();
+    persistInfluencerInvites(invites);
     renderInfluencerTables();
   });
 
@@ -4811,7 +5210,6 @@ function setupInfluencerPortal() {
 
   applyGenericPortalSectionView(root, activeSectionId);
   setGenericPortalSidebarActiveLink(root, influencerPageName);
-  persistInfluencerData();
   renderInfluencerTables();
   void loadInfluencerProfile();
 }
@@ -6445,6 +6843,10 @@ function renderCheckout() {
     const subtotal = quantity * event.price;
     const fee = Math.round(subtotal * 0.08);
     const total = subtotal + fee;
+    const promoCode = matchedPromo ? matchedPromo.code : "";
+    const influencerCommissionAmount = matchedPromo
+      ? Math.max(0, Math.round(subtotal * (influencerCommissionPercent / 100)))
+      : 0;
     const ticketToken = `BQD-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Date.now().toString().slice(-5)}`;
     const authUser = readAuthSession()?.user;
     const role = normalizeRole(authUser?.role);
@@ -6486,7 +6888,15 @@ function renderCheckout() {
       paymentStatus: "Initiated",
       paymentProvider: "NYVAPAY",
       purchaseDate: new Date().toISOString(),
-      ticketToken
+      ticketToken,
+      promoCode,
+      promoRequestId: matchedPromo?.requestId || "",
+      influencerEmail: influencerEmail || "",
+      influencerName,
+      influencerCommissionPercent: influencerCommissionPercent || 0,
+      influencerCommissionAmount,
+      referrer: promoCode ? `Influencer: ${promoCode}` : "",
+      source: promoCode ? `Influencer: ${promoCode}` : ""
     };
 
     const successRedirectUrl = `${window.location.origin}/checkout.html?event=${encodeURIComponent(event.id)}&order=${encodeURIComponent(orderId)}&email=${encodeURIComponent(normalizedEmail)}&nyvapay=success`;
@@ -6523,9 +6933,23 @@ function renderCheckout() {
     }
 
     const orderRecord = paymentResponse.order && typeof paymentResponse.order === "object"
-      ? paymentResponse.order
+      ? { ...pendingOrder, ...paymentResponse.order }
       : pendingOrder;
     upsertBuyerOrder(orderRecord);
+
+    if (matchedPromo && promoCode) {
+      const allCodes = readInfluencerPromoCodes();
+      const idx = allCodes.findIndex((item) => item.code === promoCode);
+      if (idx >= 0) {
+        const updated = normalizeInfluencerPromoCodeRecord({
+          ...allCodes[idx],
+          sales: Math.max(0, toFiniteNumber(allCodes[idx]?.sales, 0)) + quantity,
+          revenue: Math.max(0, toFiniteNumber(allCodes[idx]?.revenue, 0)) + influencerCommissionAmount
+        });
+        allCodes[idx] = updated;
+        writeInfluencerPromoCodes(allCodes);
+      }
+    }
 
     const profileStore = readUserProfiles();
     profileStore[normalizedEmail] = {

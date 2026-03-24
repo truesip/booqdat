@@ -189,13 +189,41 @@
       </section>
       <section class="promoter-section" id="influencer-promo-codes">
         <h2>Promo Codes I Created</h2>
-        <form id="influencer-code-form" class="split">
-          <label>Code<input name="code" type="text" required></label>
-          <label>Commission %<input name="commission" type="number" min="0" max="100" step="1" value="10"></label>
+        <form id="influencer-code-form" class="stack">
+          <div class="split">
+            <label>
+              Approved Event
+              <select name="requestId" required></select>
+            </label>
+            <label>
+              Commission %
+              <input name="commissionPercent" type="number" min="0" max="100" step="1" readonly>
+            </label>
+          </div>
+          <label>
+            Promo Code
+            <input name="code" type="text" required placeholder="CODE10">
+          </label>
           <button class="btn btn-primary" type="submit">Create Code</button>
         </form>
+        <p class="muted">Promo codes unlock after the promoter approves your submission for that event.</p>
         <p id="influencer-code-status" class="status"></p>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Code</th><th>Commission</th><th>Sales</th><th>Status</th></tr></thead><tbody id="influencer-codes-body"><tr><td colspan="4">No promo codes created yet.</td></tr></tbody></table></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Code</th>
+                <th>Commission</th>
+                <th>Sales</th>
+                <th>Revenue</th>
+                <th>Status</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody id="influencer-codes-body"><tr><td colspan="7">No promo codes created yet.</td></tr></tbody>
+          </table>
+        </div>
       </section>
       <section class="promoter-section" id="influencer-reports">
         <h2>Performance Reports</h2>

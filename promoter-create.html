@@ -55,6 +55,7 @@
         <a href="promoter-events.html">My Events</a>
         <a href="promoter-create.html">Create Event</a>
         <a href="promoter-analytics.html">Analytics</a>
+        <a href="promoter-influencers.html">Influencer Requests</a>
         <a href="promoter-payouts.html">Payouts & Earnings</a>
         <a href="promoter-settings.html">Profile & Settings</a>
         <a href="promoter-support.html">Support</a>
@@ -468,6 +469,18 @@
                 Promo Codes (comma-separated)
                 <input name="promoCodes" type="text" placeholder="EARLY10,VIP20">
               </label>
+              <div class="promoter-card">
+                <h4>Influencer Commission</h4>
+                <label class="checkbox-line">
+                  <input type="checkbox" name="enableInfluencerCommission">
+                  Enable influencer commission for this event
+                </label>
+                <label>
+                  Commission %
+                  <input name="influencerCommissionPercent" type="number" min="0" max="100" step="1" value="10">
+                </label>
+                <p class="muted">Commission applies to ticket sales from approved influencer promo codes.</p>
+              </div>
               <p class="muted">Tip: Banner URL is optional. Leave it empty to use uploaded images or BOOQDAT default event styling.</p>
             </section>
 
@@ -522,6 +535,63 @@
             </div>
           </article>
         </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-influencers">
+        <div class="promoter-section-head">
+          <div>
+            <h2>Influencer Requests</h2>
+            <p class="muted">Send paid requests to influencers and approve completed content.</p>
+          </div>
+        </div>
+        <article class="promoter-card">
+          <h3>Send Request</h3>
+          <form id="promoter-influencer-request-form" class="stack">
+            <div class="split">
+              <label>
+                Event
+                <select name="eventId" required></select>
+              </label>
+              <label>
+                Influencer Email
+                <input name="influencerEmail" type="email" required placeholder="influencer@email.com">
+              </label>
+            </div>
+            <div class="split">
+              <label>
+                Influencer Name
+                <input name="influencerName" type="text" placeholder="Influencer name">
+              </label>
+              <label>
+                Request Fee (USD)
+                <input name="fee" type="number" min="0" step="1" required value="150">
+              </label>
+            </div>
+            <p id="promoter-influencer-commission-note" class="muted">Commission: —</p>
+            <button class="btn btn-primary" type="submit">Send Request</button>
+          </form>
+          <p id="promoter-influencer-request-status" class="status"></p>
+        </article>
+        <article class="promoter-card">
+          <h3>Requests & Submissions</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Influencer</th>
+                  <th>Fee</th>
+                  <th>Commission</th>
+                  <th>Status</th>
+                  <th>Submission</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="promoter-influencer-requests-body"><tr><td colspan="7">No influencer requests yet.</td></tr></tbody>
+            </table>
+          </div>
+          <p id="promoter-influencer-requests-status" class="status"></p>
+        </article>
       </section>
 
       <section class="promoter-section" id="promoter-payouts">
