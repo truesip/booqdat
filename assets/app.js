@@ -1658,6 +1658,8 @@ function setupPromoterDashboard() {
   const topReferrersBody = root.querySelector("#top-referrers-body");
   const payoutHistoryBody = root.querySelector("#payout-history-body");
   const influencerRequestForm = root.querySelector("#promoter-influencer-request-form");
+  const influencerSearchInput = root.querySelector("#promoter-influencer-search");
+  const influencerSearchResults = root.querySelector("#promoter-influencer-results");
   const influencerRequestStatus = root.querySelector("#promoter-influencer-request-status");
   const influencerRequestCommissionNote = root.querySelector("#promoter-influencer-commission-note");
   const influencerRequestsBody = root.querySelector("#promoter-influencer-requests-body");
@@ -2088,6 +2090,56 @@ function setupPromoterDashboard() {
       return;
     }
     influencerRequestCommissionNote.textContent = `Commission: ${event.influencerCommissionPercent}% on ticket sales from influencer promo codes.`;
+  }
+
+  function hasActiveInfluencerRequest(eventId, influencerEmail) {
+    if (!eventId || !influencerEmail) return false;
+    const normalizedEmail = normalizeEmail(influencerEmail);
+    const normalizedEventId = String(eventId);
+    return readInfluencerRequests().some((request) => {
+      const status = String(request?.status || "").toLowerCase();
+      const isClosed = status.includes("declined") || status.includes("rejected");
+      if (isClosed) return false;
+      return String(request?.eventId || "") === normalizedEventId
+        && normalizeEmail(request?.influencerEmail) === normalizedEmail;
+    });
+  }
+
+  function searchInfluencers(query) {
+    const term = String(query || "").trim().toLowerCase();
+    if (!term) return [];
+    return readInfluencerDirectory().filter((entry) => {
+      const haystack = `${entry.name} ${entry.email} ${entry.niche}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }
+
+  function renderInfluencerSearchResults(query = influencerSearchInput?.value) {
+    if (!influencerSearchResults) return;
+    const term = String(query || "").trim();
+    if (!term) {
+      influencerSearchResults.innerHTML = `<p class="muted">Search by name or email to find influencers.</p>`;
+      return;
+    }
+    const matches = searchInfluencers(term).slice(0, 6);
+    if (!matches.length) {
+      influencerSearchResults.innerHTML = `<p class="muted">No influencers found. Enter an email to send a new request.</p>`;
+      return;
+    }
+    const eventId = influencerRequestForm?.elements?.eventId?.value || "";
+    influencerSearchResults.innerHTML = matches.map((entry) => {
+      const hasRequest = hasActiveInfluencerRequest(eventId, entry.email);
+      const statusLabel = hasRequest ? "Request sent" : "Use";
+      return `
+        <div class="influencer-search-result">
+          <div>
+            <strong>${portalEscapeHtml(entry.name || "Influencer")}</strong>
+            <div class="influencer-search-meta">${portalEscapeHtml(entry.email)}${entry.niche ? ` • ${portalEscapeHtml(entry.niche)}` : ""}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" type="button" data-influencer-select="${portalEscapeHtml(entry.email)}" ${hasRequest ? "disabled" : ""}>${statusLabel}</button>
+        </div>
+      `;
+    }).join("");
   }
 
   function renderInfluencerRequestsTable() {
@@ -2725,6 +2777,10 @@ function setupPromoterDashboard() {
         influencerRequestStatus.textContent = "Influencer email is required.";
         return;
       }
+      if (hasActiveInfluencerRequest(eventId, influencerEmail)) {
+        influencerRequestStatus.textContent = "A request already exists for this influencer and event.";
+        return;
+      }
       const request = normalizeInfluencerRequestRecord({
         eventId: selectedEvent.id,
         eventName: selectedEvent.title,
@@ -2751,11 +2807,31 @@ function setupPromoterDashboard() {
     if (eventSelect && "addEventListener" in eventSelect) {
       eventSelect.addEventListener("change", () => {
         updateInfluencerCommissionNote(eventSelect.value);
+        renderInfluencerSearchResults();
       });
+    }
+
+    if (influencerSearchInput && "addEventListener" in influencerSearchInput) {
+      influencerSearchInput.addEventListener("input", () => {
+        renderInfluencerSearchResults();
+      });
+      renderInfluencerSearchResults();
     }
   }
 
   root.addEventListener("click", (event) => {
+    const selectButton = event.target.closest("[data-influencer-select]");
+    if (selectButton && influencerRequestForm) {
+      const email = String(selectButton.dataset.influencerSelect || "").trim();
+      if (influencerRequestForm.elements?.influencerEmail) {
+        influencerRequestForm.elements.influencerEmail.value = email;
+      }
+      const directoryEntry = readInfluencerDirectory().find((entry) => entry.email === normalizeEmail(email));
+      if (directoryEntry && influencerRequestForm.elements?.influencerName) {
+        influencerRequestForm.elements.influencerName.value = directoryEntry.name || "";
+      }
+      return;
+    }
     const actionButton = event.target.closest("[data-promoter-request-action]");
     if (!actionButton) return;
     const action = String(actionButton.dataset.promoterRequestAction || "").trim().toLowerCase();
@@ -3183,6 +3259,7 @@ function portalWriteStorageJson(key, value) {
 }
 
 const INFLUENCER_REQUESTS_STORAGE_KEY = "booqdat_influencer_requests";
+const INFLUENCER_DIRECTORY_STORAGE_KEY = "booqdat_influencer_directory";
 function normalizeInfluencerRequestRecord(item = {}) {
   const submission = item?.submission && typeof item.submission === "object" ? item.submission : {};
   return {
@@ -3213,6 +3290,40 @@ function normalizeInfluencerRequestRecord(item = {}) {
   };
 }
 
+function normalizeInfluencerDirectoryEntry(item = {}) {
+  return {
+    email: normalizeEmail(item?.email || item?.influencerEmail || ""),
+    name: String(item?.name || item?.influencerName || "").trim(),
+    niche: String(item?.niche || "").trim(),
+    followers: Math.max(0, Math.floor(toFiniteNumber(item?.followers, 0))),
+    rates: String(item?.rates || "").trim(),
+    updatedAt: item?.updatedAt || new Date().toISOString()
+  };
+}
+
+function readInfluencerDirectory() {
+  const entries = portalReadStorageJson(INFLUENCER_DIRECTORY_STORAGE_KEY, [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => normalizeInfluencerDirectoryEntry(item))
+    .filter((item) => item.email);
+  const byEmail = new Map(entries.map((item) => [item.email, item]));
+  return [...byEmail.values()];
+}
+
+function writeInfluencerDirectory(entries) {
+  const normalized = Array.isArray(entries) ? entries.map((item) => normalizeInfluencerDirectoryEntry(item)) : [];
+  portalWriteStorageJson(INFLUENCER_DIRECTORY_STORAGE_KEY, normalized);
+}
+
+function upsertInfluencerDirectoryEntry(entry) {
+  const normalized = normalizeInfluencerDirectoryEntry(entry);
+  if (!normalized.email) return;
+  const entries = readInfluencerDirectory();
+  const idx = entries.findIndex((item) => item.email === normalized.email);
+  if (idx >= 0) entries[idx] = { ...entries[idx], ...normalized, updatedAt: new Date().toISOString() };
+  else entries.unshift({ ...normalized, updatedAt: new Date().toISOString() });
+  writeInfluencerDirectory(entries);
+}
 function readInfluencerRequests() {
   return portalReadStorageJson(INFLUENCER_REQUESTS_STORAGE_KEY, [])
     .filter((item) => item && typeof item === "object")
@@ -4980,6 +5091,13 @@ function setupInfluencerPortal() {
       if (profileForm.elements?.rates) profileForm.elements.rates.value = String(influencerProfileData?.rates || "");
     }
     applyInfluencerBankForm(influencerProfileData);
+    upsertInfluencerDirectoryEntry({
+      email: authEmail,
+      name: influencerProfileData?.name || profile?.name || authUser?.name || "",
+      niche: influencerProfileData?.niche || "",
+      followers: influencerProfileData?.followers ?? 0,
+      rates: influencerProfileData?.rates || ""
+    });
     renderInfluencerTables();
   }
 
@@ -5013,6 +5131,13 @@ function setupInfluencerPortal() {
       influencerProfileData = response.profile?.data && typeof response.profile.data === "object"
         ? response.profile.data
         : payloadData;
+      upsertInfluencerDirectoryEntry({
+        email: authEmail,
+        name: influencerProfileData?.name || payloadData.name || authUser?.name || "",
+        niche: influencerProfileData?.niche || payloadData.niche || "",
+        followers: influencerProfileData?.followers ?? payloadData.followers ?? 0,
+        rates: influencerProfileData?.rates || payloadData.rates || ""
+      });
       setStatus(profileStatus, "Influencer profile saved.");
       applyInfluencerBankForm(influencerProfileData);
       renderInfluencerTables();
@@ -5055,6 +5180,13 @@ function setupInfluencerPortal() {
       influencerProfileData = response.profile?.data && typeof response.profile.data === "object"
         ? response.profile.data
         : payloadData;
+      upsertInfluencerDirectoryEntry({
+        email: authEmail,
+        name: influencerProfileData?.name || payloadData.name || authUser?.name || "",
+        niche: influencerProfileData?.niche || "",
+        followers: influencerProfileData?.followers ?? 0,
+        rates: influencerProfileData?.rates || ""
+      });
       setStatus(bankStatus, "Bank details saved.");
       renderInfluencerTables();
     });

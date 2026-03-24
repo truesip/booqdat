@@ -1466,6 +1466,27 @@ blockquote cite {
   font-size: 0.81rem;
 }
 
+.influencer-search-results {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.influencer-search-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.influencer-search-meta {
+  color: #6a4c3d;
+  font-size: 0.86rem;
+}
+
 .admin-promoter-row {
   cursor: pointer;
 }
