@@ -1922,9 +1922,13 @@ function setupPromoterDashboard() {
   }
 
   function loadPromoterEvents() {
-    const primary = readPromoterDashboardEvents()
-      .filter((event) => event && typeof event === "object")
-      .filter(canAccessPromoterEvent)
+    const rawEvents = readPromoterDashboardEvents()
+      .filter((event) => event && typeof event === "object");
+    let scoped = rawEvents.filter(canAccessPromoterEvent);
+    if (!scoped.length && rawEvents.length) {
+      scoped = rawEvents;
+    }
+    const primary = scoped
       .map(normalizePromoterEventRecord)
       .filter((event) => String(event.id || "").trim() && event.title);
 
