@@ -54,6 +54,7 @@
         <a href="promoter-dashboard.html">Dashboard</a>
         <a href="promoter-events.html">My Events</a>
         <a href="promoter-create.html">Create Event</a>
+        <a href="promoter-venue-search.html">Venue Search & Requests</a>
         <a href="promoter-analytics.html">Analytics</a>
         <a href="promoter-influencers.html">Influencer Requests</a>
         <a href="promoter-payouts.html">Payouts & Earnings</a>
@@ -498,6 +499,45 @@
             </div>
           </form>
         </article>
+      </section>
+
+      <section class="promoter-section" id="promoter-venues">
+        <div class="promoter-section-head">
+          <div>
+            <h2>Venue Search & Requests</h2>
+            <p>Search venues, check availability, and request bookings directly from your promoter dashboard.</p>
+          </div>
+        </div>
+        <form id="promoter-venue-filter-form" class="split">
+          <label>Event Date<input name="eventDate" type="date"></label>
+          <label>City<input name="city" type="text"></label>
+          <label>Country<input name="country" type="text"></label>
+          <label>Min Capacity<input name="minCapacity" type="number" min="0" step="1"></label>
+          <label>Max Price (USD)<input name="maxPrice" type="number" min="0" step="1"></label>
+          <button class="btn btn-secondary" type="submit">Search Venues</button>
+        </form>
+        <p id="promoter-venue-search-status" class="status"></p>
+        <div id="promoter-venue-results" class="promoter-events-grid"></div>
+
+        <h3>My Venue Requests</h3>
+        <p id="promoter-venue-requests-status" class="status"></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Date</th>
+                <th>Venue</th>
+                <th>Proposed Price</th>
+                <th>Status</th>
+                <th>Last Update</th>
+              </tr>
+            </thead>
+            <tbody id="promoter-venue-requests-body">
+              <tr><td colspan="6">No venue requests yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section class="promoter-section" id="promoter-analytics">

@@ -194,6 +194,19 @@ function normalizeLifecycleStatus(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeDateKey(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function isLiveEventStatus(value) {
   const status = normalizeLifecycleStatus(value);
   return status === "live" || status === "approved" || status === "active";
@@ -2448,11 +2461,34 @@ function createApiRouter(env) {
       const minCapacity = Math.max(0, Math.floor(toFiniteNumber(req.query?.minCapacity, 0)));
       const maxCapacity = Math.max(0, Math.floor(toFiniteNumber(req.query?.maxCapacity, 0)));
       const maxPrice = Math.max(0, toFiniteNumber(req.query?.maxPrice, 0));
+      const eventDateRaw = truncateText(req.query?.eventDate || req.query?.date, 40);
+      const eventDateKey = normalizeDateKey(eventDateRaw);
+      const hasDateFilter = Boolean(eventDateKey);
+      const availabilityByVenue = new Map();
 
       const venueAccounts = await UserAccount.find({ role: "venue", isActive: true }).sort({ createdAt: -1 }).lean();
       const venueEmails = venueAccounts.map((item) => normalizeEmail(item?.email)).filter(Boolean);
       const profileRows = venueEmails.length ? await UserProfile.find({ email: { $in: venueEmails } }).lean() : [];
       const profileByEmail = new Map(profileRows.map((row) => [normalizeEmail(row?.email), row?.data && typeof row.data === "object" ? row.data : {}]));
+      if (hasDateFilter) {
+        const datePattern = new RegExp(`^${escapeRegex(eventDateKey)}`, "i");
+        const bookingRows = await VenueBookingRequest.find({
+          status: { $regex: /^(Accepted|Pending)$/i },
+          "data.eventDate": { $regex: datePattern }
+        }).select("venueEmail status").lean();
+        bookingRows.forEach((row) => {
+          const venueEmail = normalizeEmail(row?.venueEmail);
+          if (!venueEmail) return;
+          const status = normalizeLifecycleStatus(row?.status);
+          if (status === "accepted") {
+            availabilityByVenue.set(venueEmail, "Booked");
+            return;
+          }
+          if (!availabilityByVenue.has(venueEmail)) {
+            availabilityByVenue.set(venueEmail, "Pending");
+          }
+        });
+      }
 
       const venues = venueAccounts
         .map((account) => {
@@ -2461,6 +2497,21 @@ function createApiRouter(env) {
           const capacity = Math.max(0, Math.floor(toFiniteNumber(profileData?.capacity, 0)));
           const hourlyRate = toPositiveAmount(profileData?.hourlyRate);
           const dailyRate = toPositiveAmount(profileData?.dailyRate);
+          const blockedDates = ensureArray(profileData?.blockedDates)
+            .map((item) => normalizeDateKey(item))
+            .filter(Boolean);
+          const uniqueBlockedDates = [...new Set(blockedDates)].sort((a, b) => a.localeCompare(b));
+          const blockedDatesTotal = uniqueBlockedDates.length;
+          const blockedDatesForResponse = uniqueBlockedDates.slice(0, 31);
+          let availability = "";
+          if (hasDateFilter) {
+            const bookedStatus = availabilityByVenue.get(email) || "";
+            const isBlocked = uniqueBlockedDates.includes(eventDateKey);
+            if (bookedStatus === "Booked") availability = "Booked";
+            else if (isBlocked) availability = "Blocked";
+            else if (bookedStatus === "Pending") availability = "Pending";
+            else availability = "Available";
+          }
           return {
             accountId: String(account?._id || ""),
             venueName: truncateText(profileData?.venueName || account?.name, 200) || "Untitled Venue",
@@ -2478,7 +2529,10 @@ function createApiRouter(env) {
               cleaningFee: toPositiveAmount(profileData?.cleaningFee),
               currency: truncateText(profileData?.currency, 12) || "USD"
             },
-            isPublished: profileData?.isPublished !== false
+            isPublished: profileData?.isPublished !== false,
+            availability: hasDateFilter ? availability : undefined,
+            blockedDates: blockedDatesForResponse,
+            blockedDatesTotal
           };
         })
         .filter((venue) => venue.isPublished)

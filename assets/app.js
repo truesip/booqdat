@@ -34,6 +34,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "promoter-events.html": ["promoter", "admin"],
   "promoter-create.html": ["promoter", "admin"],
   "promoter-analytics.html": ["promoter", "admin"],
+  "promoter-venue-search.html": ["promoter", "admin"],
   "promoter-influencers.html": ["promoter", "admin"],
   "promoter-payouts.html": ["promoter", "admin"],
   "promoter-settings.html": ["promoter", "admin"],
@@ -98,6 +99,7 @@ const PROMOTER_SECTION_BY_PAGE = {
   "promoter-events.html": "promoter-events",
   "promoter-create.html": "promoter-create",
   "promoter-analytics.html": "promoter-analytics",
+  "promoter-venue-search.html": "promoter-venues",
   "promoter-influencers.html": "promoter-influencers",
   "promoter-payouts.html": "promoter-payouts",
   "promoter-settings.html": "promoter-settings",
@@ -369,6 +371,7 @@ function applyBootstrapPayloadToLocalState(data) {
       setLocalStorageJsonSafely(STORAGE_KEYS.promoterDashboardEvents, incoming);
     }
   }
+
   if (canHydrateOrderScope && Array.isArray(data.orders)) {
     setLocalStorageJsonSafely(STORAGE_KEYS.buyerOrders, filterLegacyDemoOrders(data.orders));
   }
@@ -1673,6 +1676,11 @@ function setupPromoterDashboard() {
   const influencerRequestCommissionNote = root.querySelector("#promoter-influencer-commission-note");
   const influencerRequestsBody = root.querySelector("#promoter-influencer-requests-body");
   const influencerRequestsStatus = root.querySelector("#promoter-influencer-requests-status");
+  const promoterVenueFilterForm = root.querySelector("#promoter-venue-filter-form");
+  const promoterVenueSearchStatus = root.querySelector("#promoter-venue-search-status");
+  const promoterVenueResults = root.querySelector("#promoter-venue-results");
+  const promoterVenueRequestsBody = root.querySelector("#promoter-venue-requests-body");
+  const promoterVenueRequestsStatus = root.querySelector("#promoter-venue-requests-status");
   const promoterLogoutButton = root.querySelector("[data-promoter-logout]");
 
   let currentStep = 1;
@@ -1960,6 +1968,8 @@ function setupPromoterDashboard() {
 
   let promoterEvents = loadPromoterEvents();
   let influencerRequests = readInfluencerRequests();
+  let promoterVenueRequests = [];
+  let lastVenueSearchDate = "";
 
   function promoterInfluencerRequests() {
     const promoterEmail = currentPromoterEmail();
@@ -2230,6 +2240,120 @@ function setupPromoterDashboard() {
         </tr>
       `;
     }).join("");
+  }
+
+  function setVenueStatus(target, message, isError = false) {
+    if (!target) return;
+    target.textContent = String(message || "");
+    target.style.color = isError ? "#b3261e" : "";
+  }
+
+  function getDefaultVenueRequestContext() {
+    const sortedByDate = promoterEvents
+      .filter((event) => event && typeof event === "object")
+      .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
+    const upcomingEvent = sortedByDate.find((event) => classifyEventTab(event) === "upcoming");
+    const fallbackEvent = upcomingEvent || promoterEvents[0] || {};
+    const estimatedAttendees = Math.max(1, totalInventory(fallbackEvent));
+    const proposedPrice = Math.max(0, toNumber(fallbackEvent?.budget, 0));
+    return {
+      eventName: String(fallbackEvent?.title || "").trim(),
+      eventDate: String(fallbackEvent?.date || "").trim(),
+      estimatedAttendees,
+      proposedPrice: proposedPrice > 0 ? proposedPrice : 500
+    };
+  }
+
+  function renderPromoterVenueResults(venues, eventDateKey = lastVenueSearchDate) {
+    if (!promoterVenueResults) return;
+    const rows = Array.isArray(venues) ? venues : [];
+    if (!rows.length) {
+      promoterVenueResults.innerHTML = `<article class="promoter-card"><p>No venues matched the current filters.</p></article>`;
+      return;
+    }
+    promoterVenueResults.innerHTML = rows.map((venue) => {
+      const availabilityRaw = String(venue?.availability || "").trim();
+      const hasDate = Boolean(eventDateKey);
+      const availabilityLabel = hasDate ? (availabilityRaw || "Unknown") : "Select a date";
+      const availabilityValue = availabilityLabel.toLowerCase();
+      let availabilityClass = "pending";
+      if (availabilityValue.includes("available")) availabilityClass = "approved";
+      if (availabilityValue.includes("booked")) availabilityClass = "rejected";
+      if (availabilityValue.includes("blocked")) availabilityClass = "rejected";
+      if (availabilityValue.includes("pending")) availabilityClass = "pending";
+      const amenitiesLabel = Array.isArray(venue?.amenities) && venue.amenities.length
+        ? venue.amenities.join(", ")
+        : "No amenities listed";
+      const blockedDates = Array.isArray(venue?.blockedDates) ? venue.blockedDates : [];
+      const blockedDatesTotal = Math.max(
+        blockedDates.length,
+        Math.max(0, Math.floor(toFiniteNumber(venue?.blockedDatesTotal, 0)))
+      );
+      const blockedPreview = blockedDates
+        .slice(0, 8)
+        .map((dateValue) => portalFormatDateValue(dateValue))
+        .filter((value) => value && value !== "—");
+      let blockedTitle = "";
+      if (blockedDatesTotal > 0) {
+        blockedTitle = blockedPreview.length
+          ? `Blocked dates: ${blockedPreview.join(", ")}`
+          : "Blocked dates available on venue calendar.";
+        const remaining = blockedDatesTotal - blockedPreview.length;
+        if (remaining > 0) blockedTitle += `, +${remaining} more`;
+      }
+      const availabilityTitle = blockedTitle ? ` title="${portalEscapeHtml(blockedTitle)}"` : "";
+      return `
+      <article class="promoter-card">
+        <h3>${portalEscapeHtml(venue?.venueName || "Venue")}</h3>
+        <p>${portalEscapeHtml(formatLocationLine(venue) || "Location TBA")}</p>
+        <p><strong>Capacity:</strong> ${Math.max(0, Math.floor(toFiniteNumber(venue?.capacity, 0))).toLocaleString()}</p>
+        <p><strong>Rates:</strong> Hourly ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.hourlyRate, 0)))} • Daily ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.dailyRate, 0)))}</p>
+        <p><strong>Availability:</strong> <span class="status-pill ${availabilityClass}"${availabilityTitle}>${portalEscapeHtml(availabilityLabel)}</span></p>
+        <p class="muted">${portalEscapeHtml(amenitiesLabel)}</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-promoter-request-venue-email="${portalEscapeHtml(venue?.email || "")}" data-promoter-request-venue-name="${portalEscapeHtml(venue?.venueName || "Venue")}" data-promoter-request-venue-date="${portalEscapeHtml(eventDateKey || "")}">Request Booking</button>
+      </article>
+    `;
+    }).join("");
+  }
+
+  function renderPromoterVenueRequests() {
+    if (!promoterVenueRequestsBody) return;
+    const rows = Array.isArray(promoterVenueRequests) ? promoterVenueRequests : [];
+    const sorted = rows.sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+    if (!sorted.length) {
+      promoterVenueRequestsBody.innerHTML = `<tr><td colspan="6">No venue requests yet.</td></tr>`;
+      return;
+    }
+    promoterVenueRequestsBody.innerHTML = sorted.map((request) => {
+      const statusLabel = String(request?.status || "Pending");
+      const reason = request?.actionReason ? `<div class="muted">${portalEscapeHtml(request.actionReason)}</div>` : "";
+      return `
+        <tr>
+          <td>${portalEscapeHtml(request?.data?.eventName || "Event")}</td>
+          <td>${portalEscapeHtml(portalFormatDateValue(request?.data?.eventDate))}</td>
+          <td>${portalEscapeHtml(request?.venueEmail || "Venue")}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(request?.data?.proposedPrice, 0)))}</td>
+          <td><span class="status-pill ${portalStatusPillClass(statusLabel)}">${portalEscapeHtml(statusLabel)}</span>${reason}</td>
+          <td>${portalEscapeHtml(portalFormatDateValue(request?.actedAt || request?.createdAt))}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function loadPromoterVenueRequests() {
+    const response = await apiRequest("/venues/requests", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      promoterVenueRequests = [];
+      renderPromoterVenueRequests();
+      setVenueStatus(promoterVenueRequestsStatus, response?.error || "Unable to load venue requests right now.", true);
+      return;
+    }
+    promoterVenueRequests = Array.isArray(response.requests) ? response.requests : [];
+    renderPromoterVenueRequests();
+    setVenueStatus(promoterVenueRequestsStatus, "");
   }
 
   function setWizardInput(name, value) {
@@ -2857,7 +2981,76 @@ function setupPromoterDashboard() {
     }
   }
 
-  root.addEventListener("click", (event) => {
+  if (promoterVenueFilterForm && promoterVenueSearchStatus) {
+    promoterVenueFilterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(promoterVenueFilterForm);
+      const params = new URLSearchParams();
+      const eventDate = String(formData.get("eventDate") || "").trim();
+      const city = String(formData.get("city") || "").trim();
+      const country = String(formData.get("country") || "").trim();
+      const minCapacity = Math.max(0, Math.floor(toFiniteNumber(formData.get("minCapacity"), 0)));
+      const maxPrice = Math.max(0, toFiniteNumber(formData.get("maxPrice"), 0));
+      if (eventDate) params.set("eventDate", eventDate);
+      if (city) params.set("city", city);
+      if (country) params.set("country", country);
+      if (minCapacity > 0) params.set("minCapacity", String(minCapacity));
+      if (maxPrice > 0) params.set("maxPrice", String(maxPrice));
+      lastVenueSearchDate = eventDate;
+      const response = await apiRequest(`/venues/marketplace${params.toString() ? `?${params}` : ""}`, {
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setVenueStatus(promoterVenueSearchStatus, response?.error || "Unable to search venues right now.", true);
+        renderPromoterVenueResults([]);
+        return;
+      }
+      const venues = Array.isArray(response.venues) ? response.venues : [];
+      renderPromoterVenueResults(venues, eventDate);
+      const dateLabel = eventDate ? ` for ${portalFormatDateValue(eventDate)}` : "";
+      setVenueStatus(promoterVenueSearchStatus, `${venues.length.toLocaleString()} venue${venues.length === 1 ? "" : "s"} found${dateLabel}.`);
+    });
+  }
+
+  root.addEventListener("click", async (event) => {
+    const venueRequestButton = event.target.closest("[data-promoter-request-venue-email]");
+    if (venueRequestButton) {
+      const venueEmail = String(venueRequestButton.dataset.promoterRequestVenueEmail || "").trim().toLowerCase();
+      const venueName = String(venueRequestButton.dataset.promoterRequestVenueName || "Venue").trim();
+      const venueDate = String(venueRequestButton.dataset.promoterRequestVenueDate || "").trim();
+      if (!venueEmail) return;
+      const defaults = getDefaultVenueRequestContext();
+      const eventName = String(window.prompt("Event name:", defaults.eventName) || "").trim();
+      if (!eventName) return;
+      const eventDate = String(window.prompt("Event date (YYYY-MM-DD):", venueDate || defaults.eventDate || "") || "").trim();
+      if (!eventDate) return;
+      const attendeesRaw = String(window.prompt("Estimated attendees:", String(Math.max(1, Math.floor(toNumber(defaults.estimatedAttendees, 100))))) || "").trim();
+      const proposedPriceRaw = String(window.prompt("Proposed price (USD):", String(Math.max(1, Math.floor(toNumber(defaults.proposedPrice, 500))))) || "").trim();
+      const message = String(window.prompt("Optional message to venue:", `Booking request for ${eventName}`) || "").trim();
+      const estimatedAttendees = Math.max(1, Math.floor(toNumber(attendeesRaw, defaults.estimatedAttendees)));
+      const proposedPrice = Math.max(1, toNumber(proposedPriceRaw, defaults.proposedPrice));
+      const response = await apiRequest("/venues/requests", {
+        method: "POST",
+        body: {
+          venueEmail,
+          eventName,
+          eventDate,
+          estimatedAttendees,
+          proposedPrice,
+          message
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setVenueStatus(promoterVenueSearchStatus, response?.error || "Unable to submit venue request.", true);
+        return;
+      }
+      setVenueStatus(promoterVenueSearchStatus, `Venue request sent to ${venueName}.`);
+      await loadPromoterVenueRequests();
+      return;
+    }
     const selectButton = event.target.closest("[data-influencer-select]");
     if (selectButton && influencerRequestForm) {
       const email = String(selectButton.dataset.influencerSelect || "").trim();
@@ -3213,6 +3406,9 @@ function setupPromoterDashboard() {
   renderEventCards();
   renderInfluencerRequestForm();
   renderInfluencerRequestsTable();
+  renderPromoterVenueResults([]);
+  renderPromoterVenueRequests();
+  void loadPromoterVenueRequests();
   renderAnalytics();
   renderPayoutHistory();
   renderWizardImagePreview([]);
@@ -3534,6 +3730,32 @@ function setupVenuePortal() {
     return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
   }
 
+  async function persistVenueBlockedDates() {
+    blockedDates = uniqueSortedDates(blockedDates.map((item) => toDateKey(item)).filter(Boolean));
+    portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+    venueProfileData = { ...venueProfileData, blockedDates };
+    try {
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "venue",
+          data: { blockedDates }
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        if (calendarStatus) setStatus(calendarStatus, response?.error || "Unable to sync blocked dates right now.", true);
+        return;
+      }
+      venueProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : venueProfileData;
+    } catch {
+      if (calendarStatus) setStatus(calendarStatus, "Unable to sync blocked dates right now.", true);
+    }
+  }
+
   function getBookedDates() {
     const rows = Array.isArray(venueRequests) ? venueRequests : [];
     const accepted = rows.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
@@ -3763,6 +3985,12 @@ function setupVenuePortal() {
     const profile = response.profile;
     const data = profile?.data && typeof profile.data === "object" ? profile.data : {};
     venueProfileData = { ...data };
+    const remoteBlocked = Array.isArray(data?.blockedDates) ? data.blockedDates : [];
+    if (remoteBlocked.length) {
+      blockedDates = uniqueSortedDates([...blockedDates, ...remoteBlocked.map((item) => toDateKey(item)).filter(Boolean)]);
+      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      renderBlockedDates();
+    }
     applyVenueProfileForm(data);
     applyVenueSettingsForm({
       ...data,
@@ -3824,6 +4052,7 @@ function setupVenuePortal() {
         rules: String(formData.get("rules") || "").trim(),
         cancellationPolicy: String(formData.get("cancellationPolicy") || "").trim(),
         isPublished: Boolean(formData.get("isPublished")),
+        blockedDates: uniqueSortedDates(blockedDates.map((item) => toDateKey(item)).filter(Boolean)),
         imageGallery,
         images: imageGallery
       };
@@ -3907,7 +4136,7 @@ function setupVenuePortal() {
       const nextDate = String(blockedDateInput.value || "").trim();
       if (!nextDate) return;
       blockedDates = uniqueSortedDates([...blockedDates, nextDate]);
-      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      void persistVenueBlockedDates();
       blockedDateInput.value = "";
       renderBlockedDates();
       renderVenueCalendar();
@@ -3919,7 +4148,7 @@ function setupVenuePortal() {
     if (removeBlockedDateButton) {
       const dateValue = String(removeBlockedDateButton.dataset.venueUnblockDate || "").trim();
       blockedDates = blockedDates.filter((item) => String(item || "").trim() !== dateValue);
-      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+      void persistVenueBlockedDates();
       renderBlockedDates();
       return;
     }
@@ -3934,11 +4163,11 @@ function setupVenuePortal() {
       }
       if (blockedDates.includes(dateKey)) {
         blockedDates = blockedDates.filter((item) => item !== dateKey);
-        portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+        void persistVenueBlockedDates();
         if (calendarStatus) setStatus(calendarStatus, `Removed block for ${portalFormatDateValue(dateKey)}.`);
       } else {
         blockedDates = uniqueSortedDates([...blockedDates, dateKey]);
-        portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+        void persistVenueBlockedDates();
         if (calendarStatus) setStatus(calendarStatus, `Blocked ${portalFormatDateValue(dateKey)}.`);
       }
       renderBlockedDates();
