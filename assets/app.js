@@ -439,16 +439,6 @@ function writeStoredEvents(events) {
     queueApiSync("events-empty", "/sync/events", { events: [] }, 150);
     return;
   }
-
-  const promoCodeFromUrl = String(url.searchParams.get("promo") || "").trim().toUpperCase();
-  const influencerHint = normalizeEmail(url.searchParams.get("inf") || "");
-  const promoCodes = readInfluencerPromoCodes();
-  const matchedPromo = promoCodeFromUrl
-    ? promoCodes.find((item) => item.code === promoCodeFromUrl && (!item.eventId || item.eventId === event.id))
-    : null;
-  const influencerEmail = matchedPromo?.influencerEmail || influencerHint;
-  const influencerName = matchedPromo?.influencerName || "";
-  const influencerCommissionPercent = matchedPromo ? Math.max(0, toFiniteNumber(matchedPromo.commissionPercent, 0)) : 0;
   filtered.forEach((event) => {
     const eventId = String(event?.id || "").trim();
     if (!eventId) return;
@@ -1913,11 +1903,36 @@ function setupPromoterDashboard() {
   }
 
   function loadPromoterEvents() {
-    return readPromoterDashboardEvents()
+    const primary = readPromoterDashboardEvents()
       .filter((event) => event && typeof event === "object")
       .filter(canAccessPromoterEvent)
       .map(normalizePromoterEventRecord)
       .filter((event) => String(event.id || "").trim() && event.title);
+
+    const byId = new Map(primary.map((event) => [String(event.id), event]));
+    const promoterEmail = currentPromoterEmail();
+    const role = normalizeRole(readAuthSession()?.user?.role);
+    if (promoterEmail || role === "admin") {
+      readStoredEvents()
+        .filter((event) => event && typeof event === "object")
+        .filter((event) => {
+          const ownerEmail = normalizeEmail(event?.promoterEmail || "");
+          if (role === "admin") return true;
+          if (ownerEmail && ownerEmail !== promoterEmail) return false;
+          return true;
+        })
+        .map((event) => normalizePromoterEventRecord({
+          ...event,
+          promoterEmail: normalizeEmail(event.promoterEmail || promoterEmail)
+        }))
+        .forEach((event) => {
+          const id = String(event.id || "");
+          if (!id || byId.has(id)) return;
+          byId.set(id, event);
+        });
+    }
+
+    return [...byId.values()];
   }
 
   let promoterEvents = loadPromoterEvents();
