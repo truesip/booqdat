@@ -2630,49 +2630,72 @@ function setupPromoterDashboard() {
 
   const bankConnectForm = root.querySelector("#bank-connect-form");
   const bankConnectStatus = root.querySelector("#bank-connect-status");
+  const settingsBankForm = root.querySelector("#promoter-bank-connect-form");
+  const settingsBankStatus = root.querySelector("#promoter-bank-connect-status");
+  const payoutForms = [
+    { form: bankConnectForm, status: bankConnectStatus },
+    { form: settingsBankForm, status: settingsBankStatus }
+  ].filter(({ form }) => form);
+
+  function applyPayoutAccountToForm(form, payoutAccount) {
+    if (!form) return;
+    if (form.elements?.bankName) form.elements.bankName.value = payoutAccount.bankName || "";
+    if (form.elements?.bankAddress) form.elements.bankAddress.value = payoutAccount.bankAddress || "";
+    if (form.elements?.city) form.elements.city.value = payoutAccount.city || "";
+    if (form.elements?.stateProvince) form.elements.stateProvince.value = payoutAccount.stateProvince || "";
+    if (form.elements?.country) form.elements.country.value = payoutAccount.country || "";
+    if (form.elements?.accountHolderName) {
+      form.elements.accountHolderName.value = payoutAccount.accountHolderName || payoutAccount.holder || "";
+    }
+    if (form.elements?.bankAccountNumber) form.elements.bankAccountNumber.value = payoutAccount.bankAccountNumber || "";
+    if (form.elements?.routingNumber) form.elements.routingNumber.value = payoutAccount.routingNumber || "";
+    if (form.elements?.swiftCode) form.elements.swiftCode.value = payoutAccount.swiftCode || "";
+  }
+
+  function payoutPayloadFromForm(form) {
+    const formData = new FormData(form);
+    const schedule = payoutScheduleSelect?.value === "monthly" ? "monthly" : "weekly";
+    return {
+      bankName: String(formData.get("bankName") || "").trim(),
+      bankAddress: String(formData.get("bankAddress") || "").trim(),
+      city: String(formData.get("city") || "").trim(),
+      stateProvince: String(formData.get("stateProvince") || "").trim(),
+      country: String(formData.get("country") || "").trim(),
+      accountHolderName: String(formData.get("accountHolderName") || "").trim(),
+      bankAccountNumber: String(formData.get("bankAccountNumber") || "").trim(),
+      routingNumber: String(formData.get("routingNumber") || "").trim(),
+      swiftCode: String(formData.get("swiftCode") || "").trim(),
+      schedule
+    };
+  }
+
+  function writeBankStatus(message) {
+    payoutForms.forEach(({ status }) => {
+      if (status) status.textContent = message;
+    });
+  }
+
   async function loadPayoutAccount() {
-    if (!bankConnectForm || !bankConnectStatus) return;
+    if (!payoutForms.length) return;
     const response = await apiRequest("/promoter/payout-account", {
       includeErrorResponse: true,
       suppressAuthRedirect: true
     });
     if (!response?.ok || !response?.payoutAccount) return;
     const payoutAccount = response.payoutAccount;
-    if (bankConnectForm.elements?.bankName) bankConnectForm.elements.bankName.value = payoutAccount.bankName || "";
-    if (bankConnectForm.elements?.bankAddress) bankConnectForm.elements.bankAddress.value = payoutAccount.bankAddress || "";
-    if (bankConnectForm.elements?.city) bankConnectForm.elements.city.value = payoutAccount.city || "";
-    if (bankConnectForm.elements?.stateProvince) bankConnectForm.elements.stateProvince.value = payoutAccount.stateProvince || "";
-    if (bankConnectForm.elements?.country) bankConnectForm.elements.country.value = payoutAccount.country || "";
-    if (bankConnectForm.elements?.accountHolderName) {
-      bankConnectForm.elements.accountHolderName.value = payoutAccount.accountHolderName || payoutAccount.holder || "";
-    }
-    if (bankConnectForm.elements?.bankAccountNumber) bankConnectForm.elements.bankAccountNumber.value = payoutAccount.bankAccountNumber || "";
-    if (bankConnectForm.elements?.routingNumber) bankConnectForm.elements.routingNumber.value = payoutAccount.routingNumber || "";
-    if (bankConnectForm.elements?.swiftCode) bankConnectForm.elements.swiftCode.value = payoutAccount.swiftCode || "";
+    payoutForms.forEach(({ form }) => applyPayoutAccountToForm(form, payoutAccount));
     if (payoutScheduleSelect) {
       payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
       updatePayoutScheduleInfo();
     }
-    bankConnectStatus.textContent = "Bank transfer details loaded.";
+    writeBankStatus("Bank transfer details loaded.");
   }
-  if (bankConnectForm && bankConnectStatus) {
-    bankConnectForm.addEventListener("submit", async (event) => {
+
+  function attachPayoutFormHandler(form, status) {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!bankConnectForm.reportValidity()) return;
-      const formData = new FormData(bankConnectForm);
-      const schedule = payoutScheduleSelect?.value === "monthly" ? "monthly" : "weekly";
-      const payload = {
-        bankName: String(formData.get("bankName") || "").trim(),
-        bankAddress: String(formData.get("bankAddress") || "").trim(),
-        city: String(formData.get("city") || "").trim(),
-        stateProvince: String(formData.get("stateProvince") || "").trim(),
-        country: String(formData.get("country") || "").trim(),
-        accountHolderName: String(formData.get("accountHolderName") || "").trim(),
-        bankAccountNumber: String(formData.get("bankAccountNumber") || "").trim(),
-        routingNumber: String(formData.get("routingNumber") || "").trim(),
-        swiftCode: String(formData.get("swiftCode") || "").trim(),
-        schedule
-      };
+      if (!form.reportValidity()) return;
+      const payload = payoutPayloadFromForm(form);
       const response = await apiRequest("/promoter/payout-account", {
         method: "POST",
         body: payload,
@@ -2680,16 +2703,22 @@ function setupPromoterDashboard() {
         suppressAuthRedirect: true
       });
       if (!response?.ok || !response?.payoutAccount) {
-        bankConnectStatus.textContent = response?.error || "Unable to connect payout account right now.";
+        if (status) status.textContent = response?.error || "Unable to connect payout account right now.";
         return;
       }
       const payoutAccount = response.payoutAccount;
-      bankConnectStatus.textContent = `Bank transfer details saved for ${payoutAccount.accountHolderName || payload.accountHolderName}.`;
+      payoutForms.forEach(({ form: targetForm }) => applyPayoutAccountToForm(targetForm, payoutAccount));
       if (payoutScheduleSelect) {
         payoutScheduleSelect.value = payoutAccount.schedule === "monthly" ? "monthly" : "weekly";
         updatePayoutScheduleInfo();
       }
+      const holderName = payoutAccount.accountHolderName || payload.accountHolderName || "your account";
+      writeBankStatus(`Bank transfer details saved for ${holderName}.`);
     });
+  }
+
+  payoutForms.forEach(({ form, status }) => attachPayoutFormHandler(form, status));
+  if (payoutForms.length) {
     void loadPayoutAccount();
   }
 
