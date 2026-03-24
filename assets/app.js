@@ -3185,25 +3185,6 @@ function setupPromoterDashboard() {
       if (isActive) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
-
-    dashboardRoot.querySelectorAll("[data-admin-nav-group]").forEach((group) => {
-      const links = Array.from(group.querySelectorAll("a"));
-      const hasActive = links.some((link) => link.classList.contains("active"));
-      const hasPageMatch = links.some((link) => {
-        const href = String(link.getAttribute("href") || "").trim().toLowerCase();
-        if (!href) return false;
-        try {
-          const resolved = new URL(href, window.location.origin);
-          return resolved.pathname.split("/").pop() === effectivePageName;
-        } catch {
-          return href.split("/").pop() === effectivePageName;
-        }
-      });
-      const shouldOpen = hasActive || hasPageMatch;
-      group.classList.toggle("is-open", shouldOpen);
-      const toggle = group.querySelector("[data-admin-nav-toggle]");
-      if (toggle) toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
-    });
   }
 
   function openQueuedEventEditorIfNeeded() {
