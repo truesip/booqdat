@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <title>Artiste Portal | BOOQDAT</title>
-<meta name="description" content="Artiste booking calendar with blocked and booked dates.">
+<meta name="description" content="Artiste booking requests with accept and decline actions.">
 <body class="auth-pending">
 <header class="site-header">
   <div class="container nav-shell">
@@ -60,24 +60,26 @@
     <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-artiste-logout>Log Out</button></div>
   </aside>
   <section class="promoter-main">
-    <section class="promoter-section" id="artiste-calendar">
-      <h2>Booking Calendar</h2>
-      <p class="muted">Click a date to block or unblock it. Booked dates are shown in orange.</p>
-      <p id="artiste-calendar-status" class="status"></p>
-      <div class="venue-calendar-shell">
-        <div class="venue-calendar-head">
-          <button class="btn btn-secondary btn-sm" type="button" data-artiste-calendar-prev>&larr; Prev</button>
-          <strong data-artiste-calendar-label>Month Year</strong>
-          <button class="btn btn-secondary btn-sm" type="button" data-artiste-calendar-next>Next &rarr;</button>
-        </div>
-        <div class="venue-calendar-grid" id="artiste-calendar-grid"></div>
+    <section class="promoter-section" id="artiste-bookings">
+      <h2>Bookings</h2>
+      <p class="muted">Accept or decline booking requests from promoters.</p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Date</th>
+              <th>Promoter</th>
+              <th>Offer</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="artiste-booking-requests-body">
+            <tr><td colspan="6">No booking requests yet.</td></tr>
+          </tbody>
+        </table>
       </div>
-      <h3>Blocked Dates</h3>
-      <div class="split" style="align-items: flex-end; max-width: 400px; margin-bottom: 1rem;">
-        <label>Add Blocked Date<input id="artiste-block-date" type="date"></label>
-        <button class="btn btn-secondary" type="button" data-artiste-block-date>Block</button>
-      </div>
-      <ul id="artiste-calendar-blocked" class="venue-blocked-list"></ul>
     </section>
   </section>
 </main>

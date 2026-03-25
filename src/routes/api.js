@@ -15,6 +15,7 @@ const AccessTokenBlocklist = require("../models/AccessTokenBlocklist");
 const NotificationLog = require("../models/NotificationLog");
 const VenueBookingRequest = require("../models/VenueBookingRequest");
 const HostBookingRequest = require("../models/HostBookingRequest");
+const ArtisteBookingRequest = require("../models/ArtisteBookingRequest");
 const { sendEmail } = require("../services/mailer");
 const {
   welcomeEmailTemplate,
@@ -2630,6 +2631,195 @@ function createApiRouter(env) {
         return;
       }
       if (role === "event_host" && normalizeEmail(row.hostEmail) !== sessionEmail) {
+        res.status(403).json({ ok: false, error: "Cannot update requests outside your scope" });
+        return;
+      }
+      row.status = nextStatus;
+      row.actionReason = truncateText(req.body?.reason, 400);
+      row.actedAt = new Date();
+      await row.save();
+      res.status(200).json({ ok: true, request: row });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/artistes/marketplace", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const queryFilter = truncateText(req.query?.q || req.query?.name, 160).toLowerCase();
+      const cityFilter = truncateText(req.query?.city, 120).toLowerCase();
+      const countryFilter = truncateText(req.query?.country, 120).toLowerCase();
+      const minCost = Math.max(0, toFiniteNumber(req.query?.minCost, 0));
+      const maxCost = Math.max(0, toFiniteNumber(req.query?.maxCost, 0));
+      const eventDateRaw = truncateText(req.query?.eventDate || req.query?.date, 40);
+      const eventDateKey = normalizeDateKey(eventDateRaw);
+      const hasDateFilter = Boolean(eventDateKey);
+      const availabilityByArtiste = new Map();
+
+      const artisteAccounts = await UserAccount.find({ role: "artiste", isActive: true }).sort({ createdAt: -1 }).lean();
+      const artisteEmails = artisteAccounts.map((item) => normalizeEmail(item?.email)).filter(Boolean);
+      const profileRows = artisteEmails.length ? await UserProfile.find({ email: { $in: artisteEmails } }).lean() : [];
+      const profileByEmail = new Map(profileRows.map((row) => [normalizeEmail(row?.email), row?.data && typeof row.data === "object" ? row.data : {}]));
+
+      if (hasDateFilter) {
+        const datePattern = new RegExp(`^${escapeRegex(eventDateKey)}`, "i");
+        const bookingRows = await ArtisteBookingRequest.find({
+          status: { $regex: /^(Accepted|Pending)$/i },
+          "data.eventDate": { $regex: datePattern }
+        }).select("artisteEmail status").lean();
+        bookingRows.forEach((row) => {
+          const artisteEmail = normalizeEmail(row?.artisteEmail);
+          if (!artisteEmail) return;
+          const status = normalizeLifecycleStatus(row?.status);
+          if (status === "accepted") {
+            availabilityByArtiste.set(artisteEmail, "Booked");
+            return;
+          }
+          if (!availabilityByArtiste.has(artisteEmail)) {
+            availabilityByArtiste.set(artisteEmail, "Pending");
+          }
+        });
+      }
+
+      const artistes = artisteAccounts
+        .map((account) => {
+          const email = normalizeEmail(account?.email);
+          const profileData = profileByEmail.get(email) || {};
+          const bookingCost = toPositiveAmount(profileData?.bookingCost || profileData?.performanceFee || profileData?.rate);
+          const blockedDates = ensureArray(profileData?.blockedDates)
+            .map((item) => normalizeDateKey(item))
+            .filter(Boolean);
+          const uniqueBlockedDates = [...new Set(blockedDates)].sort((a, b) => a.localeCompare(b));
+
+          let availability = "";
+          if (hasDateFilter) {
+            const bookedStatus = availabilityByArtiste.get(email) || "";
+            const isBlocked = uniqueBlockedDates.includes(eventDateKey);
+            if (bookedStatus === "Booked") availability = "Booked";
+            else if (isBlocked) availability = "Blocked";
+            else if (bookedStatus === "Pending") availability = "Pending";
+            else availability = "Available";
+          }
+
+          return {
+            name: truncateText(profileData?.stageName || profileData?.name || account?.name, 200) || "Artiste",
+            email,
+            city: truncateText(profileData?.city, 120),
+            country: truncateText(profileData?.country, 120),
+            location: truncateText(profileData?.location || profileData?.country, 200),
+            bookingCost,
+            bio: truncateText(profileData?.bio, 500),
+            image: truncateText(profileData?.image || profileData?.profileImage, 500),
+            availability: hasDateFilter ? availability : undefined,
+            blockedDates: uniqueBlockedDates.slice(0, 31),
+            blockedDatesTotal: uniqueBlockedDates.length
+          };
+        })
+        .filter((artiste) => !queryFilter || `${artiste.name} ${artiste.email}`.toLowerCase().includes(queryFilter))
+        .filter((artiste) => !cityFilter || String(artiste.city || "").toLowerCase() === cityFilter)
+        .filter((artiste) => !countryFilter || String(artiste.country || "").toLowerCase() === countryFilter)
+        .filter((artiste) => !minCost || artiste.bookingCost >= minCost)
+        .filter((artiste) => !maxCost || artiste.bookingCost <= maxCost)
+        .sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || "")));
+
+      res.status(200).json({ ok: true, count: artistes.length, artistes });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/artistes/requests", requireAuth, requireRoles("admin", "promoter"), async (req, res, next) => {
+    try {
+      const promoterEmail = normalizeEmail(req.auth?.email);
+      const artisteEmail = normalizeEmail(req.body?.artisteEmail);
+      if (!isValidEmail(artisteEmail)) {
+        res.status(400).json({ ok: false, error: "Valid artisteEmail is required" });
+        return;
+      }
+      const artisteAccount = await UserAccount.findOne({ email: artisteEmail, role: "artiste", isActive: true }).lean();
+      if (!artisteAccount) {
+        res.status(404).json({ ok: false, error: "Artiste account not found" });
+        return;
+      }
+
+      const eventName = truncateText(req.body?.eventName, 200);
+      const eventDate = truncateText(req.body?.eventDate, 40);
+      const offerPrice = toPositiveAmount(req.body?.offerPrice);
+      if (!eventName || !eventDate || !offerPrice) {
+        res.status(400).json({ ok: false, error: "eventName, eventDate, and offerPrice are required" });
+        return;
+      }
+
+      const requestId = `areq-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+      const requestData = {
+        requestId,
+        artisteEmail,
+        promoterEmail,
+        status: "Pending",
+        data: {
+          eventName,
+          eventDate,
+          promoterName: truncateText(req.body?.promoterName || req.auth?.name, 200),
+          offerPrice,
+          message: truncateText(req.body?.message || "", 1000)
+        }
+      };
+      await ArtisteBookingRequest.create(requestData);
+      res.status(201).json({ ok: true, request: requestData });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/artistes/requests", requireAuth, requireRoles("admin", "promoter", "artiste"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const filter = {};
+      if (role === "artiste") {
+        filter.artisteEmail = sessionEmail;
+      } else if (role === "promoter") {
+        filter.promoterEmail = sessionEmail;
+      }
+      const rows = await ArtisteBookingRequest.find(filter).sort({ createdAt: -1 }).limit(300).lean();
+      const requests = rows.map((row) => ({
+        requestId: row.requestId,
+        artisteEmail: row.artisteEmail,
+        promoterEmail: row.promoterEmail,
+        status: row.status,
+        actionReason: row.actionReason,
+        actedAt: row.actedAt,
+        createdAt: row.createdAt,
+        data: row.data || {}
+      }));
+      res.status(200).json({ ok: true, count: requests.length, requests });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/artistes/requests/:requestId/status", requireAuth, requireRoles("admin", "artiste"), async (req, res, next) => {
+    try {
+      const role = normalizeRole(req.auth?.role);
+      const sessionEmail = normalizeEmail(req.auth?.email);
+      const requestId = truncateText(req.params?.requestId, 120);
+      const requestedStatus = normalizeLifecycleStatus(req.body?.status);
+      const nextStatus = requestedStatus === "accept" || requestedStatus === "accepted"
+        ? "Accepted"
+        : requestedStatus === "decline" || requestedStatus === "declined"
+          ? "Declined"
+          : "";
+      if (!requestId || !nextStatus) {
+        res.status(400).json({ ok: false, error: "Valid requestId and status are required" });
+        return;
+      }
+
+      const row = await ArtisteBookingRequest.findOne({ requestId });
+      if (!row) {
+        res.status(404).json({ ok: false, error: "Artiste booking request not found" });
+        return;
+      }
+      if (role === "artiste" && normalizeEmail(row.artisteEmail) !== sessionEmail) {
         res.status(403).json({ ok: false, error: "Cannot update requests outside your scope" });
         return;
       }

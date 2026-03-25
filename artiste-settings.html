@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <title>Artiste Portal | BOOQDAT</title>
-<meta name="description" content="Artiste booking calendar with blocked and booked dates.">
+<meta name="description" content="Artiste payout settings and bank account details.">
 <body class="auth-pending">
 <header class="site-header">
   <div class="container nav-shell">
@@ -60,24 +60,28 @@
     <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-artiste-logout>Log Out</button></div>
   </aside>
   <section class="promoter-main">
-    <section class="promoter-section" id="artiste-calendar">
-      <h2>Booking Calendar</h2>
-      <p class="muted">Click a date to block or unblock it. Booked dates are shown in orange.</p>
-      <p id="artiste-calendar-status" class="status"></p>
-      <div class="venue-calendar-shell">
-        <div class="venue-calendar-head">
-          <button class="btn btn-secondary btn-sm" type="button" data-artiste-calendar-prev>&larr; Prev</button>
-          <strong data-artiste-calendar-label>Month Year</strong>
-          <button class="btn btn-secondary btn-sm" type="button" data-artiste-calendar-next>Next &rarr;</button>
+    <section class="promoter-section" id="artiste-settings">
+      <h2>Payout Settings</h2>
+      <p class="muted">Add your bank account details to receive payouts for accepted bookings.</p>
+      <form id="artiste-settings-form" class="stack">
+        <div class="split">
+          <label>Bank Name<input name="bankName" type="text" required></label>
+          <label>Bank Address<input name="bankAddress" type="text" required></label>
         </div>
-        <div class="venue-calendar-grid" id="artiste-calendar-grid"></div>
-      </div>
-      <h3>Blocked Dates</h3>
-      <div class="split" style="align-items: flex-end; max-width: 400px; margin-bottom: 1rem;">
-        <label>Add Blocked Date<input id="artiste-block-date" type="date"></label>
-        <button class="btn btn-secondary" type="button" data-artiste-block-date>Block</button>
-      </div>
-      <ul id="artiste-calendar-blocked" class="venue-blocked-list"></ul>
+        <div class="split">
+          <label>City<input name="city" type="text" required></label>
+          <label>State/Province<input name="stateProvince" type="text" required></label>
+        </div>
+        <label>Country<input name="country" type="text" required></label>
+        <label>Account Holder Name<input name="accountHolderName" type="text" required></label>
+        <div class="split">
+          <label>Account Number<input name="bankAccountNumber" type="text" required></label>
+          <label>Routing Number<input name="routingNumber" type="text" required></label>
+        </div>
+        <label>SWIFT Code<input name="swiftCode" type="text"></label>
+        <button class="btn btn-primary" type="submit">Save Bank Details</button>
+      </form>
+      <p id="artiste-settings-status" class="status"></p>
     </section>
   </section>
 </main>

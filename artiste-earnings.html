@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,17 +28,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
-
 <title>Artiste Portal | BOOQDAT</title>
-<meta name="description" content="Artiste portal for profile management, gigs, requests, and fan growth.">
+<meta name="description" content="Artiste earnings from accepted bookings.">
 <body class="auth-pending">
-
 <header class="site-header">
   <div class="container nav-shell">
     <a href="index.html" class="logo" aria-label="BOOQDAT home">
       <img src="Booqdat-logo.png" alt="BOOQDAT">
     </a>
-    <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">?</button>
+    <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
     <nav class="site-nav" data-mobile-nav>
       <a href="artiste-dashboard.html" class="active">Artiste Portal</a>
       <a href="events.html">Browse Events</a>
@@ -48,76 +45,42 @@
     </nav>
   </div>
 </header>
-
-  <main class="promoter-shell" id="artiste-portal">
-    <button class="promoter-sidebar-toggle" type="button" data-artiste-sidebar-toggle>Menu</button>
-    <aside class="promoter-sidebar">
-      <h2>Artiste Portal</h2>
-      <nav class="promoter-sidebar-nav">
-        <a href="artiste-dashboard.html">Dashboard</a>
-        <a href="artiste-profile.html">My Profile</a>
-        <a href="artiste-gigs.html">Gigs & Bookings</a>
-        <a href="artiste-venue-search.html">Venue Search & Requests</a>
-        <a href="artiste-calendar.html">Calendar</a>
-        <a href="artiste-earnings.html">Earnings</a>
-        <a href="artiste-fan-list.html">Fan List</a>
-      </nav>
-      <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-artiste-logout>Log Out</button></div>
-    </aside>
-    <section class="promoter-main">
-      <section class="promoter-section" id="artiste-home">
-        <p class="eyebrow">Artiste Dashboard</p>
-        <h1>Manage gigs and audience growth</h1>
-        <div class="promoter-kpi-grid">
-          <article class="promoter-kpi-card"><span>Upcoming Gigs</span><strong data-artiste-kpi="gigs">0</strong></article>
-          <article class="promoter-kpi-card"><span>Pending Requests</span><strong data-artiste-kpi="pending">0</strong></article>
-          <article class="promoter-kpi-card"><span>Earnings</span><strong data-artiste-kpi="earnings">$0</strong></article>
-          <article class="promoter-kpi-card"><span>Fans</span><strong data-artiste-kpi="fans">0</strong></article>
-        </div>
-      </section>
-      <section class="promoter-section" id="artiste-profile">
-        <h2>My Profile</h2>
-        <form id="artiste-profile-form" class="stack">
-          <label>Display Name<input name="name" type="text" required></label>
-          <label>Bio<textarea name="bio" rows="3"></textarea></label>
-          <label>Videos / Links<textarea name="videos" rows="2" placeholder="YouTube, Instagram, website links"></textarea></label>
-          <label>Tech Specs<textarea name="techSpecs" rows="2"></textarea></label>
-          <label>Rider PDF URL<input name="riderPdf" type="url" placeholder="https://..."></label>
-          <button class="btn btn-primary" type="submit">Save Artiste Profile</button>
-        </form>
-        <p id="artiste-profile-status" class="status"></p>
-      </section>
-      <section class="promoter-section" id="artiste-gigs">
-        <h2>Gigs & Bookings</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Gig</th><th>Date</th><th>Venue</th><th>Status</th></tr></thead><tbody id="artiste-gigs-body"><tr><td colspan="4">No gigs yet.</td></tr></tbody></table></div>
-      </section>
-      <section class="promoter-section" id="artiste-venue-search">
-        <h2>Venue Search & Requests</h2>
-        <form id="artiste-venue-filter-form" class="split">
-          <label>City<input name="city" type="text"></label>
-          <label>Country<input name="country" type="text"></label>
-          <label>Min Capacity<input name="minCapacity" type="number" min="0" step="1"></label>
-          <label>Max Price (USD)<input name="maxPrice" type="number" min="0" step="1"></label>
-          <button class="btn btn-secondary" type="submit">Search Venues</button>
-        </form>
-        <p id="artiste-venue-search-status" class="status"></p>
-        <div id="artiste-venue-results" class="promoter-events-grid"></div>
-      </section>
-      <section class="promoter-section" id="artiste-calendar">
-        <h2>Calendar</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Gig</th><th>Status</th></tr></thead><tbody id="artiste-calendar-body"><tr><td colspan="3">No scheduled gigs.</td></tr></tbody></table></div>
-      </section>
-      <section class="promoter-section" id="artiste-earnings">
-        <h2>Earnings</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Gig</th><th>Amount</th></tr></thead><tbody id="artiste-earnings-body"><tr><td colspan="3">No earnings records yet.</td></tr></tbody></table></div>
-      </section>
-      <section class="promoter-section" id="artiste-fan-list">
-        <h2>Fan List</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Source Event</th></tr></thead><tbody id="artiste-fans-body"><tr><td colspan="3">No fans tracked yet.</td></tr></tbody></table></div>
-      </section>
+<main class="promoter-shell" id="artiste-portal">
+  <button class="promoter-sidebar-toggle" type="button" data-artiste-sidebar-toggle>Menu</button>
+  <aside class="promoter-sidebar">
+    <h2>Artiste Portal</h2>
+    <nav class="promoter-sidebar-nav">
+      <a href="artiste-dashboard.html">Dashboard</a>
+      <a href="artiste-profile.html">My Profile</a>
+      <a href="artiste-bookings.html">Bookings</a>
+      <a href="artiste-calendar.html">Calendar</a>
+      <a href="artiste-earnings.html">Earnings</a>
+      <a href="artiste-settings.html">Settings</a>
+    </nav>
+    <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-artiste-logout>Log Out</button></div>
+  </aside>
+  <section class="promoter-main">
+    <section class="promoter-section" id="artiste-earnings">
+      <h2>Earnings</h2>
+      <p id="artiste-earnings-summary" class="status"></p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Booking</th>
+              <th>Promoter</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody id="artiste-earnings-body">
+            <tr><td colspan="4">No earnings records yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
-  </main>
-
+  </section>
+</main>
 <footer class="site-footer">
   <div class="container footer-grid">
     <div>
@@ -135,11 +98,10 @@
     </nav>
   </div>
   <div class="container footer-bottom">
-    <small>? <span data-year></span> BOOQDAT USA LLC</small>
+    <small>© <span data-year></span> BOOQDAT USA LLC</small>
   </div>
 </footer>
-
-  <script src="assets/auth-runtime.js?v=20260323-portal"></script>
-  <script src="assets/app.js?v=20260323-portal"></script>
+<script src="assets/auth-runtime.js?v=20260323-portal"></script>
+<script src="assets/app.js?v=20260323-portal"></script>
 </body>
 </html>

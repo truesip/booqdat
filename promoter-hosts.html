@@ -55,7 +55,7 @@
         <a href="promoter-events.html">My Events</a>
         <a href="promoter-create.html">Create Event</a>
         <a href="promoter-venue-search.html">Venue Search & Requests</a>
-        <a href="promoter-hosts.html">Event Hosts</a>
+        <a href="promoter-hosts.html">Hosts & Artistes</a>
         <a href="promoter-analytics.html">Analytics</a>
         <a href="promoter-influencers.html">Influencer Requests</a>
         <a href="promoter-payouts.html">Payouts & Earnings</a>
@@ -544,8 +544,8 @@
       <section class="promoter-section" id="promoter-hosts">
         <div class="promoter-section-head">
           <div>
-            <h2>Event Host Search & Requests</h2>
-            <p>Search event hosts, review availability, and send booking requests.</p>
+            <h2>Host & Artiste Search & Requests</h2>
+            <p>Search hosts and artistes, review availability, and send booking requests.</p>
           </div>
         </div>
         <form id="promoter-host-filter-form" class="split">
@@ -576,6 +576,38 @@
             </thead>
             <tbody id="promoter-host-requests-body">
               <tr><td colspan="6">No host requests yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Find Artistes</h3>
+        <form id="promoter-artiste-filter-form" class="split">
+          <label>Event Date<input name="eventDate" type="date"></label>
+          <label>Name / Email<input name="query" type="text" placeholder="Search artiste"></label>
+          <label>City<input name="city" type="text"></label>
+          <label>Country<input name="country" type="text"></label>
+          <label>Max Offer (USD)<input name="maxCost" type="number" min="0" step="1"></label>
+          <button class="btn btn-secondary" type="submit">Search Artistes</button>
+        </form>
+        <p id="promoter-artiste-search-status" class="status"></p>
+        <div id="promoter-artiste-results" class="promoter-events-grid"></div>
+
+        <h3>My Artiste Requests</h3>
+        <p id="promoter-artiste-requests-status" class="status"></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Date</th>
+                <th>Artiste</th>
+                <th>Offer</th>
+                <th>Status</th>
+                <th>Last Update</th>
+              </tr>
+            </thead>
+            <tbody id="promoter-artiste-requests-body">
+              <tr><td colspan="6">No artiste requests yet.</td></tr>
             </tbody>
           </table>
         </div>
