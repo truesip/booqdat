@@ -53,6 +53,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "venue-settings.html": ["venue", "admin"],
   "host-dashboard.html": ["event_host", "admin"],
   "host-profile.html": ["event_host", "admin"],
+  "host-calendar.html": ["event_host", "admin"],
   "host-settings.html": ["event_host", "admin"],
   "artiste-dashboard.html": ["artiste", "admin"],
   "artiste-profile.html": ["artiste", "admin"],
@@ -117,6 +118,7 @@ const VENUE_SECTION_BY_PAGE = {
 const HOST_SECTION_BY_PAGE = {
   "host-dashboard.html": "host-home",
   "host-profile.html": "host-profile",
+  "host-calendar.html": "host-calendar",
   "host-settings.html": "host-settings"
 };
 const ARTISTE_SECTION_BY_PAGE = {

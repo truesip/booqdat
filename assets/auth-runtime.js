@@ -39,6 +39,7 @@
     "venue-settings.html": ["venue", "admin"],
     "host-dashboard.html": ["event_host", "admin"],
     "host-profile.html": ["event_host", "admin"],
+    "host-calendar.html": ["event_host", "admin"],
     "host-settings.html": ["event_host", "admin"],
     "artiste-dashboard.html": ["artiste", "admin"],
     "artiste-profile.html": ["artiste", "admin"],
