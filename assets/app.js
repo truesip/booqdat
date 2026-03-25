@@ -34,6 +34,7 @@ const ROLE_GUARDS_BY_PAGE = {
   "promoter-events.html": ["promoter", "admin"],
   "promoter-create.html": ["promoter", "admin"],
   "promoter-analytics.html": ["promoter", "admin"],
+  "promoter-hosts.html": ["promoter", "admin"],
   "promoter-venue-search.html": ["promoter", "admin"],
   "promoter-influencers.html": ["promoter", "admin"],
   "promoter-payouts.html": ["promoter", "admin"],
@@ -51,11 +52,8 @@ const ROLE_GUARDS_BY_PAGE = {
   "venue-payout-history.html": ["venue", "admin"],
   "venue-settings.html": ["venue", "admin"],
   "host-dashboard.html": ["event_host", "admin"],
-  "host-events.html": ["event_host", "admin"],
-  "host-venue-search.html": ["event_host", "admin"],
-  "host-calendar.html": ["event_host", "admin"],
-  "host-budget-sponsors.html": ["event_host", "admin"],
-  "host-reports.html": ["event_host", "admin"],
+  "host-profile.html": ["event_host", "admin"],
+  "host-settings.html": ["event_host", "admin"],
   "artiste-dashboard.html": ["artiste", "admin"],
   "artiste-profile.html": ["artiste", "admin"],
   "artiste-gigs.html": ["artiste", "admin"],
@@ -99,6 +97,7 @@ const PROMOTER_SECTION_BY_PAGE = {
   "promoter-events.html": "promoter-events",
   "promoter-create.html": "promoter-create",
   "promoter-analytics.html": "promoter-analytics",
+  "promoter-hosts.html": "promoter-hosts",
   "promoter-venue-search.html": "promoter-venues",
   "promoter-influencers.html": "promoter-influencers",
   "promoter-payouts.html": "promoter-payouts",
@@ -117,11 +116,8 @@ const VENUE_SECTION_BY_PAGE = {
 };
 const HOST_SECTION_BY_PAGE = {
   "host-dashboard.html": "host-home",
-  "host-events.html": "host-events",
-  "host-venue-search.html": "host-venue-search",
-  "host-calendar.html": "host-calendar",
-  "host-budget-sponsors.html": "host-budget-sponsors",
-  "host-reports.html": "host-reports"
+  "host-profile.html": "host-profile",
+  "host-settings.html": "host-settings"
 };
 const ARTISTE_SECTION_BY_PAGE = {
   "artiste-dashboard.html": "artiste-home",
@@ -1681,6 +1677,11 @@ function setupPromoterDashboard() {
   const promoterVenueResults = root.querySelector("#promoter-venue-results");
   const promoterVenueRequestsBody = root.querySelector("#promoter-venue-requests-body");
   const promoterVenueRequestsStatus = root.querySelector("#promoter-venue-requests-status");
+  const promoterHostFilterForm = root.querySelector("#promoter-host-filter-form");
+  const promoterHostSearchStatus = root.querySelector("#promoter-host-search-status");
+  const promoterHostResults = root.querySelector("#promoter-host-results");
+  const promoterHostRequestsBody = root.querySelector("#promoter-host-requests-body");
+  const promoterHostRequestsStatus = root.querySelector("#promoter-host-requests-status");
   const promoterLogoutButton = root.querySelector("[data-promoter-logout]");
 
   let currentStep = 1;
@@ -1969,7 +1970,9 @@ function setupPromoterDashboard() {
   let promoterEvents = loadPromoterEvents();
   let influencerRequests = readInfluencerRequests();
   let promoterVenueRequests = [];
+  let promoterHostRequests = [];
   let lastVenueSearchDate = "";
+  let lastHostSearchDate = "";
 
   function promoterInfluencerRequests() {
     const promoterEmail = currentPromoterEmail();
@@ -2354,6 +2357,108 @@ function setupPromoterDashboard() {
     promoterVenueRequests = Array.isArray(response.requests) ? response.requests : [];
     renderPromoterVenueRequests();
     setVenueStatus(promoterVenueRequestsStatus, "");
+  }
+
+  function getDefaultHostRequestContext() {
+    const sortedByDate = promoterEvents
+      .filter((event) => event && typeof event === "object")
+      .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
+    const upcomingEvent = sortedByDate.find((event) => classifyEventTab(event) === "upcoming");
+    const fallbackEvent = upcomingEvent || promoterEvents[0] || {};
+    const offerPrice = Math.max(0, toNumber(fallbackEvent?.budget, 0));
+    return {
+      eventName: String(fallbackEvent?.title || "").trim(),
+      eventDate: String(fallbackEvent?.date || "").trim(),
+      offerPrice: offerPrice > 0 ? offerPrice : 500
+    };
+  }
+
+  function renderPromoterHostResults(hosts, eventDateKey = lastHostSearchDate) {
+    if (!promoterHostResults) return;
+    const rows = Array.isArray(hosts) ? hosts : [];
+    if (!rows.length) {
+      promoterHostResults.innerHTML = `<article class="promoter-card"><p>No event hosts matched the current filters.</p></article>`;
+      return;
+    }
+    promoterHostResults.innerHTML = rows.map((host) => {
+      const availabilityRaw = String(host?.availability || "").trim();
+      const hasDate = Boolean(eventDateKey);
+      const availabilityLabel = hasDate ? (availabilityRaw || "Unknown") : "Select a date";
+      const availabilityValue = availabilityLabel.toLowerCase();
+      let availabilityClass = "pending";
+      if (availabilityValue.includes("available")) availabilityClass = "approved";
+      if (availabilityValue.includes("booked")) availabilityClass = "rejected";
+      if (availabilityValue.includes("blocked")) availabilityClass = "rejected";
+      if (availabilityValue.includes("pending")) availabilityClass = "pending";
+      const blockedDates = Array.isArray(host?.blockedDates) ? host.blockedDates : [];
+      const blockedDatesTotal = Math.max(
+        blockedDates.length,
+        Math.max(0, Math.floor(toFiniteNumber(host?.blockedDatesTotal, 0)))
+      );
+      const blockedPreview = blockedDates
+        .slice(0, 8)
+        .map((dateValue) => portalFormatDateValue(dateValue))
+        .filter((value) => value && value !== "—");
+      let blockedTitle = "";
+      if (blockedDatesTotal > 0) {
+        blockedTitle = blockedPreview.length
+          ? `Unavailable dates: ${blockedPreview.join(", ")}`
+          : "Unavailable dates available on host calendar.";
+        const remaining = blockedDatesTotal - blockedPreview.length;
+        if (remaining > 0) blockedTitle += `, +${remaining} more`;
+      }
+      const availabilityTitle = blockedTitle ? ` title="${portalEscapeHtml(blockedTitle)}"` : "";
+      return `
+      <article class="promoter-card">
+        <h3>${portalEscapeHtml(host?.name || "Event Host")}</h3>
+        <p>${portalEscapeHtml(host?.location || [host?.city, host?.country].filter(Boolean).join(", ") || "Location TBA")}</p>
+        <p><strong>Booking Cost:</strong> ${usd(Math.max(0, toFiniteNumber(host?.bookingCost, 0)))}</p>
+        <p><strong>Availability:</strong> <span class="status-pill ${availabilityClass}"${availabilityTitle}>${portalEscapeHtml(availabilityLabel)}</span></p>
+        <p class="muted">${portalEscapeHtml(host?.bio || "No bio provided yet.")}</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-promoter-request-host-email="${portalEscapeHtml(host?.email || "")}" data-promoter-request-host-name="${portalEscapeHtml(host?.name || "Event Host")}" data-promoter-request-host-date="${portalEscapeHtml(eventDateKey || "")}" data-promoter-request-host-cost="${Math.max(0, toFiniteNumber(host?.bookingCost, 0))}">Send Booking Request</button>
+      </article>
+    `;
+    }).join("");
+  }
+
+  function renderPromoterHostRequests() {
+    if (!promoterHostRequestsBody) return;
+    const rows = Array.isArray(promoterHostRequests) ? promoterHostRequests : [];
+    const sorted = rows.sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+    if (!sorted.length) {
+      promoterHostRequestsBody.innerHTML = `<tr><td colspan="6">No host requests yet.</td></tr>`;
+      return;
+    }
+    promoterHostRequestsBody.innerHTML = sorted.map((request) => {
+      const statusLabel = String(request?.status || "Pending");
+      const reason = request?.actionReason ? `<div class="muted">${portalEscapeHtml(request.actionReason)}</div>` : "";
+      return `
+        <tr>
+          <td>${portalEscapeHtml(request?.data?.eventName || "Event")}</td>
+          <td>${portalEscapeHtml(portalFormatDateValue(request?.data?.eventDate))}</td>
+          <td>${portalEscapeHtml(request?.hostEmail || "Event Host")}</td>
+          <td>${usd(Math.max(0, toFiniteNumber(request?.data?.offerPrice, 0)))}</td>
+          <td><span class="status-pill ${portalStatusPillClass(statusLabel)}">${portalEscapeHtml(statusLabel)}</span>${reason}</td>
+          <td>${portalEscapeHtml(portalFormatDateValue(request?.actedAt || request?.createdAt))}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function loadPromoterHostRequests() {
+    const response = await apiRequest("/hosts/requests", {
+      includeErrorResponse: true,
+      suppressAuthRedirect: true
+    });
+    if (!response?.ok) {
+      promoterHostRequests = [];
+      renderPromoterHostRequests();
+      setVenueStatus(promoterHostRequestsStatus, response?.error || "Unable to load host requests right now.", true);
+      return;
+    }
+    promoterHostRequests = Array.isArray(response.requests) ? response.requests : [];
+    renderPromoterHostRequests();
+    setVenueStatus(promoterHostRequestsStatus, "");
   }
 
   function setWizardInput(name, value) {
@@ -3013,7 +3118,77 @@ function setupPromoterDashboard() {
     });
   }
 
+  if (promoterHostFilterForm && promoterHostSearchStatus) {
+    promoterHostFilterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(promoterHostFilterForm);
+      const params = new URLSearchParams();
+      const eventDate = String(formData.get("eventDate") || "").trim();
+      const query = String(formData.get("query") || "").trim();
+      const city = String(formData.get("city") || "").trim();
+      const country = String(formData.get("country") || "").trim();
+      const minCost = Math.max(0, toFiniteNumber(formData.get("minCost"), 0));
+      const maxCost = Math.max(0, toFiniteNumber(formData.get("maxCost"), 0));
+      if (eventDate) params.set("eventDate", eventDate);
+      if (query) params.set("q", query);
+      if (city) params.set("city", city);
+      if (country) params.set("country", country);
+      if (minCost > 0) params.set("minCost", String(minCost));
+      if (maxCost > 0) params.set("maxCost", String(maxCost));
+      lastHostSearchDate = eventDate;
+      const response = await apiRequest(`/hosts/marketplace${params.toString() ? `?${params}` : ""}`, {
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setVenueStatus(promoterHostSearchStatus, response?.error || "Unable to search event hosts right now.", true);
+        renderPromoterHostResults([]);
+        return;
+      }
+      const hosts = Array.isArray(response.hosts) ? response.hosts : [];
+      renderPromoterHostResults(hosts, eventDate);
+      const dateLabel = eventDate ? ` for ${portalFormatDateValue(eventDate)}` : "";
+      setVenueStatus(promoterHostSearchStatus, `${hosts.length.toLocaleString()} host${hosts.length === 1 ? "" : "s"} found${dateLabel}.`);
+    });
+  }
+
   root.addEventListener("click", async (event) => {
+    const hostRequestButton = event.target.closest("[data-promoter-request-host-email]");
+    if (hostRequestButton) {
+      const hostEmail = String(hostRequestButton.dataset.promoterRequestHostEmail || "").trim().toLowerCase();
+      const hostName = String(hostRequestButton.dataset.promoterRequestHostName || "Event Host").trim();
+      const hostDate = String(hostRequestButton.dataset.promoterRequestHostDate || "").trim();
+      const hostCost = Math.max(0, toFiniteNumber(hostRequestButton.dataset.promoterRequestHostCost, 0));
+      if (!hostEmail) return;
+      const defaults = getDefaultHostRequestContext();
+      const eventName = String(window.prompt("Event name:", defaults.eventName) || "").trim();
+      if (!eventName) return;
+      const eventDate = String(window.prompt("Event date (YYYY-MM-DD):", hostDate || defaults.eventDate || "") || "").trim();
+      if (!eventDate) return;
+      const offerDefault = hostCost > 0 ? hostCost : defaults.offerPrice;
+      const offerPriceRaw = String(window.prompt("Offer price (USD):", String(Math.max(1, Math.floor(offerDefault)))) || "").trim();
+      const message = String(window.prompt("Optional message to host:", `Booking request for ${eventName}`) || "").trim();
+      const offerPrice = Math.max(1, toFiniteNumber(offerPriceRaw, offerDefault || 500));
+      const response = await apiRequest("/hosts/requests", {
+        method: "POST",
+        body: {
+          hostEmail,
+          eventName,
+          eventDate,
+          offerPrice,
+          message
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        setVenueStatus(promoterHostSearchStatus, response?.error || "Unable to submit host booking request.", true);
+        return;
+      }
+      setVenueStatus(promoterHostSearchStatus, `Booking request sent to ${hostName}.`);
+      await loadPromoterHostRequests();
+      return;
+    }
     const venueRequestButton = event.target.closest("[data-promoter-request-venue-email]");
     if (venueRequestButton) {
       const venueEmail = String(venueRequestButton.dataset.promoterRequestVenueEmail || "").trim().toLowerCase();
@@ -3409,6 +3584,9 @@ function setupPromoterDashboard() {
   renderPromoterVenueResults([]);
   renderPromoterVenueRequests();
   void loadPromoterVenueRequests();
+  renderPromoterHostResults([]);
+  renderPromoterHostRequests();
+  void loadPromoterHostRequests();
   renderAnalytics();
   renderPayoutHistory();
   renderWizardImagePreview([]);
@@ -4246,42 +4424,33 @@ function setupHostPortal() {
   const authUser = readAuthSession()?.user || {};
   const authEmail = normalizeEmail(authUser?.email);
   const identityKey = authEmail || "default";
-  const hostEventsStorageKey = `booqdat_host_events_${identityKey}`;
-  const hostBudgetStorageKey = `booqdat_host_budget_${identityKey}`;
-  const hostEventForm = root.querySelector("#host-event-form");
-  const hostEventStatus = root.querySelector("#host-event-status");
-  const hostEventsBody = root.querySelector("#host-events-body");
-  const hostVenueFilterForm = root.querySelector("#host-venue-filter-form");
-  const hostVenueSearchStatus = root.querySelector("#host-venue-search-status");
-  const hostVenueResults = root.querySelector("#host-venue-results");
-  const hostCalendarBody = root.querySelector("#host-calendar-body");
-  const hostBudgetForm = root.querySelector("#host-budget-form");
-  const hostBudgetStatus = root.querySelector("#host-budget-status");
-  const hostReportsBody = root.querySelector("#host-reports-body");
+  const blockedDatesStorageKey = `booqdat_host_blocked_dates_${identityKey}`;
+
+  const profileForm = root.querySelector("#host-profile-form");
+  const profileStatus = root.querySelector("#host-profile-status");
+  const settingsForm = root.querySelector("#host-settings-form");
+  const settingsStatus = root.querySelector("#host-settings-status");
+  const imagePreview = root.querySelector("#host-image-preview");
+  const bookingRequestsBody = root.querySelector("#host-booking-requests-body");
+  
+  const blockedDateInput = root.querySelector("#host-block-date");
+  const blockedDatesList = root.querySelector("#host-calendar-blocked");
+  const calendarGrid = root.querySelector("#host-calendar-grid");
+  const calendarLabel = root.querySelector("[data-host-calendar-label]");
+  const calendarPrevButton = root.querySelector("[data-host-calendar-prev]");
+  const calendarNextButton = root.querySelector("[data-host-calendar-next]");
+  const calendarStatus = root.querySelector("#host-calendar-status");
+  const addBlockedDateButton = root.querySelector("[data-host-block-date]");
+  
   const sidebarToggle = root.querySelector("[data-host-sidebar-toggle]");
   const logoutButton = root.querySelector("[data-host-logout]");
 
-  let hostEvents = portalReadStorageJson(hostEventsStorageKey, [])
-    .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      id: String(item?.id || `host-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-      eventName: String(item?.eventName || "").trim(),
-      eventDate: String(item?.eventDate || "").trim(),
-      estimatedAttendees: Math.max(1, Math.floor(toFiniteNumber(item?.estimatedAttendees, 1))),
-      budget: Math.max(0, toFiniteNumber(item?.budget, 0)),
-      status: String(item?.status || "Planning")
-    }))
-    .filter((item) => item.eventName);
-  let hostBudgetPlan = portalReadStorageJson(hostBudgetStorageKey, {
-    budgetNotes: "",
-    sponsorTargets: ""
-  });
-  let hostRequests = [];
   let hostProfileData = {};
-
-  function persistHostEvents() {
-    portalWriteStorageJson(hostEventsStorageKey, hostEvents);
-  }
+  let hostRequests = [];
+  let calendarAnchorDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  let blockedDates = portalReadStorageJson(blockedDatesStorageKey, [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
 
   function setStatus(target, message, isError = false) {
     if (!target) return;
@@ -4289,21 +4458,118 @@ function setupHostPortal() {
     target.style.color = isError ? "#b3261e" : "";
   }
 
-  function eventMatchRequest(eventItem, requests) {
-    const normalizedEventName = String(eventItem?.eventName || "").trim().toLowerCase();
-    if (!normalizedEventName) return null;
-    return (Array.isArray(requests) ? requests : []).find((request) => String(request?.data?.eventName || "").trim().toLowerCase() === normalizedEventName) || null;
+  function uniqueSortedDates(values) {
+    return [...new Set((Array.isArray(values) ? values : []).map((item) => String(item || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  function toDateKey(value) {
+    if (!value) return "";
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+
+  async function persistHostBlockedDates() {
+    blockedDates = uniqueSortedDates(blockedDates.map((item) => toDateKey(item)).filter(Boolean));
+    portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+    hostProfileData = { ...hostProfileData, blockedDates };
+    try {
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "event_host",
+          data: { blockedDates }
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      if (!response?.ok) {
+        if (calendarStatus) setStatus(calendarStatus, response?.error || "Unable to sync blocked dates right now.", true);
+        return;
+      }
+      hostProfileData = response.profile?.data && typeof response.profile.data === "object"
+        ? response.profile.data
+        : hostProfileData;
+    } catch {
+      if (calendarStatus) setStatus(calendarStatus, "Unable to sync blocked dates right now.", true);
+    }
+  }
+
+  function getBookedDates() {
+    const rows = Array.isArray(hostRequests) ? hostRequests : [];
+    const accepted = rows.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
+    return new Set(accepted.map((item) => toDateKey(item?.data?.eventDate)).filter(Boolean));
+  }
+
+  function renderHostCalendar() {
+    if (!calendarGrid || !calendarLabel) return;
+    const bookedDates = getBookedDates();
+    const activeMonth = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth(), 1);
+    const year = activeMonth.getFullYear();
+    const month = activeMonth.getMonth();
+    calendarLabel.textContent = activeMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const firstOfMonth = new Date(year, month, 1);
+    const startOffset = (firstOfMonth.getDay() + 6) % 7;
+    const startDate = new Date(year, month, 1 - startOffset);
+    const todayKey = toDateKey(new Date());
+    const cells = dayLabels.map((label) => `<div class="venue-calendar-cell is-header">${label}</div>`);
+    for (let i = 0; i < 42; i += 1) {
+      const current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+      const dateKey = toDateKey(current);
+      const isCurrentMonth = current.getMonth() === month;
+      const isBooked = bookedDates.has(dateKey);
+      const isBlocked = blockedDates.includes(dateKey);
+      const classes = ["venue-calendar-cell"];
+      if (!isCurrentMonth) classes.push("is-muted");
+      if (dateKey === todayKey) classes.push("is-today");
+      if (isBooked) classes.push("is-booked");
+      else if (isBlocked) classes.push("is-blocked");
+      const statusLabel = isBooked ? "Booked" : isBlocked ? "Blocked" : "";
+      cells.push(`
+        <button class="${classes.join(" ")}" type="button" data-venue-date="${dateKey}" ${!isCurrentMonth ? "tabindex=\"-1\"" : ""}>
+          <span class="venue-calendar-date">${current.getDate()}</span>
+          ${statusLabel ? `<span class="venue-calendar-meta">${statusLabel}</span>` : "<span class=\"venue-calendar-meta\">&nbsp;</span>"}
+        </button>
+      `);
+    }
+    calendarGrid.innerHTML = cells.join("");
+  }
+
+  function renderBlockedDates() {
+    if (!blockedDatesList) return;
+    const bookedDates = getBookedDates();
+    const merged = uniqueSortedDates([...blockedDates, ...bookedDates]);
+    if (!merged.length) {
+      blockedDatesList.innerHTML = `<li class="muted">No blocked dates yet.</li>`;
+      return;
+    }
+    blockedDatesList.innerHTML = merged.map((dateValue) => {
+      const isBooked = bookedDates.has(dateValue);
+      return `
+        <li>
+          <strong>${portalEscapeHtml(portalFormatDateValue(dateValue))}</strong>
+          ${isBooked ? `<span class="status-pill approved">Booked</span>` : `<button class="btn btn-secondary btn-sm" type="button" data-venue-unblock-date="${portalEscapeHtml(dateValue)}">Remove</button>`}
+        </li>
+      `;
+    }).join("");
+    renderHostCalendar();
   }
 
   function updateHostKpis() {
-    const pendingCount = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
     const acceptedRequests = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
-    const budgetTotal = hostEvents.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
+    const pendingRequests = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending"));
+    const totalEarnings = acceptedRequests.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.data?.offerPrice, 0)), 0);
+    
     const values = {
-      events: hostEvents.length.toLocaleString(),
-      pending: pendingCount.toLocaleString(),
+      revenue: usd(totalEarnings),
       accepted: acceptedRequests.length.toLocaleString(),
-      budget: usd(budgetTotal)
+      pending: pendingRequests.length.toLocaleString()
     };
     Object.entries(values).forEach(([key, value]) => {
       const target = root.querySelector(`[data-host-kpi="${key}"]`);
@@ -4311,93 +4577,45 @@ function setupHostPortal() {
     });
   }
 
-  function renderHostEvents() {
-    if (!hostEventsBody) return;
-    if (!hostEvents.length) {
-      hostEventsBody.innerHTML = `<tr><td colspan="5">No hosted events yet.</td></tr>`;
+  function renderHostRequestsTable() {
+    if (!bookingRequestsBody) return;
+    if (!hostRequests.length) {
+      bookingRequestsBody.innerHTML = `<tr><td colspan="6">No booking requests yet.</td></tr>`;
       return;
     }
-    hostEventsBody.innerHTML = hostEvents
-      .sort((a, b) => String(a?.eventDate || "").localeCompare(String(b?.eventDate || "")))
+    bookingRequestsBody.innerHTML = hostRequests
+      .sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")))
       .map((item) => {
-        const matchedRequest = eventMatchRequest(item, hostRequests);
-        const resolvedStatus = matchedRequest?.status || item?.status || "Planning";
+        const status = String(item?.status || "Pending");
+        const isPending = status.toLowerCase().includes("pending");
+        const requestId = String(item?.requestId || "");
         return `
           <tr>
-            <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
-            <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
-            <td>${Math.max(0, Math.floor(toFiniteNumber(item?.estimatedAttendees, 0))).toLocaleString()}</td>
-            <td>${usd(Math.max(0, toFiniteNumber(item?.budget, 0)))}</td>
-            <td><span class="status-pill ${portalStatusPillClass(resolvedStatus)}">${portalEscapeHtml(resolvedStatus)}</span></td>
+            <td>${portalEscapeHtml(item?.data?.eventName || "Untitled Event")}</td>
+            <td>${portalEscapeHtml(portalFormatDateValue(item?.data?.eventDate))}</td>
+            <td>${portalEscapeHtml(item?.data?.promoterName || item?.promoterEmail || "Promoter")}</td>
+            <td>${usd(Math.max(0, toFiniteNumber(item?.data?.offerPrice, 0)))}</td>
+            <td><span class="status-pill ${portalStatusPillClass(status)}">${portalEscapeHtml(status)}</span></td>
+            <td>
+              <div class="event-action-row">
+                <button class="btn btn-secondary btn-sm" type="button" data-host-request-action="accept" data-request-id="${portalEscapeHtml(requestId)}" ${isPending ? "" : "disabled"}>Accept</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-host-request-action="decline" data-request-id="${portalEscapeHtml(requestId)}" ${isPending ? "" : "disabled"}>Decline</button>
+              </div>
+            </td>
           </tr>
         `;
       }).join("");
-  }
-
-  function renderHostCalendar() {
-    if (!hostCalendarBody) return;
-    if (!hostEvents.length) {
-      hostCalendarBody.innerHTML = `<tr><td colspan="4">No calendar entries yet.</td></tr>`;
-      return;
-    }
-    hostCalendarBody.innerHTML = hostEvents
-      .sort((a, b) => String(a?.eventDate || "").localeCompare(String(b?.eventDate || "")))
-      .map((item) => {
-        const matchedRequest = eventMatchRequest(item, hostRequests);
-        return `
-          <tr>
-            <td>${portalEscapeHtml(portalFormatDateValue(item?.eventDate))}</td>
-            <td>${portalEscapeHtml(item?.eventName || "Untitled Event")}</td>
-            <td>${portalEscapeHtml(matchedRequest?.venueEmail || "Venue TBD")}</td>
-            <td><span class="status-pill ${portalStatusPillClass(matchedRequest?.status || item?.status || "Planning")}">${portalEscapeHtml(matchedRequest?.status || item?.status || "Planning")}</span></td>
-          </tr>
-        `;
-      }).join("");
-  }
-
-  function renderHostReports() {
-    if (!hostReportsBody) return;
-    const pendingCount = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("pending")).length;
-    const acceptedRequests = hostRequests.filter((item) => String(item?.status || "").toLowerCase().includes("accepted"));
-    const plannedBudget = hostEvents.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.budget, 0)), 0);
-    const proposedBookingSpend = acceptedRequests.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item?.data?.proposedPrice, 0)), 0);
-    hostReportsBody.innerHTML = `
-      <tr><td>Upcoming hosted events</td><td>${hostEvents.length.toLocaleString()}</td></tr>
-      <tr><td>Pending venue requests</td><td>${pendingCount.toLocaleString()}</td></tr>
-      <tr><td>Accepted venue bookings</td><td>${acceptedRequests.length.toLocaleString()}</td></tr>
-      <tr><td>Planned event budget</td><td>${usd(plannedBudget)}</td></tr>
-      <tr><td>Accepted booking spend</td><td>${usd(proposedBookingSpend)}</td></tr>
-    `;
-  }
-
-  function renderHostVenueSearchResults(venues) {
-    if (!hostVenueResults) return;
-    const rows = Array.isArray(venues) ? venues : [];
-    if (!rows.length) {
-      hostVenueResults.innerHTML = `<article class="promoter-card"><p>No venues matched the current filters.</p></article>`;
-      return;
-    }
-    hostVenueResults.innerHTML = rows.map((venue) => `
-      <article class="promoter-card">
-        <h3>${portalEscapeHtml(venue?.venueName || "Venue")}</h3>
-        <p>${portalEscapeHtml(formatLocationLine(venue) || "Location TBA")}</p>
-        <p><strong>Capacity:</strong> ${Math.max(0, Math.floor(toFiniteNumber(venue?.capacity, 0))).toLocaleString()}</p>
-        <p><strong>Rates:</strong> Hourly ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.hourlyRate, 0)))} • Daily ${usd(Math.max(0, toFiniteNumber(venue?.pricing?.dailyRate, 0)))}</p>
-        <p class="muted">${portalEscapeHtml(Array.isArray(venue?.amenities) && venue.amenities.length ? venue.amenities.join(", ") : "No amenities listed")}</p>
-        <button class="btn btn-secondary btn-sm" type="button" data-host-request-venue-email="${portalEscapeHtml(venue?.email || "")}" data-host-request-venue-name="${portalEscapeHtml(venue?.venueName || "Venue")}">Request Booking</button>
-      </article>
-    `).join("");
   }
 
   function renderHostPortal() {
-    renderHostEvents();
     renderHostCalendar();
-    renderHostReports();
+    renderBlockedDates();
+    renderHostRequestsTable();
     updateHostKpis();
   }
 
   async function loadHostRequests() {
-    const response = await apiRequest("/venues/requests", {
+    const response = await apiRequest("/hosts/requests", {
       includeErrorResponse: true,
       suppressAuthRedirect: true
     });
@@ -4410,152 +4628,220 @@ function setupHostPortal() {
       includeErrorResponse: true,
       suppressAuthRedirect: true
     });
-    if (!response?.ok || !response?.profile) {
-      if (hostBudgetForm) {
-        if (hostBudgetForm.elements?.budgetNotes) hostBudgetForm.elements.budgetNotes.value = String(hostBudgetPlan?.budgetNotes || "");
-        if (hostBudgetForm.elements?.sponsorTargets) hostBudgetForm.elements.sponsorTargets.value = String(hostBudgetPlan?.sponsorTargets || "");
+    if (!response?.ok || !response?.profile) return;
+    
+    const profile = response.profile;
+    const data = profile?.data && typeof profile.data === "object" ? profile.data : {};
+    hostProfileData = { ...data };
+    
+    // Sync blocked dates
+    const remoteBlocked = Array.isArray(data?.blockedDates) ? data.blockedDates : [];
+    if (remoteBlocked.length) {
+      blockedDates = uniqueSortedDates([...blockedDates, ...remoteBlocked.map((item) => toDateKey(item)).filter(Boolean)]);
+      portalWriteStorageJson(blockedDatesStorageKey, blockedDates);
+    }
+
+    if (profileForm) {
+      if (profileForm.elements?.name) profileForm.elements.name.value = String(data.name || profile.name || authUser.name || "");
+      if (profileForm.elements?.dob) profileForm.elements.dob.value = String(data.dob || "");
+      if (profileForm.elements?.phone) profileForm.elements.phone.value = String(data.phone || profile.phone || "");
+      if (profileForm.elements?.bookingCost) profileForm.elements.bookingCost.value = String(Math.max(0, toFiniteNumber(data.bookingCost, 0)));
+      if (profileForm.elements?.address) profileForm.elements.address.value = String(data.address || "");
+      if (profileForm.elements?.city) profileForm.elements.city.value = String(data.city || "");
+      if (profileForm.elements?.country) profileForm.elements.country.value = String(data.country || "");
+      if (profileForm.elements?.bio) profileForm.elements.bio.value = String(data.bio || "");
+      if (profileForm.elements?.profileImage) profileForm.elements.profileImage.value = String(data.profileImage || "");
+      
+      if (imagePreview && data.profileImage) {
+        imagePreview.innerHTML = `<img src="${portalEscapeHtml(data.profileImage)}" alt="Profile" style="max-height:100px; border-radius:4px;">`;
       }
-      return;
     }
-    hostProfileData = response.profile?.data && typeof response.profile.data === "object" ? response.profile.data : {};
-    const budgetNotes = String(hostProfileData?.hostBudgetNotes || hostBudgetPlan?.budgetNotes || "");
-    const sponsorTargets = String(hostProfileData?.hostSponsorTargets || hostBudgetPlan?.sponsorTargets || "");
-    hostBudgetPlan = { budgetNotes, sponsorTargets };
-    portalWriteStorageJson(hostBudgetStorageKey, hostBudgetPlan);
-    if (hostBudgetForm) {
-      if (hostBudgetForm.elements?.budgetNotes) hostBudgetForm.elements.budgetNotes.value = budgetNotes;
-      if (hostBudgetForm.elements?.sponsorTargets) hostBudgetForm.elements.sponsorTargets.value = sponsorTargets;
+
+    if (settingsForm) {
+      if (settingsForm.elements?.bankName) settingsForm.elements.bankName.value = String(data.bankName || "");
+      if (settingsForm.elements?.bankAddress) settingsForm.elements.bankAddress.value = String(data.bankAddress || "");
+      if (settingsForm.elements?.city) settingsForm.elements.city.value = String(data.city || "");
+      if (settingsForm.elements?.stateProvince) settingsForm.elements.stateProvince.value = String(data.stateProvince || "");
+      if (settingsForm.elements?.country) settingsForm.elements.country.value = String(data.country || "");
+      if (settingsForm.elements?.accountHolderName) settingsForm.elements.accountHolderName.value = String(data.accountHolderName || "");
+      if (settingsForm.elements?.bankAccountNumber) settingsForm.elements.bankAccountNumber.value = String(data.bankAccountNumber || "");
+      if (settingsForm.elements?.routingNumber) settingsForm.elements.routingNumber.value = String(data.routingNumber || "");
+      if (settingsForm.elements?.swiftCode) settingsForm.elements.swiftCode.value = String(data.swiftCode || "");
     }
+    
+    renderHostPortal();
   }
 
-  if (hostEventForm && hostEventStatus) {
-    hostEventForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (!hostEventForm.reportValidity()) return;
-      const formData = new FormData(hostEventForm);
-      const nextEvent = {
-        id: `host-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        eventName: String(formData.get("eventName") || "").trim(),
-        eventDate: String(formData.get("eventDate") || "").trim(),
-        estimatedAttendees: Math.max(1, Math.floor(toFiniteNumber(formData.get("estimatedAttendees"), 1))),
-        budget: Math.max(0, toFiniteNumber(formData.get("budget"), 0)),
-        status: "Planning"
-      };
-      if (!nextEvent.eventName || !nextEvent.eventDate) {
-        setStatus(hostEventStatus, "Event name and date are required.", true);
-        return;
-      }
-      hostEvents.unshift(nextEvent);
-      persistHostEvents();
-      hostEventForm.reset();
-      setStatus(hostEventStatus, `Hosted event added: ${nextEvent.eventName}`);
-      renderHostPortal();
-    });
-  }
-
-  if (hostVenueFilterForm && hostVenueSearchStatus) {
-    hostVenueFilterForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const formData = new FormData(hostVenueFilterForm);
-      const params = new URLSearchParams();
-      const city = String(formData.get("city") || "").trim();
-      const country = String(formData.get("country") || "").trim();
-      const minCapacity = Math.max(0, Math.floor(toFiniteNumber(formData.get("minCapacity"), 0)));
-      const maxPrice = Math.max(0, toFiniteNumber(formData.get("maxPrice"), 0));
-      if (city) params.set("city", city);
-      if (country) params.set("country", country);
-      if (minCapacity > 0) params.set("minCapacity", String(minCapacity));
-      if (maxPrice > 0) params.set("maxPrice", String(maxPrice));
-      const response = await apiRequest(`/venues/marketplace${params.toString() ? `?${params}` : ""}`, {
-        includeErrorResponse: true,
-        suppressAuthRedirect: true
+  if (profileForm) {
+    const profileImageInput = profileForm.elements?.profileImage;
+    if (profileImageInput && "addEventListener" in profileImageInput) {
+      profileImageInput.addEventListener("input", () => {
+        const imageUrl = String(profileImageInput.value || "").trim();
+        if (!imagePreview) return;
+        if (!imageUrl) {
+          imagePreview.innerHTML = "";
+          return;
+        }
+        imagePreview.innerHTML = `<img src="${portalEscapeHtml(imageUrl)}" alt="Profile" style="max-height:100px; border-radius:4px;">`;
       });
-      if (!response?.ok) {
-        setStatus(hostVenueSearchStatus, response?.error || "Unable to search venues right now.", true);
-        renderHostVenueSearchResults([]);
-        return;
-      }
-      const venues = Array.isArray(response.venues) ? response.venues : [];
-      renderHostVenueSearchResults(venues);
-      setStatus(hostVenueSearchStatus, `${venues.length.toLocaleString()} venue${venues.length === 1 ? "" : "s"} found.`);
-    });
-  }
-
-  root.addEventListener("click", async (event) => {
-    const requestButton = event.target.closest("[data-host-request-venue-email]");
-    if (!requestButton) return;
-    const venueEmail = String(requestButton.dataset.hostRequestVenueEmail || "").trim().toLowerCase();
-    const venueName = String(requestButton.dataset.hostRequestVenueName || "Venue").trim();
-    if (!venueEmail) return;
-    if (!hostEvents.length) {
-      setStatus(hostVenueSearchStatus, "Add a hosted event first, then request a venue.", true);
-      return;
     }
-    const fallbackEvent = hostEvents[0];
-    const eventNameInput = String(window.prompt("Event name for this booking request:", fallbackEvent?.eventName || "") || "").trim();
-    if (!eventNameInput) return;
-    const matchedEvent = hostEvents.find((item) => String(item?.eventName || "").trim().toLowerCase() === eventNameInput.toLowerCase()) || fallbackEvent;
-    const eventDateInput = String(window.prompt("Event date (YYYY-MM-DD):", matchedEvent?.eventDate || "") || "").trim();
-    if (!eventDateInput) return;
-    const attendeesInput = String(window.prompt("Estimated attendees:", String(Math.max(1, Math.floor(toFiniteNumber(matchedEvent?.estimatedAttendees, 1))))) || "").trim();
-    const priceInput = String(window.prompt("Proposed booking price (USD):", String(Math.max(0, Math.floor(toFiniteNumber(matchedEvent?.budget, 0))))) || "").trim();
-    const message = String(window.prompt("Optional message to venue:", `Requesting ${venueName} for ${eventNameInput}`) || "").trim();
-    const estimatedAttendees = Math.max(1, Math.floor(toFiniteNumber(attendeesInput, 1)));
-    const proposedPrice = Math.max(1, toFiniteNumber(priceInput, 0));
-    const response = await apiRequest("/venues/requests", {
-      method: "POST",
-      body: {
-        venueEmail,
-        eventName: eventNameInput,
-        eventDate: eventDateInput,
-        estimatedAttendees,
-        proposedPrice,
-        message
-      },
-      includeErrorResponse: true,
-      suppressAuthRedirect: true
-    });
-    if (!response?.ok) {
-      setStatus(hostVenueSearchStatus, response?.error || "Unable to submit venue request.", true);
-      return;
-    }
-    setStatus(hostVenueSearchStatus, `Venue request sent to ${venueName}.`);
-    await loadHostRequests();
-  });
-
-  if (hostBudgetForm && hostBudgetStatus) {
-    hostBudgetForm.addEventListener("submit", async (event) => {
+    profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const formData = new FormData(hostBudgetForm);
-      const budgetNotes = String(formData.get("budgetNotes") || "").trim();
-      const sponsorTargets = String(formData.get("sponsorTargets") || "").trim();
-      hostBudgetPlan = { budgetNotes, sponsorTargets };
-      portalWriteStorageJson(hostBudgetStorageKey, hostBudgetPlan);
+      if (!profileForm.reportValidity()) return;
+      const formData = new FormData(profileForm);
+      const payloadData = {
+        ...hostProfileData,
+        name: String(formData.get("name") || "").trim(),
+        dob: String(formData.get("dob") || "").trim(),
+        phone: String(formData.get("phone") || "").trim(),
+        bookingCost: Math.max(0, toFiniteNumber(formData.get("bookingCost"), 0)),
+        address: String(formData.get("address") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        country: String(formData.get("country") || "").trim(),
+        bio: String(formData.get("bio") || "").trim(),
+        profileImage: String(formData.get("profileImage") || "").trim()
+      };
+
       const response = await apiRequest("/portal/profile", {
         method: "POST",
         body: {
           role: "event_host",
-          data: {
-            ...hostProfileData,
-            hostBudgetNotes: budgetNotes,
-            hostSponsorTargets: sponsorTargets
-          }
+          name: payloadData.name || authUser?.name || "Event Host",
+          email: authEmail,
+          data: payloadData
         },
         includeErrorResponse: true,
         suppressAuthRedirect: true
       });
-      if (!response?.ok) {
-        setStatus(hostBudgetStatus, response?.error || "Saved locally, but cloud profile update failed.", true);
+
+      if (!response?.ok || !response?.profile) {
+        setStatus(profileStatus, response?.error || "Unable to save profile.", true);
         return;
       }
-      hostProfileData = response.profile?.data && typeof response.profile.data === "object"
-        ? response.profile.data
-        : {
-          ...hostProfileData,
-          hostBudgetNotes: budgetNotes,
-          hostSponsorTargets: sponsorTargets
-        };
-      setStatus(hostBudgetStatus, "Budget and sponsor plan saved.");
+      hostProfileData = response.profile.data;
+      setStatus(profileStatus, "Profile saved successfully.");
+    });
+  }
+
+  if (settingsForm) {
+    settingsForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!settingsForm.reportValidity()) return;
+      const formData = new FormData(settingsForm);
+      const payloadData = {
+        ...hostProfileData,
+        bankName: String(formData.get("bankName") || "").trim(),
+        bankAddress: String(formData.get("bankAddress") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        stateProvince: String(formData.get("stateProvince") || "").trim(),
+        country: String(formData.get("country") || "").trim(),
+        accountHolderName: String(formData.get("accountHolderName") || "").trim(),
+        bankAccountNumber: String(formData.get("bankAccountNumber") || "").trim(),
+        routingNumber: String(formData.get("routingNumber") || "").trim(),
+        swiftCode: String(formData.get("swiftCode") || "").trim()
+      };
+
+      const response = await apiRequest("/portal/profile", {
+        method: "POST",
+        body: {
+          role: "event_host",
+          email: authEmail,
+          data: payloadData
+        },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+
+      if (!response?.ok) {
+        setStatus(settingsStatus, response?.error || "Unable to save settings.", true);
+        return;
+      }
+      hostProfileData = response.profile?.data || payloadData;
+      setStatus(settingsStatus, "Bank details saved.");
+    });
+  }
+
+  if (addBlockedDateButton && blockedDateInput) {
+    addBlockedDateButton.addEventListener("click", () => {
+      const nextDate = String(blockedDateInput.value || "").trim();
+      if (!nextDate) return;
+      blockedDates = uniqueSortedDates([...blockedDates, nextDate]);
+      void persistHostBlockedDates();
+      blockedDateInput.value = "";
+      renderBlockedDates();
+    });
+  }
+
+  root.addEventListener("click", async (event) => {
+    const removeBlockedDateButton = event.target.closest("[data-venue-unblock-date]");
+    if (removeBlockedDateButton) {
+      const dateValue = String(removeBlockedDateButton.dataset.venueUnblockDate || "").trim();
+      blockedDates = blockedDates.filter((item) => String(item || "").trim() !== dateValue);
+      void persistHostBlockedDates();
+      renderBlockedDates();
+      return;
+    }
+    
+    const calendarCell = event.target.closest("[data-venue-date]");
+    if (calendarCell) {
+      const dateKey = String(calendarCell.dataset.venueDate || "").trim();
+      if (!dateKey) return;
+      const bookedDates = getBookedDates();
+      if (bookedDates.has(dateKey)) {
+        if (calendarStatus) setStatus(calendarStatus, "This date is booked and cannot be unblocked.", true);
+        return;
+      }
+      if (blockedDates.includes(dateKey)) {
+        blockedDates = blockedDates.filter((item) => item !== dateKey);
+        void persistHostBlockedDates();
+        if (calendarStatus) setStatus(calendarStatus, `Removed block for ${portalFormatDateValue(dateKey)}.`);
+      } else {
+        blockedDates = uniqueSortedDates([...blockedDates, dateKey]);
+        void persistHostBlockedDates();
+        if (calendarStatus) setStatus(calendarStatus, `Blocked ${portalFormatDateValue(dateKey)}.`);
+      }
+      renderBlockedDates();
+      return;
+    }
+
+    const actionButton = event.target.closest("[data-host-request-action]");
+    if (actionButton) {
+      const requestId = String(actionButton.dataset.requestId || "").trim();
+      const action = String(actionButton.dataset.hostRequestAction || "").trim().toLowerCase();
+      if (!requestId) return;
+      
+      actionButton.disabled = true;
+      let reason = "";
+      if (action === "decline") {
+        reason = String(window.prompt("Add a decline reason (optional):", "") || "").trim();
+      }
+      
+      const response = await apiRequest(`/hosts/requests/${encodeURIComponent(requestId)}/status`, {
+        method: "POST",
+        body: { status: action === "accept" ? "accepted" : "declined", reason },
+        includeErrorResponse: true,
+        suppressAuthRedirect: true
+      });
+      
+      if (!response?.ok) {
+        actionButton.disabled = false;
+        alert(response?.error || "Unable to update request status.");
+        return;
+      }
+      await loadHostRequests();
+    }
+  });
+
+  if (calendarPrevButton) {
+    calendarPrevButton.addEventListener("click", () => {
+      calendarAnchorDate = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth() - 1, 1);
+      renderHostCalendar();
+    });
+  }
+  if (calendarNextButton) {
+    calendarNextButton.addEventListener("click", () => {
+      calendarAnchorDate = new Date(calendarAnchorDate.getFullYear(), calendarAnchorDate.getMonth() + 1, 1);
+      renderHostCalendar();
     });
   }
 
@@ -4573,7 +4859,6 @@ function setupHostPortal() {
 
   applyGenericPortalSectionView(root, activeSectionId);
   setGenericPortalSidebarActiveLink(root, hostPageName);
-  renderHostVenueSearchResults([]);
   renderHostPortal();
   void loadHostProfile();
   void loadHostRequests();

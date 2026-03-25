@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,7 +30,7 @@
 </head>
 
 <title>Event Host Portal | BOOQDAT</title>
-<meta name="description" content="Event host portal for profile management, booking requests, and availability calendar.">
+<meta name="description" content="Event host portal for profile management and payouts.">
 <body class="auth-pending">
 
 <header class="site-header">
@@ -61,52 +60,28 @@
       <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-host-logout>Log Out</button></div>
     </aside>
     <section class="promoter-main">
-      <section class="promoter-section" id="host-home">
-        <p class="eyebrow">Event Host Dashboard</p>
-        <h1>Manage bookings and availability</h1>
-        <div class="promoter-kpi-grid">
-          <article class="promoter-kpi-card"><span>Total Earnings</span><strong data-host-kpi="revenue">$0</strong></article>
-          <article class="promoter-kpi-card"><span>Accepted Bookings</span><strong data-host-kpi="accepted">0</strong></article>
-          <article class="promoter-kpi-card"><span>Pending Requests</span><strong data-host-kpi="pending">0</strong></article>
-        </div>
-        
-        <h3>Booking Calendar</h3>
-        <p class="muted">Click a date to block or unblock it. Booked dates are shown in orange.</p>
-        <p id="host-calendar-status" class="status"></p>
-        <div class="venue-calendar-shell">
-          <div class="venue-calendar-head">
-            <button class="btn btn-secondary btn-sm" type="button" data-host-calendar-prev>&larr; Prev</button>
-            <strong data-host-calendar-label>Month Year</strong>
-            <button class="btn btn-secondary btn-sm" type="button" data-host-calendar-next>Next &rarr;</button>
+      <section class="promoter-section" id="host-profile">
+        <h2>My Profile</h2>
+        <form id="host-profile-form" class="stack">
+          <div class="split">
+            <label>Name<input name="name" type="text" required></label>
+            <label>Date of Birth<input name="dob" type="date" required></label>
           </div>
-          <div class="venue-calendar-grid" id="host-calendar-grid"></div>
-        </div>
-
-        <h3>Blocked Dates</h3>
-        <div class="split" style="align-items: flex-end; max-width: 400px; margin-bottom: 1rem;">
-          <label>Add Blocked Date<input id="host-block-date" type="date"></label>
-          <button class="btn btn-secondary" type="button" data-host-block-date>Block</button>
-        </div>
-        <ul id="host-calendar-blocked" class="venue-blocked-list"></ul>
-
-        <h3>Booking Requests</h3>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Date</th>
-                <th>Promoter</th>
-                <th>Offer</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="host-booking-requests-body">
-              <tr><td colspan="6">No booking requests yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
+          <div class="split">
+            <label>Phone<input name="phone" type="tel" required></label>
+            <label>Booking Cost (USD)<input name="bookingCost" type="number" min="0" step="1" required></label>
+          </div>
+          <label>Address<input name="address" type="text" required></label>
+          <div class="split">
+            <label>City<input name="city" type="text" required></label>
+            <label>Country<input name="country" type="text" required></label>
+          </div>
+          <label>Short Bio / Experience<textarea name="bio" rows="3"></textarea></label>
+          <label>Profile Image URL<input name="profileImage" type="url" placeholder="https://..."></label>
+          <div id="host-image-preview" class="wizard-image-preview"></div>
+          <button class="btn btn-primary" type="submit">Save Profile</button>
+        </form>
+        <p id="host-profile-status" class="status"></p>
       </section>
     </section>
   </main>
