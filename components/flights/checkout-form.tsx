@@ -96,44 +96,115 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
 
 
   return (
-    <form action={submitPassenger} className="rounded-[2rem] bg-white p-6 shadow-card">
-      <h2 className="text-2xl font-black">Passenger and contact details</h2>
-      <p className="mt-2 text-sm text-ink/60">
-        Final charge: {formatCurrency(booking.amount, booking.currency)} including BooqDat service fee.
-      </p>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Field label="Title">
-          <Select name="title" defaultValue="mr">
-            <option value="mr">Mr</option>
-            <option value="mrs">Mrs</option>
-            <option value="ms">Ms</option>
-            <option value="mx">Mx</option>
-          </Select>
-        </Field>
-        <Field label="Gender">
-          <Select name="gender" defaultValue="m">
-            <option value="m">Male</option>
-            <option value="f">Female</option>
-            <option value="x">Unspecified</option>
-          </Select>
-        </Field>
-        <Field label="First name">
-          <Input name="givenName" required />
-        </Field>
-        <Field label="Last name">
-          <Input name="familyName" required />
-        </Field>
-        <Field label="Date of birth">
-          <Input name="bornOn" type="date" required />
-        </Field>
-        <Field label="Email">
-          <Input name="email" type="email" defaultValue={booking.contact.email === "pending@booqdat.local" ? "" : booking.contact.email} required />
-        </Field>
-        <Field label="Phone">
-          <Input name="phone" type="tel" defaultValue={booking.contact.phone ?? ""} required />
-        </Field>
-      </div>
-      <Button disabled={loading} className="mt-6 w-full">
+    <form action={submitPassenger} className="space-y-6">
+      {/* Contact Details Section */}
+      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
+        <h2 className="text-2xl font-black text-ink">Contact details</h2>
+        <p className="mt-1 text-sm text-ink/50">For receipt and carrier travel updates.</p>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <Field label="Email address *">
+            <Input name="email" type="email" defaultValue={booking.contact.email === "pending@booqdat.local" ? "" : booking.contact.email} required />
+          </Field>
+          <Field label="Phone number *">
+            <Input name="phone" type="tel" defaultValue={booking.contact.phone ?? ""} required placeholder="+1 617 756 2626" />
+          </Field>
+        </div>
+      </section>
+
+      {/* Passenger Personal & Passport Details */}
+      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
+        <h2 className="text-2xl font-black text-ink">Passengers</h2>
+        <div className="mt-3 inline-flex rounded-full bg-orangebrand/10 px-3 py-1 text-xs font-black text-orangebrand">
+          Adult 1
+        </div>
+
+        <div className="mt-6 space-y-6">
+          {/* Personal Details Subsection */}
+          <div>
+            <h3 className="text-base font-black text-ink/70">Personal details</h3>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <Field label="Title *">
+                <Select name="title" defaultValue="mr">
+                  <option value="mr">Mr.</option>
+                  <option value="mrs">Mrs.</option>
+                  <option value="ms">Ms.</option>
+                  <option value="mx">Mx.</option>
+                </Select>
+              </Field>
+              <Field label="Given name *">
+                <Input name="givenName" required />
+              </Field>
+              <Field label="Family name *">
+                <Input name="familyName" required />
+              </Field>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field label="Date of birth *">
+                <Input name="bornOn" type="date" required />
+              </Field>
+              <Field label="Gender *">
+                <Select name="gender" defaultValue="m">
+                  <option value="m">Male</option>
+                  <option value="f">Female</option>
+                  <option value="x">Unspecified</option>
+                </Select>
+              </Field>
+            </div>
+          </div>
+
+          <hr className="border-orange-50" />
+
+          {/* Passport Details Subsection */}
+          <div>
+            <h3 className="text-base font-black text-ink/70">Passport details</h3>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <Field label="Country of issue">
+                <Select name="passportCountry" defaultValue="US">
+                  <option value="US">United States</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="CA">Canada</option>
+                  <option value="AU">Australia</option>
+                </Select>
+              </Field>
+              <Field label="Passport number">
+                <Input name="passportNumber" placeholder="L12345678" />
+              </Field>
+              <Field label="Expiry date">
+                <Input name="passportExpiry" type="date" />
+              </Field>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Add Extras Section */}
+      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5 space-y-4">
+        <h2 className="text-2xl font-black text-ink">Add extras</h2>
+        
+        {/* Baggage */}
+        <div className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100">
+          <div>
+            <p className="font-black text-ink">Extra baggage</p>
+            <p className="text-xs font-semibold text-ink/55 mt-0.5">Add any extra baggage you need for your trip</p>
+          </div>
+          <span className="rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-black text-ink/45">
+            Not available
+          </span>
+        </div>
+
+        {/* Seat Selection */}
+        <div className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100">
+          <div>
+            <p className="font-black text-ink">Seat selection</p>
+            <p className="text-xs font-semibold text-ink/55 mt-0.5">Specify where on the plane you&apos;d like to sit</p>
+          </div>
+          <span className="rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-black text-ink/45">
+            Not available
+          </span>
+        </div>
+      </section>
+
+      <Button disabled={loading} className="h-16 w-full text-base">
         {loading ? "Preparing payment..." : "Continue to secure payment"}
       </Button>
     </form>
