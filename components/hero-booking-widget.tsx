@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRightLeft, BedDouble, CalendarDays, Car, Plane, Search, Ticket, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
+import { PlaceAutocomplete } from "@/components/flights/place-autocomplete";
 import { cn } from "@/lib/utils";
 
 const verticals = [
@@ -65,20 +66,21 @@ export function HeroBookingWidget() {
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="xl:col-span-3">
-              <Field label="Leaving from">
-                <div className="relative">
-                  <Plane className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-orangebrand" />
-                  <Input name="origin" defaultValue="ATL" maxLength={3} required className="h-16 rounded-[1.1rem] border-orange-100 pl-12 text-lg font-black uppercase" />
-                </div>
-              </Field>
+              <PlaceAutocomplete
+                label="Leaving from"
+                name="origin"
+                defaultCode="ATL"
+                defaultLabel="Atlanta"
+              />
             </div>
             <div className="relative xl:col-span-3">
-              <Field label="Going to">
-                <div className="relative">
-                  <Plane className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rotate-45 text-orangebrand" />
-                  <Input name="destination" defaultValue="LAX" maxLength={3} required className="h-16 rounded-[1.1rem] border-orange-100 pl-12 text-lg font-black uppercase" />
-                </div>
-              </Field>
+              <PlaceAutocomplete
+                label="Going to"
+                name="destination"
+                defaultCode="LAX"
+                defaultLabel="Los Angeles"
+                iconRotate={true}
+              />
               <span className="absolute -left-5 top-10 hidden h-10 w-10 items-center justify-center rounded-full border border-orange-100 bg-white text-orangebrand shadow-sm xl:flex">
                 <ArrowRightLeft className="h-4 w-4" />
               </span>
