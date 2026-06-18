@@ -1,9 +1,16 @@
 import crypto from "node:crypto";
 
 const WHOP_BASE_URL = process.env.WHOP_API_BASE_URL ?? "https://api.whop.com/api/v1";
+function getWhopApiKey() {
+  const apiKey = process.env.WHOP_API_KEY;
+  if (!apiKey) throw new Error("WHOP_API_KEY is required for Whop API calls.");
+  return apiKey;
+}
 
-function isMockMode() {
-  return process.env.WHOP_MOCK_MODE === "true" || !process.env.WHOP_API_KEY || !process.env.WHOP_COMPANY_ID;
+function getWhopCompanyId() {
+  const companyId = process.env.WHOP_COMPANY_ID;
+  if (!companyId) throw new Error("WHOP_COMPANY_ID is required for Whop checkout configuration.");
+  return companyId;
 }
 
 async function whopFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -11,7 +18,7 @@ async function whopFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.WHOP_API_KEY}`,
+      "Authorization": `Bearer ${getWhopApiKey()}`,
       ...init?.headers
     },
     cache: "no-store"
@@ -38,13 +45,6 @@ export async function createWhopCheckoutConfiguration({
   customerEmail: string;
   metadata: Record<string, string>;
 }) {
-  if (isMockMode()) {
-    return {
-      id: `ch_mock_${bookingId}`,
-      planId: `plan_mock_${bookingId}`,
-      purchaseUrl: `/booking/${bookingId}/status?mockPayment=1`
-    };
-  }
 
   const response = await whopFetch<{
     id: string;
@@ -54,7 +54,7 @@ export async function createWhopCheckoutConfiguration({
     method: "POST",
     body: JSON.stringify({
       plan: {
-        company_id: process.env.WHOP_COMPANY_ID,
+        company_id: getWhopCompanyId(),
         initial_price: amount,
         currency: currency.toLowerCase(),
         plan_type: "one_time"
