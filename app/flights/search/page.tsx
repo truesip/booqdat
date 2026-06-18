@@ -1,4 +1,4 @@
-import { OfferCard } from "@/components/flights/offer-card";
+import { SearchResultsContainer } from "@/components/flights/search-results-container";
 import { HeroBookingWidget } from "@/components/hero-booking-widget";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -52,20 +52,7 @@ export default async function FlightSearchPage({ searchParams }: PageProps) {
         </div>
       </section>
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <p className="text-sm font-bold text-ink/50">Search reference</p>
-            <p className="font-mono text-sm text-ink/65">{offerRequestId}</p>
-          </div>
-          <p className="rounded-full bg-white px-4 py-2 text-sm font-bold text-orangeburnt shadow-sm">
-            {offers.length} offers found
-          </p>
-        </div>
-        <div className="grid gap-5">
-          {offers.map((offer) => (
-            <OfferCard key={offer.id} offer={offer} />
-          ))}
-        </div>
+        <SearchResultsContainer offers={offers} offerRequestId={offerRequestId} />
       </section>
       <SiteFooter />
     </main>
