@@ -69,6 +69,12 @@ async function duffelFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export async function getPlaceSuggestions(query: string) {
+  if (!query || query.trim().length < 2) return [];
+  const response = await duffelFetch<{ data: Array<Record<string, unknown>> }>(`/places/suggestions?query=${encodeURIComponent(query)}`);
+  return response.data ?? [];
+}
+
 export async function searchFlightOffers(input: SearchInput) {
 
   const slices = [
