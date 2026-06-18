@@ -20,6 +20,11 @@ export async function getBookingById(id: string) {
   return db.collection<BookingDocument>(collections.bookings).findOne({ _id: new ObjectId(id) });
 }
 
+export async function getBookingByDuffelOrderId(duffelOrderId: string) {
+  const db = await getDb();
+  return db.collection<BookingDocument>(collections.bookings).findOne({ duffelOrderId });
+}
+
 export async function listUserBookings(userId: string) {
   const db = await getDb();
   return db
@@ -31,7 +36,20 @@ export async function listUserBookings(userId: string) {
 
 export async function updateBookingStatus(
   id: string,
-  update: Partial<Pick<BookingDocument, "status" | "paymentStatus" | "duffelOrderId" | "airlineBookingReference" | "whopPaymentId" | "failureReason">>
+  update: Partial<
+    Pick<
+      BookingDocument,
+      | "status"
+      | "paymentStatus"
+      | "duffelOrderId"
+      | "duffelLastEventId"
+      | "duffelLastEventType"
+      | "duffelLastEventAt"
+      | "airlineBookingReference"
+      | "whopPaymentId"
+      | "failureReason"
+    >
+  >
 ) {
   const db = await getDb();
   await db.collection<BookingDocument>(collections.bookings).updateOne(
@@ -43,6 +61,35 @@ export async function updateBookingStatus(
       }
     }
   );
+}
+
+export async function updateBookingByDuffelOrderId(
+  duffelOrderId: string,
+  update: Partial<
+    Pick<
+      BookingDocument,
+      | "status"
+      | "paymentStatus"
+      | "duffelOrderId"
+      | "duffelLastEventId"
+      | "duffelLastEventType"
+      | "duffelLastEventAt"
+      | "airlineBookingReference"
+      | "failureReason"
+    >
+  >
+) {
+  const db = await getDb();
+  const result = await db.collection<BookingDocument>(collections.bookings).updateOne(
+    { duffelOrderId },
+    {
+      $set: {
+        ...update,
+        updatedAt: new Date()
+      }
+    }
+  );
+  return result.matchedCount;
 }
 
 export async function listOperationalBookings(statuses: BookingStatus[]) {
