@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { NormalizedFlightOffer, PassengerInput } from "@/lib/types";
 
 const DUFFEL_BASE_URL = process.env.DUFFEL_API_BASE_URL ?? "https://api.duffel.com";
@@ -15,6 +16,33 @@ type SearchInput = {
 
 function isMockMode() {
   return process.env.DUFFEL_MOCK_MODE === "true" || !process.env.DUFFEL_ACCESS_TOKEN;
+}
+
+export function verifyDuffelWebhook(body: string, headers: Headers) {
+  const secret = process.env.DUFFEL_WEBHOOK_SECRET;
+  if (!secret) return process.env.NODE_ENV !== "production";
+
+  const rawSignature = headers.get("x-duffel-signature");
+  if (!rawSignature) return false;
+
+  const signatureParts = Object.fromEntries(
+    rawSignature.split(",").map((part) => {
+      const [key, ...value] = part.split("=");
+      return [key, value.join("=")];
+    })
+  );
+  const timestamp = signatureParts.t;
+  const received = signatureParts.v1;
+  if (!timestamp || !received) return false;
+
+  const expected = crypto.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+  try {
+    const receivedBuffer = Buffer.from(received, "hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    return receivedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
 }
 
 async function duffelFetch<T>(path: string, init?: RequestInit): Promise<T> {

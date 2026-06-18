@@ -93,6 +93,9 @@ export interface BookingDocument {
   offerId: string;
   duffelOfferRequestId?: string;
   duffelOrderId?: string;
+  duffelLastEventId?: string;
+  duffelLastEventType?: string;
+  duffelLastEventAt?: Date;
   airlineBookingReference?: string;
   whopCheckoutConfigId?: string;
   whopPaymentId?: string;
