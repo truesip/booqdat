@@ -71,7 +71,7 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
     setLoading(false);
   }
 
-  if (checkoutSession?.sessionId && !checkoutSession.sessionId.startsWith("ch_mock_")) {
+  if (checkoutSession?.sessionId) {
     return (
       <div className="rounded-[2rem] bg-white p-6 shadow-card">
         <h2 className="text-2xl font-black">Secure checkout</h2>
@@ -94,19 +94,6 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
     );
   }
 
-  if (checkoutSession?.purchaseUrl) {
-    return (
-      <div className="rounded-[2rem] bg-white p-6 shadow-card">
-        <h2 className="text-2xl font-black">Test payment session ready</h2>
-        <p className="mt-2 text-sm text-ink/60">
-          Continue to the booking status page to review payment and ticketing behavior.
-        </p>
-        <Button onClick={() => router.push(checkoutSession.purchaseUrl ?? `/booking/${bookingId}/status`)} className="mt-6 w-full">
-          Continue to payment status
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <form action={submitPassenger} className="rounded-[2rem] bg-white p-6 shadow-card">

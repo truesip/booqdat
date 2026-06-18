@@ -14,8 +14,10 @@ type SearchInput = {
   cabinClass: "economy" | "premium_economy" | "business" | "first";
 };
 
-function isMockMode() {
-  return process.env.DUFFEL_MOCK_MODE === "true" || !process.env.DUFFEL_ACCESS_TOKEN;
+function getDuffelAccessToken() {
+  const token = process.env.DUFFEL_ACCESS_TOKEN;
+  if (!token) throw new Error("DUFFEL_ACCESS_TOKEN is required for Duffel API calls.");
+  return token;
 }
 
 export function verifyDuffelWebhook(body: string, headers: Headers) {
@@ -53,7 +55,7 @@ async function duffelFetch<T>(path: string, init?: RequestInit): Promise<T> {
       "Accept-Encoding": "gzip",
       "Content-Type": "application/json",
       "Duffel-Version": DUFFEL_VERSION,
-      "Authorization": `Bearer ${process.env.DUFFEL_ACCESS_TOKEN}`,
+      "Authorization": `Bearer ${getDuffelAccessToken()}`,
       ...init?.headers
     },
     cache: "no-store"
@@ -68,12 +70,6 @@ async function duffelFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function searchFlightOffers(input: SearchInput) {
-  if (isMockMode()) {
-    return {
-      offerRequestId: `orq_mock_${Date.now()}`,
-      offers: createMockOffers(input)
-    };
-  }
 
   const slices = [
     {
@@ -114,25 +110,6 @@ export async function searchFlightOffers(input: SearchInput) {
 }
 
 export async function getOffer(offerId: string) {
-  if (isMockMode()) {
-    return createMockOffers({
-      tripType: "round-trip",
-      origin: "ATL",
-      destination: "LAX",
-      departureDate: new Date(Date.now() + 86400000 * 21).toISOString().slice(0, 10),
-      returnDate: new Date(Date.now() + 86400000 * 27).toISOString().slice(0, 10),
-      adults: 1,
-      cabinClass: "economy"
-    }).find((offer) => offer.id === offerId) ?? createMockOffers({
-      tripType: "round-trip",
-      origin: "ATL",
-      destination: "LAX",
-      departureDate: new Date(Date.now() + 86400000 * 21).toISOString().slice(0, 10),
-      returnDate: new Date(Date.now() + 86400000 * 27).toISOString().slice(0, 10),
-      adults: 1,
-      cabinClass: "economy"
-    })[0];
-  }
 
   const response = await duffelFetch<{ data: unknown }>(`/air/offers/${offerId}?return_available_services=true`);
   return normalizeOffer(response.data);
@@ -145,12 +122,6 @@ export async function createDuffelOrder({
   offer: NormalizedFlightOffer;
   passengers: PassengerInput[];
 }) {
-  if (isMockMode()) {
-    return {
-      id: `ord_mock_${Date.now()}`,
-      bookingReference: `BD${Math.random().toString(36).slice(2, 7).toUpperCase()}`
-    };
-  }
 
   const payload = {
     data: {
@@ -268,77 +239,3 @@ export function normalizeOffer(raw: unknown): NormalizedFlightOffer {
   };
 }
 
-function createMockOffers(input: SearchInput): NormalizedFlightOffer[] {
-  const depart = `${input.departureDate}T09:20:00`;
-  const arrive = `${input.departureDate}T12:05:00`;
-  const returnDepart = `${input.returnDate ?? input.departureDate}T17:30:00`;
-  const returnArrive = `${input.returnDate ?? input.departureDate}T20:10:00`;
-
-  return [0, 1, 2].map((index) => {
-    const price = 238 + index * 74 + (input.cabinClass === "business" ? 620 : 0);
-    const airline = ["BooqDat Airways", "Sky Harbor", "Northstar Air"][index] ?? "BooqDat Airways";
-    return {
-      id: `off_mock_${index + 1}`,
-      expiresAt: new Date(Date.now() + 1000 * 60 * (28 - index * 3)).toISOString(),
-      totalAmount: price.toFixed(2),
-      totalCurrency: "USD",
-      baseAmount: (price * 0.82).toFixed(2),
-      taxAmount: (price * 0.18).toFixed(2),
-      ownerName: airline,
-      ownerIataCode: ["BD", "SH", "NA"][index],
-      totalEmissionsKg: String(160 + index * 24),
-      slices: [
-        {
-          originCode: input.origin,
-          originName: input.origin,
-          destinationCode: input.destination,
-          destinationName: input.destination,
-          departingAt: depart,
-          arrivingAt: arrive,
-          duration: "PT4H45M",
-          segments: [
-            {
-              operatingCarrierName: airline,
-              marketingCarrierName: airline,
-              flightNumber: `${830 + index}`,
-              originCode: input.origin,
-              destinationCode: input.destination,
-              departingAt: depart,
-              arrivingAt: arrive,
-              duration: "PT4H45M"
-            }
-          ]
-        },
-        ...(input.tripType === "round-trip"
-          ? [
-              {
-                originCode: input.destination,
-                originName: input.destination,
-                destinationCode: input.origin,
-                destinationName: input.origin,
-                departingAt: returnDepart,
-                arrivingAt: returnArrive,
-                duration: "PT4H40M",
-                segments: [
-                  {
-                    operatingCarrierName: airline,
-                    marketingCarrierName: airline,
-                    flightNumber: `${930 + index}`,
-                    originCode: input.destination,
-                    destinationCode: input.origin,
-                    departingAt: returnDepart,
-                    arrivingAt: returnArrive,
-                    duration: "PT4H40M"
-                  }
-                ]
-              }
-            ]
-          : [])
-      ],
-      conditions: {
-        changeBeforeDeparture: "Changes may be available before departure",
-        refundBeforeDeparture: "Refund rules vary by fare"
-      }
-    };
-  });
-}

@@ -1,41 +1,17 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getBookingById, updateBookingStatus } from "@/lib/bookings";
-import { createDuffelOrder } from "@/lib/duffel";
+import { getBookingById } from "@/lib/bookings";
 import { formatCurrency } from "@/lib/utils";
 
 type PageProps = {
   params: Promise<{ bookingId: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function BookingStatusPage({ params, searchParams }: PageProps) {
+export default async function BookingStatusPage({ params }: PageProps) {
   const { bookingId } = await params;
-  const query = await searchParams;
   const booking = await getBookingById(bookingId);
   if (!booking) notFound();
-
-  if (query?.mockPayment === "1" && booking.status !== "confirmed") {
-    let confirmed = false;
-    try {
-      await updateBookingStatus(bookingId, { status: "ticketing_in_progress", paymentStatus: "succeeded", whopPaymentId: `pay_mock_${bookingId}` });
-      const order = await createDuffelOrder({ offer: booking.offerSnapshot, passengers: booking.passengers });
-      await updateBookingStatus(bookingId, {
-        status: "confirmed",
-        paymentStatus: "succeeded",
-        duffelOrderId: order.id,
-        airlineBookingReference: order.bookingReference
-      });
-      confirmed = true;
-    } catch (error) {
-      await updateBookingStatus(bookingId, {
-        status: "requires_manual_review",
-        failureReason: error instanceof Error ? error.message : "Ticketing failed after payment"
-      });
-    }
-    if (confirmed) redirect(`/booking/${bookingId}/confirmed`);
-  }
 
   const refreshed = await getBookingById(bookingId);
   if (!refreshed) notFound();
