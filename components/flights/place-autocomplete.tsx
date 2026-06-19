@@ -19,9 +19,10 @@ type Props = {
   defaultCode: string;
   defaultLabel: string;
   iconRotate?: boolean;
+  placeholder?: string;
 };
 
-export function PlaceAutocomplete({ label, name, defaultCode, defaultLabel, iconRotate = false }: Props) {
+export function PlaceAutocomplete({ label, name, defaultCode, defaultLabel, iconRotate = false, placeholder = "Search city or airport..." }: Props) {
   const [query, setQuery] = useState(`${defaultLabel} (${defaultCode})`);
   const [selectedCode, setSelectedCode] = useState(defaultCode);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -104,7 +105,7 @@ export function PlaceAutocomplete({ label, name, defaultCode, defaultLabel, icon
             onFocus={() => setIsOpen(true)}
             required
             className="h-16 rounded-[1.1rem] border-orange-100 pl-12 pr-10 text-base font-bold text-ink focus-ring"
-            placeholder="Search city or airport..."
+            placeholder={placeholder}
           />
           {loading && (
             <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-orangebrand" />
