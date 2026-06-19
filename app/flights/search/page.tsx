@@ -52,7 +52,7 @@ export default async function FlightSearchPage({ searchParams }: PageProps) {
         </div>
       </section>
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <SearchResultsContainer offers={offers} offerRequestId={offerRequestId} />
+        <SearchResultsContainer offers={offers} offerRequestId={offerRequestId} searchParams={search} />
       </section>
       <SiteFooter />
     </main>

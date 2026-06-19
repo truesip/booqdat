@@ -7,9 +7,18 @@ import type { NormalizedFlightOffer } from "@/lib/types";
 type Props = {
   offers: NormalizedFlightOffer[];
   offerRequestId: string;
+  searchParams?: {
+    tripType: "one-way" | "round-trip";
+    origin: string;
+    destination: string;
+    departureDate: string;
+    returnDate?: string;
+    adults: number;
+    cabinClass: "economy" | "premium_economy" | "business" | "first";
+  };
 };
 
-export function SearchResultsContainer({ offers, offerRequestId }: Props) {
+export function SearchResultsContainer({ offers, offerRequestId, searchParams }: Props) {
   const router = useRouter();
 
   async function handleSelectOffer(offer: NormalizedFlightOffer) {
@@ -32,6 +41,7 @@ export function SearchResultsContainer({ offers, offerRequestId }: Props) {
     <SearchResultsLayout
       offers={offers}
       offerRequestId={offerRequestId}
+      searchParams={searchParams}
       onSelectOffer={handleSelectOffer}
     />
   );
