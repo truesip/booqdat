@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import type { BookingDocument } from "@/lib/types";
+import { X, Maximize2, Check, Briefcase, Armchair } from "lucide-react";
 
 export function CheckoutForm({ bookingId, booking }: { bookingId: string; booking: BookingDocument }) {
   const router = useRouter();
@@ -17,8 +18,63 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
     environment?: "production" | "sandbox";
   } | null>(null);
 
+  // Seat selection states
+  const [showSeatMap, setShowSeatMap] = useState(false);
+  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [tempSelectedSeat, setTempSelectedSeat] = useState<string | null>(null);
+
+  // Metadata states
+  const [metadata, setMetadata] = useState<Array<{ key: string; value: string }>>([{ key: "", value: "" }]);
+
+  // Mock seat map availability configuration
+  const occupiedSeats = useMemo(() => {
+    const set = new Set<string>();
+    // Pre-populate some occupied seats randomly for row 8 to 29
+    for (let r = 8; r <= 29; r++) {
+      ["A", "B", "C", "D", "E", "F"].forEach((col) => {
+        // High occupancy (e.g. 75% occupied)
+        if (Math.random() < 0.75) {
+          // Keep a few specific rows partially open for selection
+          if (!(r === 15 && col === "A") && !(r === 23 && col === "A") && !([24, 25, 26, 27, 28, 29].includes(r) && ["E", "F"].includes(col))) {
+            set.add(`${r}${col}`);
+          }
+        }
+      });
+    }
+    return set;
+  }, []);
+
+  function handleSelectSeatCell(seat: string) {
+    if (occupiedSeats.has(seat)) return;
+    setTempSelectedSeat(seat === tempSelectedSeat ? null : seat);
+  }
+
+  function handleConfirmSeatSelection() {
+    setSelectedSeat(tempSelectedSeat);
+    setShowSeatMap(false);
+  }
+
+  function handleAddMetadataRow() {
+    setMetadata([...metadata, { key: "", value: "" }]);
+  }
+
+  function handleMetadataChange(index: number, field: "key" | "value", val: string) {
+    const updated = [...metadata];
+    updated[index][field] = val;
+    setMetadata(updated);
+  }
+
   async function submitPassenger(formData: FormData) {
     setLoading(true);
+    
+    // Parse metadata pairs into a clean object if keys exist
+    const parsedMetadata: Record<string, string> = {};
+    metadata.forEach((row) => {
+      if (row.key.trim()) {
+        parsedMetadata[row.key.trim()] = row.value.trim();
+      }
+    });
+
     const payload = {
       contact: {
         email: String(formData.get("email") ?? ""),
@@ -35,7 +91,9 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
           email: String(formData.get("email") ?? ""),
           phoneNumber: String(formData.get("phone") ?? "")
         }
-      ]
+      ],
+      selectedSeat: selectedSeat || undefined,
+      metadata: Object.keys(parsedMetadata).length > 0 ? parsedMetadata : undefined
     };
 
     const bookingResponse = await fetch(`/api/bookings/${bookingId}`, {
@@ -71,6 +129,10 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
     setLoading(false);
   }
 
+  // Calculate pricing breakdown exactly like Duffel Screenshot 2
+  const taxAmount = parseFloat((booking.amount * 0.21).toFixed(2)); // mock taxes at 21%
+  const fareBaseAmount = parseFloat((booking.amount - taxAmount).toFixed(2));
+
   if (checkoutSession?.sessionId) {
     return (
       <div className="rounded-[2rem] bg-white p-6 shadow-card">
@@ -94,119 +156,349 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
     );
   }
 
-
   return (
-    <form action={submitPassenger} className="space-y-6">
-      {/* Contact Details Section */}
-      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
-        <h2 className="text-2xl font-black text-ink">Contact details</h2>
-        <p className="mt-1 text-sm text-ink/50">For receipt and carrier travel updates.</p>
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <Field label="Email address *">
-            <Input name="email" type="email" defaultValue={booking.contact.email === "pending@booqdat.local" ? "" : booking.contact.email} required />
-          </Field>
-          <Field label="Phone number *">
-            <Input name="phone" type="tel" defaultValue={booking.contact.phone ?? ""} required placeholder="+1 617 756 2626" />
-          </Field>
-        </div>
-      </section>
+    <div className="space-y-6">
+      <form action={submitPassenger} className="space-y-6">
+        {/* Contact Details Section */}
+        <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
+          <h2 className="text-xl font-black text-ink">Contact details</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <Field label="Email *">
+              <Input name="email" type="email" defaultValue={booking.contact.email === "pending@booqdat.local" ? "" : booking.contact.email} required />
+            </Field>
+            <Field label="Phone number *">
+              <Input name="phone" type="tel" defaultValue={booking.contact.phone ?? ""} required placeholder="+1 617 756 2626" />
+            </Field>
+          </div>
+        </section>
 
-      {/* Passenger Personal & Passport Details */}
-      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
-        <h2 className="text-2xl font-black text-ink">Passengers</h2>
-        <div className="mt-3 inline-flex rounded-full bg-orangebrand/10 px-3 py-1 text-xs font-black text-orangebrand">
-          Adult 1
-        </div>
+        {/* Passengers details section */}
+        <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5">
+          <h2 className="text-xl font-black text-ink">Passengers</h2>
+          <div className="mt-3 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orangebrand">
+            Adult 1
+          </div>
 
-        <div className="mt-6 space-y-6">
-          {/* Personal Details Subsection */}
-          <div>
-            <h3 className="text-base font-black text-ink/70">Personal details</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <Field label="Title *">
-                <Select name="title" defaultValue="mr">
-                  <option value="mr">Mr.</option>
-                  <option value="mrs">Mrs.</option>
-                  <option value="ms">Ms.</option>
-                  <option value="mx">Mx.</option>
-                </Select>
-              </Field>
-              <Field label="Given name *">
-                <Input name="givenName" required />
-              </Field>
-              <Field label="Family name *">
-                <Input name="familyName" required />
-              </Field>
+          <div className="mt-6 space-y-6">
+            {/* Personal Details Subsection */}
+            <div>
+              <h3 className="text-sm font-black text-ink/50 uppercase tracking-wider">Personal details</h3>
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <Field label="Title *">
+                  <Select name="title" defaultValue="mr">
+                    <option value="mr">Mr.</option>
+                    <option value="mrs">Mrs.</option>
+                    <option value="ms">Ms.</option>
+                    <option value="mx">Mx.</option>
+                  </Select>
+                </Field>
+                <Field label="Given name *">
+                  <Input name="givenName" required />
+                </Field>
+                <Field label="Family name *">
+                  <Input name="familyName" required />
+                </Field>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field label="Date of birth *">
+                  <Input name="bornOn" type="date" required />
+                </Field>
+                <Field label="Gender *">
+                  <Select name="gender" defaultValue="m">
+                    <option value="m">Male</option>
+                    <option value="f">Female</option>
+                    <option value="x">Unspecified</option>
+                  </Select>
+                </Field>
+              </div>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <Field label="Date of birth *">
-                <Input name="bornOn" type="date" required />
-              </Field>
-              <Field label="Gender *">
-                <Select name="gender" defaultValue="m">
-                  <option value="m">Male</option>
-                  <option value="f">Female</option>
-                  <option value="x">Unspecified</option>
-                </Select>
-              </Field>
+
+            <hr className="border-orange-50" />
+
+            {/* Passport Details Subsection */}
+            <div>
+              <h3 className="text-sm font-black text-ink/50 uppercase tracking-wider">Passport details</h3>
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <Field label="Country of Issue">
+                  <Select name="passportCountry" defaultValue="US">
+                    <option value="US">United States</option>
+                    <option value="GB">United Kingdom</option>
+                    <option value="CA">Canada</option>
+                    <option value="AU">Australia</option>
+                  </Select>
+                </Field>
+                <Field label="Passport number">
+                  <Input name="passportNumber" placeholder="L12345678" />
+                </Field>
+                <Field label="Expiry date">
+                  <Input name="passportExpiry" type="date" />
+                </Field>
+              </div>
             </div>
           </div>
+        </section>
 
-          <hr className="border-orange-50" />
+        {/* Add Extras Section */}
+        <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5 space-y-4">
+          <h2 className="text-xl font-black text-ink">Add extras</h2>
+          
+          {/* Baggage Row */}
+          <div className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100">
+            <div className="flex items-center gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                <Briefcase className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-black text-ink">Extra baggage</p>
+                <p className="text-[11px] font-bold text-ink/50 mt-0.5">Add any extra baggage you need for your trip</p>
+              </div>
+            </div>
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase text-slate-400 select-none">
+              Not available
+            </span>
+          </div>
 
-          {/* Passport Details Subsection */}
-          <div>
-            <h3 className="text-base font-black text-ink/70">Passport details</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <Field label="Country of issue">
-                <Select name="passportCountry" defaultValue="US">
-                  <option value="US">United States</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="CA">Canada</option>
-                  <option value="AU">Australia</option>
-                </Select>
-              </Field>
-              <Field label="Passport number">
-                <Input name="passportNumber" placeholder="L12345678" />
-              </Field>
-              <Field label="Expiry date">
-                <Input name="passportExpiry" type="date" />
-              </Field>
+          {/* Interactive Seat Selection Row */}
+          <div
+            onClick={() => { setTempSelectedSeat(selectedSeat); setShowSeatMap(true); }}
+            className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100 cursor-pointer hover:border-orangebrand/40 transition group"
+          >
+            <div className="flex items-center gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orangebrand/10 text-orangebrand">
+                <Armchair className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-black text-ink">Seat selection</p>
+                <p className="text-[11px] font-bold text-ink/50 mt-0.5">Specify where on the plane you&apos;d like to sit</p>
+              </div>
+            </div>
+            
+            {selectedSeat ? (
+              <span className="rounded-full bg-orangebrand/15 px-4 py-1.5 text-xs font-black text-orangebrand animate-scaleIn">
+                Seat {selectedSeat}
+              </span>
+            ) : (
+              <span className="text-slate-400 group-hover:text-orangebrand transition-all">
+                <Maximize2 className="h-5 w-5" />
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* Add Metadata Section */}
+        <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5 space-y-4">
+          <h2 className="text-xl font-black text-ink">Add metadata</h2>
+          <div className="space-y-4">
+            {metadata.map((row, index) => (
+              <div key={index} className="grid gap-4 md:grid-cols-2">
+                <Field label="Key (optional)">
+                  <Input
+                    value={row.key}
+                    onChange={(e) => handleMetadataChange(index, "key", e.target.value)}
+                    placeholder="e.g. loyalty_id"
+                  />
+                </Field>
+                <Field label="Value (optional)">
+                  <Input
+                    value={row.value}
+                    onChange={(e) => handleMetadataChange(index, "value", e.target.value)}
+                    placeholder="e.g. 12345678"
+                  />
+                </Field>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={handleAddMetadataRow}
+              className="text-xs font-black text-indigo-600 hover:text-indigo-800 transition select-none pt-2"
+            >
+              Add another key/value pair
+            </button>
+          </div>
+        </section>
+
+        {/* Payment table summary section */}
+        <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5 space-y-4 text-ink">
+          <h2 className="text-xl font-black">Payment</h2>
+          
+          <div className="space-y-3 mt-4 text-sm font-semibold border-b border-slate-50 pb-4">
+            <div className="flex justify-between items-center text-ink/65">
+              <span>Fare</span>
+              <span>{formatCurrency(fareBaseAmount, booking.currency)}</span>
+            </div>
+            <div className="flex justify-between items-center text-ink/65">
+              <span>Fare taxes</span>
+              <span>{formatCurrency(taxAmount, booking.currency)}</span>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Add Extras Section */}
-      <section className="rounded-[2rem] bg-white p-6 shadow-card border border-orangebrand/5 space-y-4">
-        <h2 className="text-2xl font-black text-ink">Add extras</h2>
-        
-        {/* Baggage */}
-        <div className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100">
-          <div>
-            <p className="font-black text-ink">Extra baggage</p>
-            <p className="text-xs font-semibold text-ink/55 mt-0.5">Add any extra baggage you need for your trip</p>
+          <div className="flex justify-between items-center text-lg font-black pt-2">
+            <span>Total (USD)</span>
+            <span className="text-orangebrand">{formatCurrency(booking.amount, booking.currency)}</span>
           </div>
-          <span className="rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-black text-ink/45">
-            Not available
-          </span>
-        </div>
+        </section>
 
-        {/* Seat Selection */}
-        <div className="flex items-center justify-between rounded-3xl bg-cloud p-5 border border-orange-100">
-          <div>
-            <p className="font-black text-ink">Seat selection</p>
-            <p className="text-xs font-semibold text-ink/55 mt-0.5">Specify where on the plane you&apos;d like to sit</p>
+        <Button disabled={loading} className="h-16 w-full text-base bg-black text-white hover:bg-slate-900 rounded-2xl font-black">
+          {loading ? "Preparing payment..." : "Pay with Balance"}
+        </Button>
+      </form>
+
+      {/* DETAILED GRAPHICAL SEAT MAP MODAL POPUP */}
+      {showSeatMap && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-hidden select-none animate-fadeIn">
+          <div className="bg-white rounded-[2.5rem] shadow-[0_25px_60px_rgba(0,0,0,0.15)] flex flex-col h-[90vh] w-full max-w-[420px] overflow-hidden relative border border-slate-100">
+            
+            {/* Modal Header */}
+            <div className="p-6 border-b border-orange-50 shrink-0 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-ink flex items-center gap-1.5">
+                  <Armchair className="h-4.5 w-4.5 text-orangebrand" />
+                  Flight to {booking.offerSnapshot.slices[0].destinationCode}
+                </h3>
+                <p className="text-[10px] font-black text-ink/40 uppercase mt-0.5">{formatDateShort(booking.offerSnapshot.slices[0].departingAt)}</p>
+                <p className="text-xs font-black text-ink mt-2">Passenger 1</p>
+              </div>
+              <button
+                onClick={() => setShowSeatMap(false)}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Legend */}
+            <div className="px-6 py-4 bg-cloud border-b border-orange-50/50 shrink-0 flex flex-wrap gap-x-4 gap-y-2 text-[9px] font-black text-ink/50 tracking-wider">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-slate-100 border border-slate-200 text-slate-500 font-sans font-bold text-[8px]">\</span>
+                <span>Additional Cost</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded bg-white border border-slate-300" />
+                <span>Included</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded bg-black" />
+                <span>Selected</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-slate-50 border border-slate-150 text-slate-400 text-[8px]">X</span>
+                <span>Unavailable/Restricted</span>
+              </div>
+            </div>
+
+            {/* Aisle markers */}
+            <div className="px-6 py-2 border-b border-orange-50/30 text-[9px] font-black text-ink/40 uppercase flex justify-between shrink-0 tracking-wider">
+              <span className="flex items-center gap-1">← Exit</span>
+              <span className="flex items-center gap-1">🚻 Lavatory</span>
+              <span className="flex items-center gap-1">☕ Galley</span>
+            </div>
+
+            {/* Scrollable grid map */}
+            <div className="flex-1 overflow-y-auto py-6 px-8 space-y-3 font-mono text-sm">
+              {Array.from({ length: 22 }, (_, i) => {
+                const row = i + 8; // rows 8 to 29
+                return (
+                  <div key={row} className="flex items-center justify-between gap-4">
+                    {/* Columns A B C */}
+                    <div className="flex gap-2">
+                      {["A", "B", "C"].map((col) => {
+                        const seatCode = `${row}${col}`;
+                        const isOccupied = occupiedSeats.has(seatCode);
+                        const isSelected = tempSelectedSeat === seatCode;
+
+                        return (
+                          <button
+                            key={col}
+                            type="button"
+                            disabled={isOccupied}
+                            onClick={() => handleSelectSeatCell(seatCode)}
+                            className={`h-7 w-7 rounded flex items-center justify-center text-[10px] font-bold transition-all border ${
+                              isOccupied
+                                ? "bg-slate-50 border-slate-150 text-slate-400 cursor-not-allowed"
+                                : isSelected
+                                ? "bg-black border-black text-white font-black"
+                                : "bg-white border-slate-300 text-ink/75 hover:border-orangebrand"
+                            }`}
+                          >
+                            {isOccupied ? "x" : col}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Row Number spacer */}
+                    <span className="text-[10px] font-black text-slate-300 w-4 text-center select-none">{row}</span>
+
+                    {/* Columns D E F */}
+                    <div className="flex gap-2">
+                      {["D", "E", "F"].map((col) => {
+                        const seatCode = `${row}${col}`;
+                        const isOccupied = occupiedSeats.has(seatCode);
+                        const isSelected = tempSelectedSeat === seatCode;
+
+                        return (
+                          <button
+                            key={col}
+                            type="button"
+                            disabled={isOccupied}
+                            onClick={() => handleSelectSeatCell(seatCode)}
+                            className={`h-7 w-7 rounded flex items-center justify-center text-[10px] font-bold transition-all border ${
+                              isOccupied
+                                ? "bg-slate-50 border-slate-150 text-slate-400 cursor-not-allowed"
+                                : isSelected
+                                ? "bg-black border-black text-white font-black"
+                                : "bg-white border-slate-300 text-ink/75 hover:border-orangebrand"
+                            }`}
+                          >
+                            {isOccupied ? "x" : col}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-orange-50 shrink-0 bg-slate-50/50 flex flex-col gap-4">
+              <div className="flex justify-between items-center text-xs font-black text-ink">
+                <span>Price for {tempSelectedSeat ? "1 seat" : "0 seats"}</span>
+                <span className="text-orangebrand font-black">+ US$0.00</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowSeatMap(false)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white text-xs font-black text-ink/50 hover:bg-slate-50 transition"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSeatSelection}
+                  className="h-11 rounded-2xl bg-black text-xs font-black text-white hover:bg-slate-900 transition"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+
           </div>
-          <span className="rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-black text-ink/45">
-            Not available
-          </span>
         </div>
-      </section>
-
-      <Button disabled={loading} className="h-16 w-full text-base">
-        {loading ? "Preparing payment..." : "Continue to secure payment"}
-      </Button>
-    </form>
+      )}
+    </div>
   );
+}
+
+// Add memo helper since we use it in component body
+import { useMemo } from "react";
+
+function formatDateShort(dateStr?: string) {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
 }
