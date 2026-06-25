@@ -52,7 +52,6 @@ export interface CustomerProfileDocument {
   whopOnboarded?: boolean;
   createdAt: Date;
   updatedAt: Date;
-  whopCompanyId?: string;
 }
 
 export interface NormalizedFlightOffer {
@@ -102,16 +101,23 @@ export interface EventDocument {
   time?: string;
   venueType?: "Physical" | "Online";
   venue?: string;
-  city: string;
+  location?: string;
+  city?: string;
   state?: string;
   country?: string;
   capacity?: number;
-  gaPrice: number;
-  gaQty: number;
+  latitude?: number;
+  longitude?: number;
+  ticketPrice?: number;
+  ticketQuantity?: number;
+  ticketsSold?: number;
+  gaPrice?: number;
+  gaQty?: number;
   vipPrice?: number;
   vipQty?: number;
   banner?: string;
   imageUrl?: string;
+  whopCompanyId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -185,19 +191,3 @@ export interface PassengerInput {
   phoneNumber?: string;
 }
 
-export interface EventDocument {
-  _id?: ObjectId;
-  promoterId: ObjectId;
-  title: string;
-  description: string;
-  date: Date;
-  location: string;
-  latitude?: number;
-  longitude?: number;
-  ticketPrice: number;
-  ticketQuantity: number;
-  ticketsSold: number;
-  whopCompanyId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}

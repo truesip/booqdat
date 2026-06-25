@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout | BOOQDAT</title>
+  <meta name="description" content="Complete your BOOQDAT ticket purchase and receive an instant digital ticket.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="events.html">Browse Events</a>
+        <a href="promoters.html">For Promoters</a>
+        <a href="login.html">Log In</a>
+        <a href="signup.html" class="btn btn-primary">Sign Up</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <p class="eyebrow">Secure Checkout</p>
+        <h1>Purchase Tickets</h1>
+        <p>Complete your order and receive your digital ticket confirmation immediately.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container checkout-layout">
+        <article id="event-summary" class="checkout-summary"></article>
+        <article class="checkout-form-card">
+          <h2>Attendee Details</h2>
+          <form id="checkout-form" class="stack">
+            <label>
+              Full Name
+              <input name="name" type="text" required placeholder="Jane Doe">
+            </label>
+            <label>
+              Email Address
+              <input name="email" type="email" required placeholder="jane@example.com">
+            </label>
+            <label>
+              Phone Number
+              <input name="phone" type="tel" required placeholder="(555) 555-5555">
+            </label>
+            <label>
+              Ticket Quantity
+              <input name="quantity" id="ticket-quantity" type="number" min="1" max="10" value="1" required>
+            </label>
+            <button type="submit" class="btn btn-primary">Complete Purchase</button>
+          </form>
+          <p class="checkout-note">By completing purchase, you agree to the <a href="terms.html">Terms of Service</a> and <a href="privacy.html">Privacy Policy</a>.</p>
+          <div id="purchase-result" class="result-box hidden"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/auth-runtime.js?v=20260321-2358"></script>
+  <script src="assets/app.js?v=20260321-2358"></script>
+</body>
+</html>

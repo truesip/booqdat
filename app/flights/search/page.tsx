@@ -22,7 +22,7 @@ export default async function FlightSearchPage({ searchParams }: PageProps) {
     cabinClass: asString(params?.cabinClass, "economy")
   });
 
-  const search = parsed.success ? parsed.data : flightSearchSchema.parse({
+  const baseSearch = parsed.success ? parsed.data : flightSearchSchema.parse({
     tripType: "round-trip",
     origin: "ATL",
     destination: "LAX",
@@ -32,7 +32,15 @@ export default async function FlightSearchPage({ searchParams }: PageProps) {
     cabinClass: "economy"
   });
 
-  const { offers, offerRequestId } = await searchFlightOffers(search);
+  const search = {
+    ...baseSearch,
+    takeoffStart: asString(params?.takeoffStart, undefined as unknown as string),
+    takeoffEnd: asString(params?.takeoffEnd, undefined as unknown as string),
+    landingStart: asString(params?.landingStart, undefined as unknown as string),
+    landingEnd: asString(params?.landingEnd, undefined as unknown as string)
+  };
+
+  const { offers, offerRequestId } = await searchFlightOffers(baseSearch);
 
   return (
     <main className="min-h-screen bg-cloud">

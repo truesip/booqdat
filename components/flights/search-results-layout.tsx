@@ -18,6 +18,10 @@ type Props = {
     returnDate?: string;
     adults: number;
     cabinClass: "economy" | "premium_economy" | "business" | "first";
+    takeoffStart?: string;
+    takeoffEnd?: string;
+    landingStart?: string;
+    landingEnd?: string;
   };
   onSelectOffer: (offer: NormalizedFlightOffer) => Promise<void>;
 };
@@ -122,8 +126,32 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
       );
     }
 
+    // Filter by Take-off Time parameters from URL
+    if (searchParams?.takeoffStart && searchParams?.takeoffEnd) {
+      const minHr = parseInt(searchParams.takeoffStart, 10);
+      const maxHr = parseInt(searchParams.takeoffEnd, 10);
+      result = result.filter((o) => {
+        const outboundSlice = o.slices[0];
+        if (!outboundSlice) return true;
+        const hr = new Date(outboundSlice.departingAt).getHours();
+        return hr >= minHr && hr <= maxHr;
+      });
+    }
+
+    // Filter by Landing Time parameters from URL
+    if (searchParams?.landingStart && searchParams?.landingEnd) {
+      const minHr = parseInt(searchParams.landingStart, 10);
+      const maxHr = parseInt(searchParams.landingEnd, 10);
+      result = result.filter((o) => {
+        const outboundSlice = o.slices[0];
+        if (!outboundSlice) return true;
+        const hr = new Date(outboundSlice.arrivingAt).getHours();
+        return hr >= minHr && hr <= maxHr;
+      });
+    }
+
     return result;
-  }, [offers, stopsFilter, selectedAirline, flightNumberQuery]);
+  }, [offers, stopsFilter, selectedAirline, flightNumberQuery, searchParams]);
 
   // Group filtered offers by their unique schedule keys (so we display schedules uniquely)
   const groupedScheduleOffers = useMemo(() => {

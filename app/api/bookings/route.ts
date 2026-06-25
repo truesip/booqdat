@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const event = await getEventById(eventId);
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-    const ticketPrice = ticketType === "vip" ? (event.vipPrice || event.gaPrice) : event.gaPrice;
+    const ticketPrice = (ticketType === "vip" ? (event.vipPrice || event.gaPrice) : event.gaPrice) || 0;
     const price = calculateEventPrice(ticketPrice, quantity);
 
     const bookingId = await createBooking({
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         eventTitle: event.title,
         eventDate: event.date.toISOString(),
         eventTime: event.time || "",
-        city: event.city,
+        city: event.city || "",
         venue: event.venue || "",
         ticketType,
         ticketPrice,

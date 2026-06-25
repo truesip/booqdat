@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    document.documentElement.classList.add("auth-pending");
+  </script>
+  <style>
+    html.auth-pending body.auth-pending {
+      background: #ffffff;
+    }
+    html.auth-pending body.auth-pending > * {
+      visibility: hidden;
+    }
+    html.auth-pending body.auth-pending::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: #ffffff url("Booqdat-logo.png") center center / 180px auto no-repeat;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: visible;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+
+<title>Influencer Portal | BOOQDAT</title>
+<meta name="description" content="Influencer portal for invites, promo codes, and performance reporting.">
+<body class="auth-pending">
+
+<header class="site-header">
+  <div class="container nav-shell">
+    <a href="index.html" class="logo" aria-label="BOOQDAT home">
+      <img src="Booqdat-logo.png" alt="BOOQDAT">
+    </a>
+    <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">?</button>
+    <nav class="site-nav" data-mobile-nav>
+      <a href="influencer-dashboard.html" class="active">Influencer Portal</a>
+      <a href="events.html">Browse Events</a>
+      <a href="support.html">Support</a>
+      <a href="index.html" class="btn btn-primary">Public Site</a>
+    </nav>
+  </div>
+</header>
+
+  <main class="promoter-shell" id="influencer-portal">
+    <button class="promoter-sidebar-toggle" type="button" data-influencer-sidebar-toggle>Menu</button>
+    <aside class="promoter-sidebar">
+      <h2>Influencer Portal</h2>
+      <nav class="promoter-sidebar-nav">
+        <a href="influencer-dashboard.html">Dashboard</a>
+        <a href="influencer-profile.html">My Profile</a>
+        <a href="influencer-invites.html">Event Invites & Requests</a>
+        <a href="influencer-promo-codes.html">Promo Codes I Created</a>
+        <a href="influencer-reports.html">Performance Reports</a>
+      </nav>
+      <div class="sidebar-footer"><button class="btn btn-secondary sidebar-logout-btn" type="button" data-influencer-logout>Log Out</button></div>
+    </aside>
+    <section class="promoter-main">
+      <section class="promoter-section" id="influencer-home">
+        <p class="eyebrow">Influencer Dashboard</p>
+        <h1>Grow campaigns with measurable performance</h1>
+        <div class="promoter-kpi-grid">
+          <article class="promoter-kpi-card"><span>Active Invites</span><strong data-influencer-kpi="invites">0</strong></article>
+          <article class="promoter-kpi-card"><span>Promo Codes</span><strong data-influencer-kpi="codes">0</strong></article>
+          <article class="promoter-kpi-card"><span>Ticket Sales</span><strong data-influencer-kpi="sales">0</strong></article>
+          <article class="promoter-kpi-card"><span>Estimated Reach</span><strong data-influencer-kpi="reach">0</strong></article>
+        </div>
+      </section>
+      <section class="promoter-section" id="influencer-profile">
+        <h2>My Profile</h2>
+        <form id="influencer-profile-form" class="stack">
+          <label>Name<input name="name" type="text" required></label>
+          <label>Niche<input name="niche" type="text" placeholder="Music, nightlife, fashion"></label>
+          <div class="split">
+            <label>Followers Count<input name="followers" type="number" min="0" step="1"></label>
+            <label>Rate Card Notes<input name="rates" type="text" placeholder="Post, reel, stories pricing"></label>
+          </div>
+          <button class="btn btn-primary" type="submit">Save Influencer Profile</button>
+        </form>
+        <p id="influencer-profile-status" class="status"></p>
+      </section>
+      <section class="promoter-section" id="influencer-invites">
+        <h2>Event Invites & Requests</h2>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Date</th><th>Requester</th><th>Status</th></tr></thead><tbody id="influencer-invites-body"><tr><td colspan="4">No invites yet.</td></tr></tbody></table></div>
+      </section>
+      <section class="promoter-section" id="influencer-promo-codes">
+        <h2>Promo Codes I Created</h2>
+        <form id="influencer-code-form" class="split">
+          <label>Code<input name="code" type="text" required></label>
+          <label>Commission %<input name="commission" type="number" min="0" max="100" step="1" value="10"></label>
+          <button class="btn btn-primary" type="submit">Create Code</button>
+        </form>
+        <p id="influencer-code-status" class="status"></p>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Code</th><th>Commission</th><th>Sales</th><th>Status</th></tr></thead><tbody id="influencer-codes-body"><tr><td colspan="4">No promo codes created yet.</td></tr></tbody></table></div>
+      </section>
+      <section class="promoter-section" id="influencer-reports">
+        <h2>Performance Reports</h2>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody id="influencer-reports-body"><tr><td>Reach</td><td>0</td></tr><tr><td>Clicks</td><td>0</td></tr><tr><td>Ticket Sales</td><td>0</td></tr></tbody></table></div>
+      </section>
+    </section>
+  </main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <strong>BOOQDAT USA LLC</strong>
+      <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+      <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+    </div>
+    <nav class="footer-links">
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="support.html">Support</a>
+      <a href="refund-policy.html">Refund Policy</a>
+    </nav>
+  </div>
+  <div class="container footer-bottom">
+    <small>? <span data-year></span> BOOQDAT USA LLC</small>
+  </div>
+</footer>
+
+  <script src="assets/auth-runtime.js?v=20260323-portal"></script>
+  <script src="assets/app.js?v=20260323-portal"></script>
+</body>
+</html>

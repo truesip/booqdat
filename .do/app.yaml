@@ -1,0 +1,101 @@
+name: booqdat-platform
+region: nyc
+services:
+  - name: web
+    environment_slug: node-js
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    source_dir: /
+    build_command: npm ci
+    run_command: npm start
+    routes:
+      - path: /
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: MONGODB_URI
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_MONGODB_URI
+      - key: CORS_ORIGIN
+        scope: RUN_TIME
+        value: REPLACE_WITH_APP_URL
+      - key: REQUEST_BODY_LIMIT
+        scope: RUN_TIME
+        value: 12mb
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_JWT_SECRET
+      - key: JWT_EXPIRES_IN
+        scope: RUN_TIME
+        value: 8h
+      - key: REFRESH_TOKEN_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_REFRESH_TOKEN_SECRET
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        scope: RUN_TIME
+        value: 30d
+      - key: NYVAPAY_BASE_URL
+        scope: RUN_TIME
+        value: https://nyvapay.com
+      - key: NYVAPAY_MERCHANT_EMAIL
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_NYVAPAY_MERCHANT_EMAIL
+      - key: NYVAPAY_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_NYVAPAY_API_KEY
+      - key: NYVAPAY_WEBHOOK_URL
+        scope: RUN_TIME
+        value: OPTIONAL_PUBLIC_NYVAPAY_WEBHOOK_URL
+      - key: NYVAPAY_SUCCESS_REDIRECT_URL
+        scope: RUN_TIME
+        value: OPTIONAL_NYVAPAY_SUCCESS_REDIRECT_URL
+      - key: NYVAPAY_WEBHOOK_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: OPTIONAL_NYVAPAY_WEBHOOK_TOKEN
+      - key: NYVAPAY_TIMEOUT_MS
+        scope: RUN_TIME
+        value: "8000"
+      - key: NYVAPAY_MAX_ATTEMPTS
+        scope: RUN_TIME
+        value: "2"
+      - key: SMTP2GO_API_BASE_URL
+        scope: RUN_TIME
+        value: https://api.smtp2go.com/v3
+      - key: SMTP2GO_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_SMTP2GO_API_KEY
+      - key: SENDER_DOMAIN
+        scope: RUN_TIME
+        value: booqdat.com
+      - key: MAIL_FROM
+        scope: RUN_TIME
+        value: no-reply@booqdat.com
+      - key: MAIL_FROM_NAME
+        scope: RUN_TIME
+        value: BOOQDAT
+      - key: MAIL_REPLY_TO
+        scope: RUN_TIME
+        value: helloworld@booqdat.com
+      - key: SUPPORT_EMAIL
+        scope: RUN_TIME
+        value: helloworld@booqdat.com
+      - key: COMPANY_NAME
+        scope: RUN_TIME
+        value: BOOQDAT
+      - key: SEED_ADMIN_EMAIL
+        scope: RUN_TIME
+        value: OPTIONAL_ADMIN_EMAIL
+      - key: SEED_ADMIN_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: OPTIONAL_ADMIN_PASSWORD

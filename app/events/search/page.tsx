@@ -138,14 +138,14 @@ export default async function EventsSearchPage({ searchParams }: PageProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 shrink-0 text-orangebrand" />
-                        <span>GA: {formatCurrency(event.gaPrice, "USD")} {event.vipPrice ? `· VIP: ${formatCurrency(event.vipPrice, "USD")}` : ""}</span>
+                        <span>GA: {formatCurrency(event.gaPrice || 0, "USD")} {event.vipPrice ? `· VIP: ${formatCurrency(event.vipPrice || 0, "USD")}` : ""}</span>
                       </div>
                     </div>
 
                     <div className="mt-6 pt-2 flex items-center justify-between">
                       <div>
                         <span className="block text-[10px] font-black uppercase tracking-wider text-ink/30">Tickets From</span>
-                        <span className="text-xl font-black text-orangebrand">{formatCurrency(event.gaPrice, "USD")}</span>
+                        <span className="text-xl font-black text-orangebrand">{formatCurrency(event.gaPrice || 0, "USD")}</span>
                       </div>
                       <Link
                         href={`/events/booking?eventId=${eventIdStr}`}

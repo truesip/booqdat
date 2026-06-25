@@ -22,6 +22,10 @@ export default async function PromoterDashboardPage() {
     _id: event._id?.toString(),
     promoterId: event.promoterId.toString(),
     date: event.date.toISOString(),
+    location: event.location || "",
+    ticketPrice: event.ticketPrice || 0,
+    ticketQuantity: event.ticketQuantity || 0,
+    ticketsSold: event.ticketsSold || 0,
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString()
   }));

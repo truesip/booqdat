@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Promoter Dashboard | BOOQDAT</title>
+  <meta name="description" content="BOOQDAT promoter dashboard for event creation, analytics, earnings, and support.">
+  <script>
+    document.documentElement.classList.add("auth-pending");
+  </script>
+  <style>
+    html.auth-pending body.auth-pending {
+      background: #ffffff;
+    }
+    html.auth-pending body.auth-pending > * {
+      visibility: hidden;
+    }
+    html.auth-pending body.auth-pending::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: #ffffff url("Booqdat-logo.png") center center / 180px auto no-repeat;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: visible;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="auth-pending">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a href="index.html" class="logo" aria-label="BOOQDAT home">
+        <img src="Booqdat-logo.png" alt="BOOQDAT">
+      </a>
+      <button class="mobile-toggle" data-mobile-toggle aria-label="Open menu">☰</button>
+      <nav class="site-nav" data-mobile-nav>
+        <a href="promoter-dashboard.html" class="active">Promoter Dashboard</a>
+        <a href="events.html">Browse Events</a>
+        <a href="support.html">Support</a>
+        <a href="index.html" class="btn btn-primary">Public Site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="promoter-shell" id="promoter-dashboard">
+    <button class="promoter-sidebar-toggle" type="button" data-promoter-sidebar-toggle>Menu</button>
+    <aside class="promoter-sidebar">
+      <h2>Promoter Console</h2>
+      <nav class="promoter-sidebar-nav">
+        <a href="promoter-dashboard.html">Dashboard</a>
+        <a href="promoter-events.html">My Events</a>
+        <a href="promoter-create.html">Create Event</a>
+        <a href="promoter-analytics.html">Analytics</a>
+        <a href="promoter-payouts.html">Payouts & Earnings</a>
+        <a href="promoter-settings.html">Profile & Settings</a>
+        <a href="promoter-support.html">Support</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-secondary sidebar-logout-btn" type="button" data-promoter-logout>Log Out</button>
+      </div>
+    </aside>
+
+    <section class="promoter-main">
+      <section class="promoter-section" id="promoter-home">
+        <div class="promoter-section-head">
+          <div>
+            <p class="eyebrow">Promoter Dashboard</p>
+            <h1>Track Events, Sales, and Earnings in Real Time</h1>
+            <p>Manage your event operations from publishing to payouts in one workflow.</p>
+          </div>
+          <div class="admin-quick-actions">
+            <button class="btn btn-primary promoter-cta-btn" type="button" data-scroll-create>+ Create New Event</button>
+          </div>
+        </div>
+        <div class="promoter-kpi-grid">
+          <article class="promoter-kpi-card">
+            <span>Upcoming Events</span>
+            <strong data-promoter-kpi="upcoming-events">0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Total Tickets Sold</span>
+            <strong data-promoter-kpi="total-tickets-sold">0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Total Earnings (Net)</span>
+            <strong data-promoter-kpi="total-earnings">$0</strong>
+          </article>
+          <article class="promoter-kpi-card">
+            <span>Pending Payouts</span>
+            <strong data-promoter-kpi="pending-payouts">$0</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-events">
+        <div class="promoter-section-head">
+          <h2>My Events</h2>
+          <button class="btn btn-secondary" type="button" data-scroll-create>Create Event</button>
+        </div>
+        <div class="promoter-tabs" role="tablist" aria-label="Event views">
+          <button class="is-active" type="button" data-event-tab="upcoming">Upcoming</button>
+          <button type="button" data-event-tab="past">Past</button>
+          <button type="button" data-event-tab="drafts">Drafts</button>
+        </div>
+        <div id="promoter-events-list" class="promoter-events-grid"></div>
+        <div id="promoter-action-feedback" class="result-box hidden"></div>
+      </section>
+
+      <section class="promoter-section" id="promoter-create">
+        <div class="promoter-section-head">
+          <h2>Create / Edit Event</h2>
+          <p>Use the guided flow to configure tickets, schedule, and publishing options.</p>
+        </div>
+
+        <article class="promoter-card wizard-wrap">
+          <div class="wizard-progress">
+            <span class="wizard-indicator is-active" data-wizard-indicator="1">1. Basic Info</span>
+            <span class="wizard-indicator" data-wizard-indicator="2">2. Date & Venue</span>
+            <span class="wizard-indicator" data-wizard-indicator="3">3. Ticket Types</span>
+            <span class="wizard-indicator" data-wizard-indicator="4">4. Assets & Promo</span>
+            <span class="wizard-indicator" data-wizard-indicator="5">5. Review & Publish</span>
+          </div>
+
+          <form id="promoter-wizard-form" class="stack">
+            <section class="wizard-step is-active" data-step="1">
+              <h3>Step 1: Basic Info</h3>
+              <label>
+                Event Title
+                <input name="title" type="text" required placeholder="Desert Skyline Friday Sessions">
+              </label>
+              <label>
+                Description
+                <textarea name="description" rows="4" required placeholder="Describe your event experience, lineup, and key details."></textarea>
+              </label>
+              <div class="split">
+                <label>
+                  Category
+                  <select name="category" required>
+                    <option value="">Select category</option>
+                    <option>Music</option>
+                    <option>Comedy</option>
+                    <option>Sports</option>
+                    <option>Business</option>
+                    <option>Community</option>
+                  </select>
+                </label>
+                <label>
+                  Tags (comma-separated)
+                  <input name="tags" type="text" placeholder="festival, rooftop, nightlife">
+                </label>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="2">
+              <h3>Step 2: Date, Time, Venue</h3>
+              <div class="split">
+                <label>
+                  Event Date
+                  <input name="date" type="date" required>
+                </label>
+                <label>
+                  Start Time
+                  <input name="time" type="time" required>
+                </label>
+              </div>
+              <div class="split">
+                <label>
+                  Venue Type
+                  <select name="venueType" required>
+                    <option value="">Select type</option>
+                    <option value="Physical">Physical Venue</option>
+                    <option value="Online">Online Event</option>
+                  </select>
+                </label>
+                <label>
+                  Venue / Online URL
+                  <input name="venue" type="text" required placeholder="Venue name or stream URL">
+                </label>
+              </div>
+              <div class="split">
+                <label>
+                  City
+                  <input name="city" type="text" required placeholder="Albuquerque">
+                </label>
+                <label>
+                  State
+                  <input name="state" type="text" required placeholder="NM">
+                </label>
+              </div>
+              <label>
+                Country
+                <select name="country" required>
+                  <option value="">Select country</option>
+                  <option value="Afghanistan">Afghanistan</option>
+                  <option value="Albania">Albania</option>
+                  <option value="Algeria">Algeria</option>
+                  <option value="Andorra">Andorra</option>
+                  <option value="Angola">Angola</option>
+                  <option value="Antigua and Barbuda">Antigua and Barbuda</option>
+                  <option value="Argentina">Argentina</option>
+                  <option value="Armenia">Armenia</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Austria">Austria</option>
+                  <option value="Azerbaijan">Azerbaijan</option>
+                  <option value="Bahamas">Bahamas</option>
+                  <option value="Bahrain">Bahrain</option>
+                  <option value="Bangladesh">Bangladesh</option>
+                  <option value="Barbados">Barbados</option>
+                  <option value="Belarus">Belarus</option>
+                  <option value="Belgium">Belgium</option>
+                  <option value="Belize">Belize</option>
+                  <option value="Benin">Benin</option>
+                  <option value="Bhutan">Bhutan</option>
+                  <option value="Bolivia">Bolivia</option>
+                  <option value="Bosnia and Herzegovina">Bosnia and Herzegovina</option>
+                  <option value="Botswana">Botswana</option>
+                  <option value="Brazil">Brazil</option>
+                  <option value="Brunei">Brunei</option>
+                  <option value="Bulgaria">Bulgaria</option>
+                  <option value="Burkina Faso">Burkina Faso</option>
+                  <option value="Burundi">Burundi</option>
+                  <option value="Cabo Verde">Cabo Verde</option>
+                  <option value="Cambodia">Cambodia</option>
+                  <option value="Cameroon">Cameroon</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Central African Republic">Central African Republic</option>
+                  <option value="Chad">Chad</option>
+                  <option value="Chile">Chile</option>
+                  <option value="China">China</option>
+                  <option value="Colombia">Colombia</option>
+                  <option value="Comoros">Comoros</option>
+                  <option value="Congo (Congo-Brazzaville)">Congo (Congo-Brazzaville)</option>
+                  <option value="Costa Rica">Costa Rica</option>
+                  <option value="Croatia">Croatia</option>
+                  <option value="Cuba">Cuba</option>
+                  <option value="Cyprus">Cyprus</option>
+                  <option value="Czechia">Czechia</option>
+                  <option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option>
+                  <option value="Denmark">Denmark</option>
+                  <option value="Djibouti">Djibouti</option>
+                  <option value="Dominica">Dominica</option>
+                  <option value="Dominican Republic">Dominican Republic</option>
+                  <option value="Ecuador">Ecuador</option>
+                  <option value="Egypt">Egypt</option>
+                  <option value="El Salvador">El Salvador</option>
+                  <option value="Equatorial Guinea">Equatorial Guinea</option>
+                  <option value="Eritrea">Eritrea</option>
+                  <option value="Estonia">Estonia</option>
+                  <option value="Eswatini">Eswatini</option>
+                  <option value="Ethiopia">Ethiopia</option>
+                  <option value="Fiji">Fiji</option>
+                  <option value="Finland">Finland</option>
+                  <option value="France">France</option>
+                  <option value="Gabon">Gabon</option>
+                  <option value="Gambia">Gambia</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Ghana">Ghana</option>
+                  <option value="Greece">Greece</option>
+                  <option value="Grenada">Grenada</option>
+                  <option value="Guatemala">Guatemala</option>
+                  <option value="Guinea">Guinea</option>
+                  <option value="Guinea-Bissau">Guinea-Bissau</option>
+                  <option value="Guyana">Guyana</option>
+                  <option value="Haiti">Haiti</option>
+                  <option value="Honduras">Honduras</option>
+                  <option value="Hungary">Hungary</option>
+                  <option value="Iceland">Iceland</option>
+                  <option value="India">India</option>
+                  <option value="Indonesia">Indonesia</option>
+                  <option value="Iran">Iran</option>
+                  <option value="Iraq">Iraq</option>
+                  <option value="Ireland">Ireland</option>
+                  <option value="Israel">Israel</option>
+                  <option value="Italy">Italy</option>
+                  <option value="Jamaica">Jamaica</option>
+                  <option value="Japan">Japan</option>
+                  <option value="Jordan">Jordan</option>
+                  <option value="Kazakhstan">Kazakhstan</option>
+                  <option value="Kenya">Kenya</option>
+                  <option value="Kiribati">Kiribati</option>
+                  <option value="Kosovo">Kosovo</option>
+                  <option value="Kuwait">Kuwait</option>
+                  <option value="Kyrgyzstan">Kyrgyzstan</option>
+                  <option value="Laos">Laos</option>
+                  <option value="Latvia">Latvia</option>
+                  <option value="Lebanon">Lebanon</option>
+                  <option value="Lesotho">Lesotho</option>
+                  <option value="Liberia">Liberia</option>
+                  <option value="Libya">Libya</option>
+                  <option value="Liechtenstein">Liechtenstein</option>
+                  <option value="Lithuania">Lithuania</option>
+                  <option value="Luxembourg">Luxembourg</option>
+                  <option value="Madagascar">Madagascar</option>
+                  <option value="Malawi">Malawi</option>
+                  <option value="Malaysia">Malaysia</option>
+                  <option value="Maldives">Maldives</option>
+                  <option value="Mali">Mali</option>
+                  <option value="Malta">Malta</option>
+                  <option value="Marshall Islands">Marshall Islands</option>
+                  <option value="Mauritania">Mauritania</option>
+                  <option value="Mauritius">Mauritius</option>
+                  <option value="Mexico">Mexico</option>
+                  <option value="Micronesia">Micronesia</option>
+                  <option value="Moldova">Moldova</option>
+                  <option value="Monaco">Monaco</option>
+                  <option value="Mongolia">Mongolia</option>
+                  <option value="Montenegro">Montenegro</option>
+                  <option value="Morocco">Morocco</option>
+                  <option value="Mozambique">Mozambique</option>
+                  <option value="Myanmar">Myanmar</option>
+                  <option value="Namibia">Namibia</option>
+                  <option value="Nauru">Nauru</option>
+                  <option value="Nepal">Nepal</option>
+                  <option value="Netherlands">Netherlands</option>
+                  <option value="New Zealand">New Zealand</option>
+                  <option value="Nicaragua">Nicaragua</option>
+                  <option value="Niger">Niger</option>
+                  <option value="Nigeria">Nigeria</option>
+                  <option value="North Korea">North Korea</option>
+                  <option value="North Macedonia">North Macedonia</option>
+                  <option value="Norway">Norway</option>
+                  <option value="Oman">Oman</option>
+                  <option value="Pakistan">Pakistan</option>
+                  <option value="Palau">Palau</option>
+                  <option value="Palestine">Palestine</option>
+                  <option value="Panama">Panama</option>
+                  <option value="Papua New Guinea">Papua New Guinea</option>
+                  <option value="Paraguay">Paraguay</option>
+                  <option value="Peru">Peru</option>
+                  <option value="Philippines">Philippines</option>
+                  <option value="Poland">Poland</option>
+                  <option value="Portugal">Portugal</option>
+                  <option value="Qatar">Qatar</option>
+                  <option value="Romania">Romania</option>
+                  <option value="Russia">Russia</option>
+                  <option value="Rwanda">Rwanda</option>
+                  <option value="Saint Kitts and Nevis">Saint Kitts and Nevis</option>
+                  <option value="Saint Lucia">Saint Lucia</option>
+                  <option value="Saint Vincent and the Grenadines">Saint Vincent and the Grenadines</option>
+                  <option value="Samoa">Samoa</option>
+                  <option value="San Marino">San Marino</option>
+                  <option value="Sao Tome and Principe">Sao Tome and Principe</option>
+                  <option value="Saudi Arabia">Saudi Arabia</option>
+                  <option value="Senegal">Senegal</option>
+                  <option value="Serbia">Serbia</option>
+                  <option value="Seychelles">Seychelles</option>
+                  <option value="Sierra Leone">Sierra Leone</option>
+                  <option value="Singapore">Singapore</option>
+                  <option value="Slovakia">Slovakia</option>
+                  <option value="Slovenia">Slovenia</option>
+                  <option value="Solomon Islands">Solomon Islands</option>
+                  <option value="Somalia">Somalia</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="South Korea">South Korea</option>
+                  <option value="South Sudan">South Sudan</option>
+                  <option value="Spain">Spain</option>
+                  <option value="Sri Lanka">Sri Lanka</option>
+                  <option value="Sudan">Sudan</option>
+                  <option value="Suriname">Suriname</option>
+                  <option value="Sweden">Sweden</option>
+                  <option value="Switzerland">Switzerland</option>
+                  <option value="Syria">Syria</option>
+                  <option value="Taiwan">Taiwan</option>
+                  <option value="Tajikistan">Tajikistan</option>
+                  <option value="Tanzania">Tanzania</option>
+                  <option value="Thailand">Thailand</option>
+                  <option value="Timor-Leste">Timor-Leste</option>
+                  <option value="Togo">Togo</option>
+                  <option value="Tonga">Tonga</option>
+                  <option value="Trinidad and Tobago">Trinidad and Tobago</option>
+                  <option value="Tunisia">Tunisia</option>
+                  <option value="Turkey">Turkey</option>
+                  <option value="Turkmenistan">Turkmenistan</option>
+                  <option value="Tuvalu">Tuvalu</option>
+                  <option value="Uganda">Uganda</option>
+                  <option value="Ukraine">Ukraine</option>
+                  <option value="United Arab Emirates">United Arab Emirates</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="United States">United States</option>
+                  <option value="Uruguay">Uruguay</option>
+                  <option value="Uzbekistan">Uzbekistan</option>
+                  <option value="Vanuatu">Vanuatu</option>
+                  <option value="Vatican City">Vatican City</option>
+                  <option value="Venezuela">Venezuela</option>
+                  <option value="Vietnam">Vietnam</option>
+                  <option value="Yemen">Yemen</option>
+                  <option value="Zambia">Zambia</option>
+                  <option value="Zimbabwe">Zimbabwe</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label>
+                Capacity
+                <input name="capacity" type="number" min="1" step="1" required placeholder="450">
+              </label>
+            </section>
+
+            <section class="wizard-step" data-step="3">
+              <h3>Step 3: Ticket Types</h3>
+              <div class="ticket-type-grid">
+                <article class="ticket-type-card">
+                  <h4>General Admission</h4>
+                  <div class="split">
+                    <label>
+                      Price (USD)
+                      <input name="gaPrice" type="number" min="0" step="1" required value="35">
+                    </label>
+                    <label>
+                      Quantity
+                      <input name="gaQty" type="number" min="0" step="1" required value="300">
+                    </label>
+                  </div>
+                  <div class="split">
+                    <label>
+                      Sales Start
+                      <input name="gaStart" type="date" required>
+                    </label>
+                    <label>
+                      Sales End
+                      <input name="gaEnd" type="date" required>
+                    </label>
+                  </div>
+                </article>
+                <article class="ticket-type-card">
+                  <h4>VIP</h4>
+                  <div class="split">
+                    <label>
+                      Price (USD)
+                      <input name="vipPrice" type="number" min="0" step="1" value="75">
+                    </label>
+                    <label>
+                      Quantity
+                      <input name="vipQty" type="number" min="0" step="1" value="80">
+                    </label>
+                  </div>
+                  <div class="split">
+                    <label>
+                      Sales Start
+                      <input name="vipStart" type="date">
+                    </label>
+                    <label>
+                      Sales End
+                      <input name="vipEnd" type="date">
+                    </label>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="4">
+              <h3>Step 4: Assets & Promo</h3>
+              <label>
+                Banner Image URL
+                <input name="banner" type="url" placeholder="https://example.com/event-banner.jpg">
+              </label>
+              <label>
+                Upload Event Images (optional)
+                <input name="imageUploads" type="file" accept="image/*" multiple>
+              </label>
+              <div id="wizard-image-preview" class="wizard-image-preview"></div>
+              <p class="muted">Upload up to 3 images. If Banner URL is empty, the first uploaded image is used as the event banner.</p>
+              <label>
+                Promo Codes (comma-separated)
+                <input name="promoCodes" type="text" placeholder="EARLY10,VIP20">
+              </label>
+              <p class="muted">Tip: Banner URL is optional. Leave it empty to use uploaded images or BOOQDAT default event styling.</p>
+            </section>
+
+            <section class="wizard-step" data-step="5">
+              <h3>Step 5: Review & Publish</h3>
+              <div id="wizard-review" class="wizard-review"></div>
+              <div id="wizard-publish-output" class="result-box hidden"></div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-secondary" data-wizard-prev>Back</button>
+              <button type="button" class="btn btn-primary" data-wizard-next>Next</button>
+              <button type="button" class="btn btn-secondary hidden" data-wizard-draft>Save as Draft</button>
+              <button type="button" class="btn btn-primary hidden" data-wizard-publish>Review & Publish</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="promoter-section" id="promoter-analytics">
+        <h2>Analytics</h2>
+        <div class="promoter-analytics-grid">
+          <article class="promoter-card">
+            <h3>Ticket Sales Over Time</h3>
+            <canvas id="promoter-sales-chart" width="760" height="260"></canvas>
+          </article>
+          <article class="promoter-card">
+            <h3>Revenue Trend</h3>
+            <canvas id="promoter-revenue-chart" width="760" height="260"></canvas>
+          </article>
+          <article class="promoter-card">
+            <h3>Buyer Demographics</h3>
+            <div id="promoter-demographics" class="bar-list"></div>
+          </article>
+          <article class="promoter-card">
+            <h3>Peak Purchase Times (Heatmap)</h3>
+            <div id="purchase-heatmap" class="heatmap-grid"></div>
+          </article>
+          <article class="promoter-card">
+            <h3>Top Referrers</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Visits</th>
+                    <th>Conversions</th>
+                  </tr>
+                </thead>
+                <tbody id="top-referrers-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-payouts">
+        <h2>Payouts & Earnings</h2>
+        <div class="promoter-analytics-grid">
+          <article class="promoter-card">
+            <h3>Payout Schedule</h3>
+            <label>
+              Schedule
+              <select id="payout-schedule-select">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <p id="payout-schedule-info" class="muted">Weekly payouts are issued every Friday for cleared transactions.</p>
+          </article>
+          <article class="promoter-card">
+            <h3>Bank Transfer Details</h3>
+            <form id="bank-connect-form" class="stack">
+              <label>
+                Bank Name
+                <input name="bankName" type="text" required placeholder="Global Bank Plc">
+              </label>
+              <label>
+                Bank Address
+                <input name="bankAddress" type="text" required placeholder="123 Finance Street">
+              </label>
+              <div class="split">
+                <label>
+                  City
+                  <input name="city" type="text" required placeholder="Lagos">
+                </label>
+                <label>
+                  Province / State
+                  <input name="stateProvince" type="text" required placeholder="Lagos State">
+                </label>
+              </div>
+              <label>
+                Country
+                <input name="country" type="text" required placeholder="Nigeria">
+              </label>
+              <label>
+                Account Holder Name
+                <input name="accountHolderName" type="text" required placeholder="Business account holder">
+              </label>
+              <label>
+                Bank Account Number
+                <input name="bankAccountNumber" type="text" required placeholder="0123456789">
+              </label>
+              <div class="split">
+                <label>
+                  Routing Number
+                  <input name="routingNumber" type="text" required placeholder="110000000">
+                </label>
+                <label>
+                  Swift Code
+                  <input name="swiftCode" type="text" required placeholder="BOFAUS3N">
+                </label>
+              </div>
+              <button class="btn btn-primary" type="submit">Save Bank Transfer Details</button>
+            </form>
+            <p id="bank-connect-status" class="status"></p>
+          </article>
+          <article class="promoter-card">
+            <h3>Transaction History</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Event</th>
+                    <th>Gross</th>
+                    <th>Net</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="payout-history-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="promoter-section" id="promoter-settings">
+        <h2>Profile & Settings</h2>
+        <article class="promoter-card">
+          <form id="promoter-settings-form" class="stack">
+            <div class="split">
+              <label>
+                Promoter Name
+                <input name="name" type="text" required>
+              </label>
+              <label>
+                Contact Email
+                <input name="email" type="email" required>
+              </label>
+            </div>
+            <div class="split">
+              <label>
+                Phone
+                <input name="phone" type="tel">
+              </label>
+              <label>
+                Location
+                <input name="location" type="text">
+              </label>
+            </div>
+            <label class="checkbox-line"><input type="checkbox" name="notifySales" checked> Email me daily sales summaries</label>
+            <label class="checkbox-line"><input type="checkbox" name="notifyPayouts" checked> Notify me on payout updates</label>
+            <button class="btn btn-primary" type="submit">Save Profile Settings</button>
+          </form>
+          <p id="promoter-settings-status" class="status"></p>
+        </article>
+      </section>
+
+      <section class="promoter-section" id="promoter-support">
+        <h2>Support</h2>
+        <div class="promoter-support-grid">
+          <article class="promoter-card">
+            <h3>Promoter Support</h3>
+            <p>Need help with event setup, links, or payouts?</p>
+            <p>Email <a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a> with your event ID and issue details.</p>
+          </article>
+          <article class="promoter-card">
+            <h3>Resources</h3>
+            <ul class="admin-link-list">
+              <li><a href="support.html">Support Center</a></li>
+              <li><a href="terms.html">Terms of Service</a></li>
+              <li><a href="privacy.html">Privacy Policy</a></li>
+              <li><a href="refund-policy.html">Refund Policy</a></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>BOOQDAT USA LLC</strong>
+        <p>1209 Mountain Road Pl NE Ste R<br>Albuquerque, NM 87110</p>
+        <p><a href="mailto:helloworld@booqdat.com">helloworld@booqdat.com</a></p>
+      </div>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="support.html">Support</a>
+        <a href="refund-policy.html">Refund Policy</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <small>© <span data-year></span> BOOQDAT USA LLC</small>
+    </div>
+  </footer>
+
+  <script src="assets/auth-runtime.js?v=20260321-2358"></script>
+  <script src="assets/app.js?v=20260321-2358"></script>
+</body>
+</html>
