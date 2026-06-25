@@ -2,18 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CreditCard, LayoutDashboard, LogOut, ReceiptText, Shield, UserRound } from "lucide-react";
+import { CreditCard, LayoutDashboard, LogOut, ReceiptText, Shield, UserRound, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const items = [
-  ["/dashboard", "Overview", LayoutDashboard],
-  ["/dashboard/profile", "Profile", UserRound],
-  ["/dashboard/orders", "Orders purchased", ReceiptText],
-  ["/dashboard/payment-methods", "Payment methods", CreditCard],
-  ["/dashboard/security", "Security", Shield]
-] as const;
-
-export function DashboardNav() {
+export function DashboardNav({ role }: { role?: string }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -22,6 +14,15 @@ export function DashboardNav() {
     router.push("/");
     router.refresh();
   }
+
+  const items = [
+    ["/dashboard", "Overview", LayoutDashboard],
+    ["/dashboard/profile", "Profile", UserRound],
+    ...(role === "promoter" ? [["/dashboard/balances", "Balances", Coins] as const] : []),
+    ["/dashboard/orders", "Orders purchased", ReceiptText],
+    ["/dashboard/payment-methods", "Payment methods", CreditCard],
+    ["/dashboard/security", "Security", Shield]
+  ] as const;
 
   return (
     <aside className="rounded-[2rem] border border-orangebrand/10 bg-white p-4 text-ink shadow-card lg:sticky lg:top-24 lg:h-fit">

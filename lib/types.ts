@@ -1,6 +1,6 @@
 import type { ObjectId } from "mongodb";
 
-export type UserRole = "customer" | "admin";
+export type UserRole = "customer" | "admin" | "promoter";
 
 export type BookingStatus =
   | "draft"
@@ -46,6 +46,7 @@ export interface CustomerProfileDocument {
   };
   createdAt: Date;
   updatedAt: Date;
+  whopCompanyId?: string;
 }
 
 export interface NormalizedFlightOffer {
