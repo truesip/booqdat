@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plane, ArrowRightLeft, Check, Search, Calendar, Briefcase, HelpCircle, ArrowRight } from "lucide-react";
+import { Plane, ArrowRightLeft, Check, Search, Calendar, ArrowRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { NormalizedFlightOffer } from "@/lib/types";
 import { HeroBookingWidget } from "@/components/hero-booking-widget";
@@ -62,6 +62,13 @@ function formatDateShort(dateStr?: string) {
   });
 }
 
+function getOfferScheduleKey(offer: NormalizedFlightOffer): string {
+  return offer.slices.map((slice) => {
+    const firstSeg = slice.segments[0];
+    return `${slice.originCode}-${slice.destinationCode}-${firstSeg?.operatingCarrierName}-${firstSeg?.flightNumber}-${slice.departingAt}`;
+  }).join("|");
+}
+
 export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSelectOffer }: Props) {
   const [showSearchWidget, setShowSearchWidget] = useState(false);
   const [sortBy, setSortBy] = useState<"least_expensive" | "most_expensive" | "shortest_duration" | "longest_duration">("least_expensive");
@@ -71,9 +78,8 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
   const [selectingId, setSelectingId] = useState<string | null>(null);
 
   // Fare options step state
-  const [selectedOfferForFares, setSelectedOfferForFares] = useState<NormalizedFlightOffer | null>(null);
-  const [selectedOutboundFare, setSelectedOutboundFare] = useState<"economy_low" | "business_flexible" | "economy_flexible" | null>(null);
-  const [selectedInboundFare, setSelectedInboundFare] = useState<"economy_low" | "business_flexible" | "economy_flexible" | null>(null);
+  const [selectedScheduleKey, setSelectedScheduleKey] = useState<string | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<NormalizedFlightOffer | null>(null);
 
   // Extract unique airlines from offers for filter dropdown
   const airlines = useMemo(() => {
@@ -115,8 +121,30 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
       );
     }
 
-    // Sort
-    result.sort((a, b) => {
+    return result;
+  }, [offers, stopsFilter, selectedAirline, flightNumberQuery]);
+
+  // Group filtered offers by their unique schedule keys (so we display schedules uniquely)
+  const groupedScheduleOffers = useMemo(() => {
+    const groups: Record<string, NormalizedFlightOffer[]> = {};
+    filteredOffers.forEach((offer) => {
+      const key = getOfferScheduleKey(offer);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(offer);
+    });
+
+    const uniqueList: NormalizedFlightOffer[] = [];
+    Object.keys(groups).forEach((key) => {
+      const list = groups[key];
+      // Sort each schedule list so the cheapest offer is first
+      list.sort((a, b) => parseFloat(a.totalAmount) - parseFloat(b.totalAmount));
+      if (list[0]) {
+        uniqueList.push(list[0]);
+      }
+    });
+
+    // Sort unique list by selected sortBy
+    uniqueList.sort((a, b) => {
       if (sortBy === "least_expensive") {
         return parseFloat(a.totalAmount) - parseFloat(b.totalAmount);
       } else if (sortBy === "most_expensive") {
@@ -129,151 +157,79 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
       return 0;
     });
 
-    return result;
-  }, [offers, sortBy, stopsFilter, selectedAirline, flightNumberQuery]);
+    return { uniqueList, groups };
+  }, [filteredOffers, sortBy]);
 
-  // Handle select flight to enter Fare Options step
-  function handleSelectFlight(offer: NormalizedFlightOffer) {
-    setSelectedOfferForFares(offer);
-    setSelectedOutboundFare(null);
-    setSelectedInboundFare(null);
+  // Handle select flight schedule to enter Fare Selection step
+  function handleSelectSchedule(offer: NormalizedFlightOffer) {
+    const key = getOfferScheduleKey(offer);
+    setSelectedScheduleKey(key);
+    // Auto-select the first (cheapest) offer by default
+    const matchingOffers = groupedScheduleOffers.groups[key] || [];
+    setSelectedOffer(matchingOffers[0] || offer);
   }
 
-  // Handle finalize fare options and proceed to checkout
+  // Handle proceed to checkout with the selected real offer
   async function handleGoToCheckout() {
-    if (!selectedOfferForFares) return;
-    
-    // Calculate custom markup/adjustments based on selected fares if applicable
-    const finalOffer = { ...selectedOfferForFares };
-    
-    const isRoundTrip = searchParams?.tripType === "round-trip";
-    const basePrice = parseFloat(selectedOfferForFares.totalAmount);
-    
-    let totalFareAdjustment = 0;
-    
-    if (isRoundTrip) {
-      if (selectedOutboundFare === "business_flexible") totalFareAdjustment += 150;
-      if (selectedOutboundFare === "economy_flexible") totalFareAdjustment += 40;
-      
-      if (selectedInboundFare === "business_flexible") totalFareAdjustment += 150;
-      if (selectedInboundFare === "economy_flexible") totalFareAdjustment += 40;
-    } else {
-      if (selectedOutboundFare === "business_flexible") totalFareAdjustment += 315;
-      if (selectedOutboundFare === "economy_flexible") totalFareAdjustment += 85;
-    }
-    
-    if (totalFareAdjustment > 0) {
-      finalOffer.totalAmount = (basePrice + totalFareAdjustment).toFixed(2);
-    }
+    if (!selectedOffer) return;
 
-    setSelectingId(finalOffer.id);
+    setSelectingId(selectedOffer.id);
     try {
-      await onSelectOffer(finalOffer);
+      await onSelectOffer(selectedOffer);
     } catch {
       setSelectingId(null);
     }
   }
 
-  // Calculate fare options amounts dynamically
-  const farePrices = useMemo(() => {
-    if (!selectedOfferForFares) return null;
-    const basePrice = parseFloat(selectedOfferForFares.totalAmount);
-    const isRoundTrip = searchParams?.tripType === "round-trip";
-
-    if (isRoundTrip) {
-      const halfBase = basePrice * 0.5;
-      return {
-        outbound: {
-          economy_low: halfBase,
-          business_flexible: halfBase + 150,
-          economy_flexible: halfBase + 40
-        },
-        inbound: {
-          economy_low: halfBase,
-          business_flexible: halfBase + 150,
-          economy_flexible: halfBase + 40
-        }
-      };
-    } else {
-      return {
-        outbound: {
-          economy_low: basePrice,
-          business_flexible: basePrice + 315,
-          economy_flexible: basePrice + 85
-        }
-      };
-    }
-  }, [selectedOfferForFares, searchParams]);
-
-  // Calculate the current active sum total based on selection
-  const currentTotalAmount = useMemo(() => {
-    if (!selectedOfferForFares || !farePrices) return 0;
-    const isRoundTrip = searchParams?.tripType === "round-trip";
-    
-    let total = 0;
-    if (selectedOutboundFare && farePrices.outbound) {
-      total += farePrices.outbound[selectedOutboundFare];
-    }
-    if (isRoundTrip && selectedInboundFare && farePrices.inbound) {
-      total += farePrices.inbound[selectedInboundFare];
-    }
-    return total;
-  }, [selectedOfferForFares, farePrices, selectedOutboundFare, selectedInboundFare, searchParams]);
-
-  const isCheckoutActive = useMemo(() => {
-    if (!selectedOfferForFares) return false;
-    const isRoundTrip = searchParams?.tripType === "round-trip";
-    if (isRoundTrip) {
-      return selectedOutboundFare !== null && selectedInboundFare !== null;
-    }
-    return selectedOutboundFare !== null;
-  }, [selectedOfferForFares, selectedOutboundFare, selectedInboundFare, searchParams]);
+  // Get matching offers (fare options) for the selected schedule
+  const availableFareOffers = useMemo(() => {
+    if (!selectedScheduleKey) return [];
+    return groupedScheduleOffers.groups[selectedScheduleKey] || [];
+  }, [selectedScheduleKey, groupedScheduleOffers]);
 
   // --- FARE OPTIONS STEP RENDERING ---
-  if (selectedOfferForFares && farePrices) {
+  if (selectedScheduleKey && selectedOffer) {
     const isRoundTrip = searchParams?.tripType === "round-trip";
-    const outboundSlice = selectedOfferForFares.slices[0];
-    const inboundSlice = isRoundTrip ? selectedOfferForFares.slices[1] : null;
+    const outboundSlice = selectedOffer.slices[0];
+    const inboundSlice = isRoundTrip ? selectedOffer.slices[1] : null;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-scaleIn">
         {/* Dynamic Breadcrumbs Nav */}
         <nav className="flex flex-wrap items-center gap-2 text-xs font-black text-ink/35 select-none uppercase tracking-widest">
-          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => setSelectedOfferForFares(null)}>Orders</span>
+          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => { setSelectedScheduleKey(null); setSelectedOffer(null); }}>Orders</span>
           <span>&rsaquo;</span>
-          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => setSelectedOfferForFares(null)}>New order</span>
+          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => { setSelectedScheduleKey(null); setSelectedOffer(null); }}>New order</span>
           <span>&rsaquo;</span>
-          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => setSelectedOfferForFares(null)}>{searchParams?.origin || "Origin"} to {searchParams?.destination || "Destination"}</span>
+          <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => { setSelectedScheduleKey(null); setSelectedOffer(null); }}>{searchParams?.origin || "Origin"} to {searchParams?.destination || "Destination"}</span>
           {isRoundTrip && (
             <>
               <span>&rsaquo;</span>
-              <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => setSelectedOfferForFares(null)}>{searchParams?.destination || "Destination"} to {searchParams?.origin || "Origin"}</span>
+              <span className="hover:text-orangebrand transition cursor-pointer" onClick={() => { setSelectedScheduleKey(null); setSelectedOffer(null); }}>{searchParams?.destination || "Destination"} to {searchParams?.origin || "Origin"}</span>
             </>
           )}
           <span>&rsaquo;</span>
           <span className="text-ink/65 font-black">Fare options</span>
         </nav>
 
-        {/* Fare Options Grid layout with sidebar */}
+        {/* Fare Options Layout Grid with sidebar */}
         <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
           
-          {/* Slices Fares selection area */}
+          {/* Fares selection area */}
           <div className="space-y-10">
-            
-            {/* OUTBOUND SECTION */}
+            {/* Outbound schedule timing preview */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-orange-100 pb-3">
                 <span className="text-xs font-black uppercase tracking-widest bg-orangebrand px-3 py-1 text-white rounded-full">Outbound</span>
                 <span className="text-xs font-black text-ink/40">{formatDateShort(searchParams?.departureDate)}</span>
               </div>
 
-              {/* Outbound Slice Timings */}
               <div className="flex items-center justify-between bg-cloud rounded-3xl p-5 border border-orange-50/70">
                 <div className="flex items-center gap-4">
-                  {selectedOfferForFares.ownerIataCode ? (
+                  {selectedOffer.ownerIataCode ? (
                     <img
-                      src={`https://assets.duffel.com/img/airlines/for-light-background/medium/${selectedOfferForFares.ownerIataCode}.png`}
-                      alt={selectedOfferForFares.ownerName}
+                      src={`https://assets.duffel.com/img/airlines/for-light-background/medium/${selectedOffer.ownerIataCode}.png`}
+                      alt={selectedOffer.ownerName}
                       className="h-9 w-auto max-w-[85px] object-contain filter brightness-95"
                       onError={(e) => { e.currentTarget.style.display = "none"; }}
                     />
@@ -296,111 +252,9 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                   </p>
                 </div>
               </div>
-
-              {/* Outbound Fare Option Cards row */}
-              <div className="grid gap-4 md:grid-cols-3">
-                {/* Economy Low */}
-                <div
-                  onClick={() => setSelectedOutboundFare("economy_low")}
-                  className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                    selectedOutboundFare === "economy_low"
-                      ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
-                      : "border-slate-200 bg-white hover:border-orangebrand/50"
-                  }`}
-                >
-                  <div className="absolute right-4 top-4">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                      selectedOutboundFare === "economy_low" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
-                    }`}>
-                      {selectedOutboundFare === "economy_low" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Economy</span>
-                    <h4 className="text-base font-black text-ink mt-0.5">Economy Low</h4>
-                    <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on changes</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on refunds</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> Hold space</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> Includes carry-on bags</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on checked bags</li>
-                    </ul>
-                  </div>
-                  <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                    <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                    <span className="text-lg font-black text-ink">{formatCurrency(farePrices.outbound.economy_low, selectedOfferForFares.totalCurrency)}</span>
-                  </div>
-                </div>
-
-                {/* Business Flexible */}
-                <div
-                  onClick={() => setSelectedOutboundFare("business_flexible")}
-                  className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                    selectedOutboundFare === "business_flexible"
-                      ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
-                      : "border-slate-200 bg-white hover:border-orangebrand/50"
-                  }`}
-                >
-                  <div className="absolute right-4 top-4">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                      selectedOutboundFare === "business_flexible" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
-                    }`}>
-                      {selectedOutboundFare === "business_flexible" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Business</span>
-                    <h4 className="text-base font-black text-ink mt-0.5">Business Flexible</h4>
-                    <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Changes allowed</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Refunds allowed</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Hold space</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes carry-on bags</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes checked bags</li>
-                    </ul>
-                  </div>
-                  <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                    <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                    <span className="text-lg font-black text-ink">{formatCurrency(farePrices.outbound.business_flexible, selectedOfferForFares.totalCurrency)}</span>
-                  </div>
-                </div>
-
-                {/* Economy Flexible */}
-                <div
-                  onClick={() => setSelectedOutboundFare("economy_flexible")}
-                  className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                    selectedOutboundFare === "economy_flexible"
-                      ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
-                      : "border-slate-200 bg-white hover:border-orangebrand/50"
-                  }`}
-                >
-                  <div className="absolute right-4 top-4">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                      selectedOutboundFare === "economy_flexible" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
-                    }`}>
-                      {selectedOutboundFare === "economy_flexible" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Economy</span>
-                    <h4 className="text-base font-black text-ink mt-0.5">Economy Flexible</h4>
-                    <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Changes with fee</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on refunds</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Hold space</li>
-                      <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes carry-on bags</li>
-                      <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on checked bags</li>
-                    </ul>
-                  </div>
-                  <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                    <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                    <span className="text-lg font-black text-ink">{formatCurrency(farePrices.outbound.economy_flexible, selectedOfferForFares.totalCurrency)}</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* INBOUND SECTION */}
+            {/* Inbound schedule timing preview if return */}
             {isRoundTrip && inboundSlice && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 border-b border-orange-100 pb-3">
@@ -408,13 +262,12 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                   <span className="text-xs font-black text-ink/40">{formatDateShort(searchParams?.returnDate)}</span>
                 </div>
 
-                {/* Inbound Slice Timings */}
                 <div className="flex items-center justify-between bg-cloud rounded-3xl p-5 border border-orange-50/70">
                   <div className="flex items-center gap-4">
-                    {selectedOfferForFares.ownerIataCode ? (
+                    {selectedOffer.ownerIataCode ? (
                       <img
-                        src={`https://assets.duffel.com/img/airlines/for-light-background/medium/${selectedOfferForFares.ownerIataCode}.png`}
-                        alt={selectedOfferForFares.ownerName}
+                        src={`https://assets.duffel.com/img/airlines/for-light-background/medium/${selectedOffer.ownerIataCode}.png`}
+                        alt={selectedOffer.ownerName}
                         className="h-9 w-auto max-w-[85px] object-contain filter brightness-95"
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
@@ -437,116 +290,73 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Inbound Fares conditional rendering */}
-                {selectedOutboundFare === null ? (
-                  <div className="rounded-3xl bg-slate-50 p-6 border border-slate-100 text-center text-ink/50 text-sm font-black select-none">
-                    Choose a fare option for the previous flight to see the available fares for this flight.
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-3 animate-scaleIn">
-                    {/* Economy Low */}
+            {/* REAL OFFER FARE OPTION CARDS DIRECT FROM DUFFEL */}
+            <div className="space-y-4">
+              <p className="text-xs font-black uppercase tracking-widest text-ink/40">Select your fare brand</p>
+              
+              <div className="grid gap-4 md:grid-cols-3">
+                {availableFareOffers.map((fareOffer) => {
+                  const isSelected = selectedOffer.id === fareOffer.id;
+                  const firstSliceFareBrand = fareOffer.slices[0]?.fareBrandName || "Economy";
+                  
+                  return (
                     <div
-                      onClick={() => setSelectedInboundFare("economy_low")}
+                      key={fareOffer.id}
+                      onClick={() => setSelectedOffer(fareOffer)}
                       className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                        selectedInboundFare === "economy_low"
+                        isSelected
                           ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
                           : "border-slate-200 bg-white hover:border-orangebrand/50"
                       }`}
                     >
                       <div className="absolute right-4 top-4">
                         <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                          selectedInboundFare === "economy_low" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
+                          isSelected ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
                         }`}>
-                          {selectedInboundFare === "economy_low" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
+                          {isSelected && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
                         </span>
                       </div>
+                      
                       <div>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Economy</span>
-                        <h4 className="text-base font-black text-ink mt-0.5">Economy Low</h4>
-                        <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on changes</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on refunds</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> Hold space</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> Includes carry-on bags</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on checked bags</li>
-                        </ul>
-                      </div>
-                      <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                        <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                        <span className="text-lg font-black text-ink">{formatCurrency(farePrices.inbound?.economy_low ?? 0, selectedOfferForFares.totalCurrency)}</span>
-                      </div>
-                    </div>
-
-                    {/* Business Flexible */}
-                    <div
-                      onClick={() => setSelectedInboundFare("business_flexible")}
-                      className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                        selectedInboundFare === "business_flexible"
-                          ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
-                          : "border-slate-200 bg-white hover:border-orangebrand/50"
-                      }`}
-                    >
-                      <div className="absolute right-4 top-4">
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                          selectedInboundFare === "business_flexible" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
-                        }`}>
-                          {selectedInboundFare === "business_flexible" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
+                        <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">
+                          {fareOffer.slices[0]?.segments[0]?.operatingCarrierName || fareOffer.ownerName}
                         </span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Business</span>
-                        <h4 className="text-base font-black text-ink mt-0.5">Business Flexible</h4>
+                        <h4 className="text-base font-black text-ink mt-0.5 truncate">{firstSliceFareBrand}</h4>
+                        
                         <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Changes allowed</li>
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Refunds allowed</li>
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Hold space</li>
+                          <li className="flex items-center gap-1.5 truncate">
+                            <span className={fareOffer.conditions?.changeBeforeDeparture ? "text-orangebrand" : "text-slate-300"}>
+                              {fareOffer.conditions?.changeBeforeDeparture ? "✓" : "➜"}
+                            </span>
+                            <span className="truncate">{fareOffer.conditions?.changeBeforeDeparture || "No data on changes"}</span>
+                          </li>
+                          <li className="flex items-center gap-1.5 truncate">
+                            <span className={fareOffer.conditions?.refundBeforeDeparture ? "text-orangebrand" : "text-slate-300"}>
+                              {fareOffer.conditions?.refundBeforeDeparture ? "✓" : "➜"}
+                            </span>
+                            <span className="truncate">{fareOffer.conditions?.refundBeforeDeparture || "No data on refunds"}</span>
+                          </li>
+                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Hold price & space</li>
                           <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes carry-on bags</li>
                           <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes checked bags</li>
                         </ul>
                       </div>
-                      <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                        <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                        <span className="text-lg font-black text-ink">{formatCurrency(farePrices.inbound?.business_flexible ?? 0, selectedOfferForFares.totalCurrency)}</span>
-                      </div>
-                    </div>
 
-                    {/* Economy Flexible */}
-                    <div
-                      onClick={() => setSelectedInboundFare("economy_flexible")}
-                      className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition duration-200 select-none ${
-                        selectedInboundFare === "economy_flexible"
-                          ? "border-orangebrand bg-orangebrand/[0.02] ring-2 ring-orangebrand"
-                          : "border-slate-200 bg-white hover:border-orangebrand/50"
-                      }`}
-                    >
-                      <div className="absolute right-4 top-4">
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                          selectedInboundFare === "economy_flexible" ? "bg-orangebrand border-orangebrand text-white" : "border-slate-300 bg-white"
-                        }`}>
-                          {selectedInboundFare === "economy_flexible" && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
+                      <div className="mt-6 border-t border-slate-50 pt-4 text-right">
+                        <span className="text-[10px] font-black text-ink/35 block">total amount</span>
+                        <span className="text-lg font-black text-ink">
+                          {formatCurrency(fareOffer.totalAmount, fareOffer.totalCurrency)}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-ink/40">Economy</span>
-                        <h4 className="text-base font-black text-ink mt-0.5">Economy Flexible</h4>
-                        <ul className="mt-4 space-y-2 text-[11px] font-black text-ink/55">
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Changes with fee</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on refunds</li>
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Hold space</li>
-                          <li className="flex items-center gap-1.5"><span className="text-orangebrand">✓</span> Includes carry-on bags</li>
-                          <li className="flex items-center gap-1.5"><span className="text-slate-300">➜</span> No data on checked bags</li>
-                        </ul>
-                      </div>
-                      <div className="mt-6 border-t border-slate-50 pt-4 text-right">
-                        <span className="text-[10px] font-black text-ink/35 block">total amount from</span>
-                        <span className="text-lg font-black text-ink">{formatCurrency(farePrices.inbound?.economy_flexible ?? 0, selectedOfferForFares.totalCurrency)}</span>
-                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
-            )}
+            </div>
+
           </div>
 
           {/* Right Summary Sidebar Box */}
@@ -556,15 +366,15 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                 <h3 className="text-lg font-black tracking-tight border-b border-orange-50 pb-4">Summary</h3>
                 <div className="mt-4 space-y-4 text-xs font-black text-ink/65">
                   <p className="flex items-center gap-1.5">
-                    Sold by <span className="font-black text-orangebrand">{selectedOfferForFares.ownerName}</span>
+                    Sold by <span className="font-black text-orangebrand">{selectedOffer.ownerName}</span>
                   </p>
                   
                   <ul className="space-y-2 text-[11px] font-bold text-ink/50 border-t border-b border-orange-50/50 py-3">
-                    <li className="flex items-center gap-1.5">
-                      <span className="text-slate-300">➜</span> {isCheckoutActive && (selectedOutboundFare === "business_flexible" || selectedInboundFare === "business_flexible") ? "Changes allowed" : "No data on changes"}
+                    <li className="flex items-center gap-1.5 truncate">
+                      <span className="text-slate-300">➜</span> {selectedOffer.conditions?.changeBeforeDeparture || "No data on changes"}
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <span className="text-slate-300">➜</span> {isCheckoutActive && (selectedOutboundFare === "business_flexible" || selectedInboundFare === "business_flexible") ? "Refunds allowed" : "No data on refunds"}
+                    <li className="flex items-center gap-1.5 truncate">
+                      <span className="text-slate-300">➜</span> {selectedOffer.conditions?.refundBeforeDeparture || "No data on refunds"}
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-slate-300">➜</span> Hold space for 1 day
@@ -573,7 +383,7 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                       <span className="text-slate-300">➜</span> Includes carry-on bags
                     </li>
                     <li className="flex items-center gap-1.5">
-                      <span className="text-slate-300">➜</span> {(selectedOutboundFare === "business_flexible" || selectedInboundFare === "business_flexible") ? "Includes checked bags" : "No data about checked bags"}
+                      <span className="text-slate-300">➜</span> Includes checked bags
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-slate-300">➜</span> 86kg CO2
@@ -586,35 +396,23 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                 <div className="flex items-center justify-between text-ink select-none border-b border-slate-50 pb-3">
                   <span className="text-[10px] font-black uppercase tracking-widest text-ink/40">Total amount</span>
                   <span className="text-xl font-black text-orangebrand">
-                    {isCheckoutActive ? formatCurrency(currentTotalAmount, selectedOfferForFares.totalCurrency) : "—"}
+                    {formatCurrency(selectedOffer.totalAmount, selectedOffer.totalCurrency)}
                   </span>
                 </div>
 
-                {isCheckoutActive ? (
-                  <button
-                    onClick={handleGoToCheckout}
-                    disabled={selectingId !== null}
-                    className="w-full h-12 rounded-2xl bg-black text-xs font-black text-white hover:bg-slate-900 transition flex items-center justify-center gap-2 select-none"
-                  >
-                    {selectingId ? "Securing booking..." : "Go to checkout"}
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <button
-                      disabled
-                      className="w-full h-12 rounded-2xl bg-slate-200 text-xs font-black text-slate-400 cursor-not-allowed flex items-center justify-center gap-2 select-none"
-                    >
-                      Go to checkout
-                    </button>
-                    <p className="text-[10px] font-bold text-center text-ink/40">Select fare options for all flights</p>
-                  </div>
-                )}
+                <button
+                  onClick={handleGoToCheckout}
+                  disabled={selectingId !== null}
+                  className="w-full h-12 rounded-2xl bg-black text-xs font-black text-white hover:bg-slate-900 transition flex items-center justify-center gap-2 select-none"
+                >
+                  {selectingId ? "Securing booking..." : "Go to checkout"}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
             <button
-              onClick={() => setSelectedOfferForFares(null)}
+              onClick={() => { setSelectedScheduleKey(null); setSelectedOffer(null); }}
               className="w-full h-11 rounded-2xl border border-slate-200 bg-white text-xs font-black text-ink/50 hover:bg-slate-50 transition"
             >
               Back to search results
@@ -860,14 +658,14 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
               <p className="font-mono text-sm font-semibold text-ink/50 mt-0.5">{offerRequestId}</p>
             </div>
             <p className="rounded-full bg-white px-4 py-2 text-xs font-black text-orangebrand shadow-sm border border-orange-100 tracking-wider">
-              {filteredOffers.length} OFFERS AVAILABLE
+              {groupedScheduleOffers.uniqueList.length} UNIQUE FLIGHTS AVAILABLE
             </p>
           </div>
 
           {/* Results Offers Loop */}
           <div className="space-y-6">
-            {filteredOffers.length > 0 ? (
-              filteredOffers.map((offer) => {
+            {groupedScheduleOffers.uniqueList.length > 0 ? (
+              groupedScheduleOffers.uniqueList.map((offer) => {
                 return (
                   <article
                     key={offer.id}
@@ -876,14 +674,14 @@ export function SearchResultsLayout({ offers, offerRequestId, searchParams, onSe
                     {/* Top Pricing Header Bar */}
                     <div className="flex items-center justify-between px-6 py-5 bg-orangebrand/[0.03] border-b border-orange-50/50">
                       <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-ink/35">Total Price</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-ink/35">Lowest Price</span>
                         <p className="text-2xl font-black text-ink mt-0.5">
                           <span className="text-xs font-bold text-ink/50 mr-1">From</span>
                           {formatCurrency(offer.totalAmount, offer.totalCurrency)}
                         </p>
                       </div>
                       <button
-                        onClick={() => handleSelectFlight(offer)}
+                        onClick={() => handleSelectSchedule(offer)}
                         className="h-11 px-8 rounded-full bg-black text-xs font-black text-white hover:bg-slate-900 transition select-none animate-fadeIn"
                       >
                         Select

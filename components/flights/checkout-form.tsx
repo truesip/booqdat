@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { WhopCheckoutEmbed } from "@whop/checkout/react";
 import { Button } from "@/components/ui/button";
@@ -492,7 +492,6 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
 }
 
 // Add memo helper since we use it in component body
-import { useMemo } from "react";
 
 function formatDateShort(dateStr?: string) {
   if (!dateStr) return "";

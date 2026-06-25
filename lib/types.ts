@@ -66,6 +66,7 @@ export interface NormalizedFlightOffer {
     departingAt: string;
     arrivingAt: string;
     duration?: string;
+    fareBrandName?: string;
     segments: Array<{
       operatingCarrierName: string;
       marketingCarrierName?: string;

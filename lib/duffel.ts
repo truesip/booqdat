@@ -215,6 +215,7 @@ export function normalizeOffer(raw: unknown): NormalizedFlightOffer {
         departingAt: asStringValue(first.departing_at),
         arrivingAt: asStringValue(last.arriving_at),
         duration: asStringValue(slice.duration, undefined as unknown as string),
+        fareBrandName: asStringValue(slice.fare_brand_name, "Economy"),
         segments: segmentsRaw.map((segmentRaw) => {
           const segment = asRecord(segmentRaw);
           const operatingCarrier = asRecord(segment.operating_carrier);
