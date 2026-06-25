@@ -1,11 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LinkButton } from "@/components/ui/button";
-import { getCurrentUser } from "@/lib/auth";
 
 export async function SiteHeader() {
-  const current = await getCurrentUser();
-
   return (
     <header className="sticky top-0 z-50 border-b border-orange-100 bg-white/95 text-ink shadow-sm backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -33,20 +29,9 @@ export async function SiteHeader() {
           </Link>
         </nav>
         <div className="flex items-center gap-3">
-          {current ? (
-            <LinkButton href="/dashboard" variant="light" className="px-4 py-2">
-              Dashboard
-            </LinkButton>
-          ) : (
-            <>
-              <Link href="/login" className="hidden text-sm font-bold text-ink/70 hover:text-orangebrand sm:block">
-                Sign in
-              </Link>
-              <LinkButton href="/register" variant="primary" className="px-4 py-2">
-                Join free
-              </LinkButton>
-            </>
-          )}
+          <Link href="mailto:helloworld@booqdat.com" className="text-sm font-bold text-ink/70 hover:text-orangebrand">
+            Support
+          </Link>
         </div>
       </div>
     </header>

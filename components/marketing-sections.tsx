@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, Bell, Globe2, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bell, Globe2 } from "lucide-react";
 import { LinkButton } from "@/components/ui/button";
 
 const destinations = [
@@ -14,39 +14,9 @@ const comingSoon = [
   ["Event tickets", "Concerts, sports, nightlife, and destination experiences.", "/coming-soon/events"]
 ];
 
-const valueCards: Array<{ title: string; body: string; icon: LucideIcon }> = [
-  {
-    title: "Fast flight booking",
-    body: "Search flights, compare fares, and move from offer to checkout in minutes.",
-    icon: Sparkles
-  },
-  {
-    title: "Payment confidence",
-    body: "A secure checkout flow and order tracking system keep purchases easy to follow.",
-    icon: ShieldCheck
-  },
-  {
-    title: "Account control",
-    body: "Track orders, profile details, and saved payment previews from your dashboard.",
-    icon: BadgeCheck
-  }
-];
-
 export function MarketingSections() {
   return (
     <>
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-5 md:grid-cols-3">
-          {valueCards.map(({ title, body, icon: Icon }) => (
-            <div key={title} className="rounded-[2rem] bg-white p-7 shadow-card">
-              <Icon className="h-9 w-9 text-orangebrand" />
-              <h3 className="mt-5 text-xl font-black">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-ink/60">{body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <section className="bg-white py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">

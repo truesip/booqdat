@@ -16,18 +16,11 @@ export default function HomePage() {
               Flights available now · Hotels, cars, and events coming soon
             </p>
             <h1 className="mt-7 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl lg:text-[4.2rem] lg:leading-[0.96]">
-              Book flights with confidence. Plan the rest of the trip soon.
+              Discover OutSide
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-ink/65">
-              BooqDat is a modern travel booking experience for customers who want fast flight search, clear pricing, secure checkout, and a dashboard that keeps every trip organized.
+              BooqDat is a modern travel booking experience for customers who want fast flight search, clear pricing, and secure checkout.
             </p>
-            <div className="mt-8 grid max-w-xl grid-cols-3 gap-3 text-sm">
-              {["Transparent fares", "Secure checkout", "Trip dashboard"].map((item) => (
-                <div key={item} className="rounded-2xl bg-white p-4 font-black text-ink shadow-sm ring-1 ring-orange-100">
-                  {item}
-                </div>
-              ))}
-            </div>
           </div>
           <div className="lg:pt-8">
             <HeroBookingWidget />
