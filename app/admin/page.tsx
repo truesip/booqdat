@@ -38,7 +38,9 @@ export default async function AdminPage() {
               <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                 <div>
                   <p className="text-xl font-black">
-                    {booking.offerSnapshot.slices[0]?.originCode} → {booking.offerSnapshot.slices[0]?.destinationCode}
+                    {booking.vertical === "events"
+                      ? booking.eventSnapshot?.eventTitle
+                      : `${booking.offerSnapshot?.slices[0]?.originCode} → ${booking.offerSnapshot?.slices[0]?.destinationCode}`}
                   </p>
                   <p className="mt-1 text-sm text-ink/55">
                     Updated {formatDateTime(booking.updatedAt)} · {booking.contact.email}

@@ -84,13 +84,50 @@ export interface NormalizedFlightOffer {
   };
 }
 
+export interface EventDocument {
+  _id?: ObjectId;
+  promoterId: ObjectId;
+  title: string;
+  description: string;
+  category?: string;
+  tags?: string[];
+  date: Date;
+  time?: string;
+  venueType?: "Physical" | "Online";
+  venue?: string;
+  city: string;
+  state?: string;
+  country?: string;
+  capacity?: number;
+  gaPrice: number;
+  gaQty: number;
+  vipPrice?: number;
+  vipQty?: number;
+  banner?: string;
+  imageUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface EventTicketSnapshot {
+  eventId: string;
+  eventTitle: string;
+  eventDate: string;
+  eventTime: string;
+  city: string;
+  venue: string;
+  ticketType: "ga" | "vip";
+  ticketPrice: number;
+  quantity: number;
+}
+
 export interface BookingDocument {
   _id?: ObjectId;
   userId?: ObjectId;
   guestEmail?: string;
   status: BookingStatus;
   paymentStatus: PaymentStatus;
-  vertical: "flights";
+  vertical: "flights" | "events";
   offerId: string;
   duffelOfferRequestId?: string;
   duffelOrderId?: string;
@@ -103,7 +140,8 @@ export interface BookingDocument {
   amount: number;
   currency: string;
   serviceFeeAmount: number;
-  offerSnapshot: NormalizedFlightOffer;
+  offerSnapshot?: NormalizedFlightOffer;
+  eventSnapshot?: EventTicketSnapshot;
   passengers: PassengerInput[];
   contact: {
     email: string;

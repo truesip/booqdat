@@ -24,7 +24,7 @@ export async function SiteHeader() {
           <Link href="/coming-soon/cars" className="hover:text-orangebrand">
             Car rentals
           </Link>
-          <Link href="/coming-soon/events" className="hover:text-orangebrand">
+          <Link href="/events/search" className="hover:text-orangebrand">
             Event tickets
           </Link>
         </nav>

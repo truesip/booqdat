@@ -13,13 +13,19 @@ export default async function OrdersPage() {
       <p className="mt-2 text-sm text-ink/60">Track flight purchases, payment status, ticketing status, and airline references.</p>
       <div className="mt-6 grid gap-4">
         {bookings.length ? bookings.map((booking) => {
-          const firstSlice = booking.offerSnapshot.slices[0];
+          const isEvent = booking.vertical === "events";
+          const title = isEvent
+            ? booking.eventSnapshot?.eventTitle
+            : `${booking.offerSnapshot?.slices[0]?.originCode} → ${booking.offerSnapshot?.slices[0]?.destinationCode}`;
+          const subtitle = isEvent
+            ? formatDateTime(booking.eventSnapshot?.eventDate)
+            : formatDateTime(booking.offerSnapshot?.slices[0]?.departingAt);
           return (
             <Link key={booking._id?.toString()} href={`/dashboard/orders/${booking._id?.toString()}`} className="rounded-3xl border border-slate-100 bg-cloud p-5 transition hover:border-aqua">
               <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                 <div>
-                  <p className="text-lg font-black">{firstSlice?.originCode} → {firstSlice?.destinationCode}</p>
-                  <p className="mt-1 text-sm text-ink/55">{formatDateTime(firstSlice?.departingAt)}</p>
+                  <p className="text-lg font-black">{title}</p>
+                  <p className="mt-1 text-sm text-ink/55">{subtitle}</p>
                 </div>
                 <div className="text-left md:text-right">
                   <p className="font-black">{formatCurrency(booking.amount, booking.currency)}</p>
