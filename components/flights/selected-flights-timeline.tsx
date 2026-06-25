@@ -1,8 +1,8 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { Plane, Calendar, Clock, ArrowRightLeft, ShieldCheck, HelpCircle } from "lucide-react";
+import { Plane, Clock, ArrowRightLeft, ShieldCheck, HelpCircle } from "lucide-react";
 import type { NormalizedFlightOffer } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
 
 interface SelectedFlightsTimelineProps {
   offer: NormalizedFlightOffer;

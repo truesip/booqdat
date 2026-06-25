@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRightLeft, BedDouble, CalendarDays, Car, Plane, Search, Ticket, UsersRound, Check } from "lucide-react";
+import { BedDouble, CalendarDays, Car, Plane, Ticket, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { PlaceAutocomplete } from "@/components/flights/place-autocomplete";
@@ -17,6 +17,13 @@ const verticals = [
 export function HeroBookingWidget() {
   const [active, setActive] = useState("flights");
   const [tripType, setTripType] = useState<"round-trip" | "one-way">("round-trip");
+  
+  // At any time interactive states
+  const [showDepartureTime, setShowDepartureTime] = useState(false);
+  const [showReturnTime, setShowReturnTime] = useState(false);
+  const [departureTimeLabel, setDepartureTimeRange] = useState("At any time");
+  const [returnTimeLabel, setReturnTimeRange] = useState("At any time");
+
   const tomorrow = new Date(Date.now() + 86400000 * 14).toISOString().slice(0, 10);
   const nextWeek = new Date(Date.now() + 86400000 * 21).toISOString().slice(0, 10);
 
@@ -131,43 +138,176 @@ export function HeroBookingWidget() {
               />
             </div>
 
-            {/* Departure & Return Dates */}
-            <div>
+            {/* Departure Date Container */}
+            <div className="relative">
               <Field label="Departure date">
                 <div className="relative">
                   <CalendarDays className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-orangebrand" />
                   <Input name="departureDate" type="date" defaultValue={tomorrow} required className="h-16 rounded-[1.1rem] border-orange-100 pl-12 font-bold" />
                 </div>
               </Field>
-              <div className="mt-1.5 flex items-center gap-1 pl-1 text-[11px] font-black tracking-wide text-indigo-600 hover:text-indigo-800 transition cursor-pointer select-none">
-                <span>At any time</span>
+              <div 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDepartureTime(!showDepartureTime); }}
+                className="mt-2.5 inline-flex items-center gap-1.5 border border-purple-200 bg-purple-50/40 text-purple-700 px-3.5 py-1.5 rounded-full text-[11px] font-black tracking-wide hover:bg-purple-50 hover:border-purple-300 transition cursor-pointer select-none"
+              >
+                <span>{departureTimeLabel}</span>
                 <span className="text-[7px]">▼</span>
               </div>
+
+              {/* Departure Time Popover */}
+              {showDepartureTime && (
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute left-0 z-50 mt-2 rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_rgba(0,0,0,0.14)] w-[320px] select-none text-ink animate-scaleIn"
+                >
+                  <div className="space-y-6">
+                    {/* Take-off slider */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-black text-ink/75 mb-2">
+                        <span className="flex items-center gap-1.5">
+                          <Plane className="h-3.5 w-3.5 text-orangebrand rotate-45" /> Take-off
+                        </span>
+                        <span className="text-slate-400 font-bold">at any time</span>
+                      </div>
+                      <div className="h-1 bg-slate-200 rounded-full relative my-3">
+                        <div className="absolute left-0 right-0 h-1 bg-orangebrand rounded-full" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                      </div>
+                      <div className="flex justify-between text-[9px] font-bold text-ink/35 px-1 mt-1">
+                        <span>00:00</span>
+                        <span>08:00</span>
+                        <span>16:00</span>
+                        <span>23:59</span>
+                      </div>
+                    </div>
+
+                    {/* Landing slider */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-black text-ink/75 mb-2">
+                        <span className="flex items-center gap-1.5">
+                          <Plane className="h-3.5 w-3.5 text-orangebrand rotate-135" /> Landing
+                        </span>
+                        <span className="text-slate-400 font-bold">at any time</span>
+                      </div>
+                      <div className="h-1 bg-slate-200 rounded-full relative my-3">
+                        <div className="absolute left-0 right-0 h-1 bg-orangebrand rounded-full" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                      </div>
+                      <div className="flex justify-between text-[9px] font-bold text-ink/35 px-1 mt-1">
+                        <span>00:00</span>
+                        <span>08:00</span>
+                        <span>16:00</span>
+                        <span>23:59</span>
+                      </div>
+                    </div>
+
+                    {/* Confirm Button */}
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowDepartureTime(false); setDepartureTimeRange("At any time"); }}
+                        className="px-5 py-2.5 rounded-xl bg-black text-xs font-black text-white hover:bg-slate-900 transition"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* Return Date Container */}
             {tripType === "round-trip" ? (
-              <div>
+              <div className="relative">
                 <Field label="Return date">
                   <div className="relative">
                     <CalendarDays className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-orangebrand" />
                     <Input name="returnDate" type="date" defaultValue={nextWeek} className="h-16 rounded-[1.1rem] border-orange-100 pl-12 font-bold" />
                   </div>
                 </Field>
-                <div className="mt-1.5 flex items-center gap-1 pl-1 text-[11px] font-black tracking-wide text-indigo-600 hover:text-indigo-800 transition cursor-pointer select-none">
-                  <span>At any time</span>
+                <div 
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowReturnTime(!showReturnTime); }}
+                  className="mt-2.5 inline-flex items-center gap-1.5 border border-purple-200 bg-purple-50/40 text-purple-700 px-3.5 py-1.5 rounded-full text-[11px] font-black tracking-wide hover:bg-purple-50 hover:border-purple-300 transition cursor-pointer select-none"
+                >
+                  <span>{returnTimeLabel}</span>
                   <span className="text-[7px]">▼</span>
                 </div>
+
+                {/* Return Time Popover */}
+                {showReturnTime && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute left-0 z-50 mt-2 rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_rgba(0,0,0,0.14)] w-[320px] select-none text-ink animate-scaleIn"
+                  >
+                    <div className="space-y-6">
+                      {/* Take-off slider */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs font-black text-ink/75 mb-2">
+                          <span className="flex items-center gap-1.5">
+                            <Plane className="h-3.5 w-3.5 text-orangebrand rotate-45" /> Take-off
+                          </span>
+                          <span className="text-slate-400 font-bold">at any time</span>
+                        </div>
+                        <div className="h-1 bg-slate-200 rounded-full relative my-3">
+                          <div className="absolute left-0 right-0 h-1 bg-orangebrand rounded-full" />
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                        </div>
+                        <div className="flex justify-between text-[9px] font-bold text-ink/35 px-1 mt-1">
+                          <span>00:00</span>
+                          <span>08:00</span>
+                          <span>16:00</span>
+                          <span>23:59</span>
+                        </div>
+                      </div>
+
+                      {/* Landing slider */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs font-black text-ink/75 mb-2">
+                          <span className="flex items-center gap-1.5">
+                            <Plane className="h-3.5 w-3.5 text-orangebrand rotate-135" /> Landing
+                          </span>
+                          <span className="text-slate-400 font-bold">at any time</span>
+                        </div>
+                        <div className="h-1 bg-slate-200 rounded-full relative my-3">
+                          <div className="absolute left-0 right-0 h-1 bg-orangebrand rounded-full" />
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white border-2 border-orangebrand cursor-grab shadow-sm" />
+                        </div>
+                        <div className="flex justify-between text-[9px] font-bold text-ink/35 px-1 mt-1">
+                          <span>00:00</span>
+                          <span>08:00</span>
+                          <span>16:00</span>
+                          <span>23:59</span>
+                        </div>
+                      </div>
+
+                      {/* Confirm Button */}
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowReturnTime(false); setReturnTimeRange("At any time"); }}
+                          className="px-5 py-2.5 rounded-xl bg-black text-xs font-black text-white hover:bg-slate-900 transition"
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="opacity-45 pointer-events-none">
+              <div className="opacity-45 pointer-events-none relative">
                 <Field label="Return date">
                   <div className="relative">
                     <CalendarDays className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300" />
                     <Input disabled name="returnDate" type="text" placeholder="DD / MM / YYYY" className="h-16 rounded-[1.1rem] border-slate-100 bg-slate-50 pl-12 font-bold" />
                   </div>
                 </Field>
-                <div className="mt-1.5 flex items-center gap-1 pl-1 text-[11px] font-black tracking-wide text-slate-400 select-none">
-                  <span>At any time</span>
+                <div className="mt-2.5 inline-flex items-center gap-1.5 border border-slate-200 bg-slate-50 text-slate-400 px-3.5 py-1.5 rounded-full text-[11px] font-black tracking-wide select-none">
+                  <span>{returnTimeLabel}</span>
                   <span className="text-[7px]">▼</span>
                 </div>
               </div>
