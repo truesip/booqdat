@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <main className="min-h-screen bg-cloud">
       <SiteHeader />
       <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[280px_1fr] lg:px-8">
-        <DashboardNav />
+        <DashboardNav role={current.user.role} />
         <div>{children}</div>
       </section>
     </main>

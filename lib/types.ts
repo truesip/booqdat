@@ -52,6 +52,7 @@ export interface CustomerProfileDocument {
   whopOnboarded?: boolean;
   createdAt: Date;
   updatedAt: Date;
+  whopCompanyId?: string;
 }
 
 export interface NormalizedFlightOffer {
