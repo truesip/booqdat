@@ -39,5 +39,6 @@ export const collections = {
   paymentMethods: "payment_methods",
   passengers: "passengers",
   webhookEvents: "webhook_events",
-  waitlistLeads: "waitlist_leads"
+  waitlistLeads: "waitlist_leads",
+  events: "events"
 } as const;

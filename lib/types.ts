@@ -1,6 +1,6 @@
 import type { ObjectId } from "mongodb";
 
-export type UserRole = "customer" | "admin";
+export type UserRole = "customer" | "admin" | "promoter";
 
 export type BookingStatus =
   | "draft"
@@ -24,6 +24,9 @@ export interface UserDocument {
   passwordHash?: string;
   role: UserRole;
   emailVerifiedAt?: Date;
+  whopCompanyId?: string;
+  whopCompanyStatus?: string;
+  whopOnboarded?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +47,9 @@ export interface CustomerProfileDocument {
     dealsEmail?: boolean;
     bookingUpdatesSms?: boolean;
   };
+  whopCompanyId?: string;
+  whopCompanyStatus?: string;
+  whopOnboarded?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -138,4 +144,21 @@ export interface PassengerInput {
   gender?: string;
   email?: string;
   phoneNumber?: string;
+}
+
+export interface EventDocument {
+  _id?: ObjectId;
+  promoterId: ObjectId;
+  title: string;
+  description: string;
+  date: Date;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  ticketPrice: number;
+  ticketQuantity: number;
+  ticketsSold: number;
+  whopCompanyId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
