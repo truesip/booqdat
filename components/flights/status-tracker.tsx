@@ -288,59 +288,79 @@ export function StatusTracker({ bookingId, initialBooking }: StatusTrackerProps)
         )}
       </section>
 
-      {/* Flight Itinerary Summary Card */}
+      {/* Vertical Specific Details Card */}
       <section className="rounded-[2rem] bg-white p-8 shadow-card border border-orangebrand/5">
-        <h2 className="text-xl font-black text-ink flex items-center gap-2 mb-6">
-          <Plane className="h-5 w-5 text-orangebrand" />
-          Flight details
-        </h2>
-
-        {booking.offerSnapshot.slices.map((slice, sIdx) => (
-          <div key={sIdx} className="mb-6 last:mb-0 bg-cloud rounded-3xl p-5 border border-orange-100">
-            <div className="flex items-center justify-between border-b border-orange-100/50 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-orangebrand px-3 py-1 text-xs font-black text-white">
-                  {sIdx === 0 ? "Outbound" : "Return"}
-                </span>
-                <span className="text-xs font-bold text-ink/50">
-                  {slice.segments[0]?.operatingCarrierName ?? booking.offerSnapshot.ownerName}
-                </span>
-              </div>
-              <span className="text-xs font-black text-ink/70">
-                Duration: {slice.duration ? slice.duration.replace("PT", "").toLowerCase() : "N/A"}
-              </span>
+        {booking.vertical === "events" ? (
+          <>
+            <h2 className="text-xl font-black text-ink flex items-center gap-2 mb-6">
+              <Ticket className="h-5 w-5 text-orangebrand" />
+              Event details
+            </h2>
+            <div className="bg-cloud rounded-3xl p-5 border border-orange-100 space-y-3 text-sm font-semibold">
+              <p className="text-lg font-black text-ink">{booking.eventSnapshot?.eventTitle}</p>
+              <p className="text-ink/60">
+                Date: {booking.eventSnapshot?.eventDate ? new Date(booking.eventSnapshot.eventDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}
+                {booking.eventSnapshot?.eventTime ? ` at ${booking.eventSnapshot.eventTime}` : ""}
+              </p>
+              <p className="text-ink/60">Venue: {booking.eventSnapshot?.venue}, {booking.eventSnapshot?.city}</p>
+              <p className="text-orangeburnt">Ticket: {booking.eventSnapshot?.ticketType === "vip" ? "VIP Pass" : "General Admission"} ({booking.eventSnapshot?.quantity}x)</p>
             </div>
+          </>
+        ) : (
+          <>
+            <h2 className="text-xl font-black text-ink flex items-center gap-2 mb-6">
+              <Plane className="h-5 w-5 text-orangebrand" />
+              Flight details
+            </h2>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              {/* Departure */}
-              <div>
-                <p className="text-2xl font-black text-ink">{slice.originCode}</p>
-                <p className="text-xs font-semibold text-ink/50 mt-0.5">{slice.originName}</p>
-                <p className="text-xs font-bold text-orangebrand mt-1">{formatDateTime(slice.departingAt)}</p>
-              </div>
-
-              {/* Path line */}
-              <div className="hidden md:flex flex-col items-center flex-1 max-w-[120px] px-2">
-                <span className="text-[10px] font-black text-ink/40 uppercase tracking-wider">
-                  {slice.segments.length > 1 ? `${slice.segments.length - 1} stop` : "non-stop"}
-                </span>
-                <div className="w-full h-0.5 bg-orangebrand/25 relative my-2">
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orangebrand" />
+            {booking.offerSnapshot!.slices.map((slice, sIdx) => (
+              <div key={sIdx} className="mb-6 last:mb-0 bg-cloud rounded-3xl p-5 border border-orange-100">
+                <div className="flex items-center justify-between border-b border-orange-100/50 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-orangebrand px-3 py-1 text-xs font-black text-white">
+                      {sIdx === 0 ? "Outbound" : "Return"}
+                    </span>
+                    <span className="text-xs font-bold text-ink/50">
+                      {slice.segments[0]?.operatingCarrierName ?? booking.offerSnapshot!.ownerName}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black text-ink/70">
+                    Duration: {slice.duration ? slice.duration.replace("PT", "").toLowerCase() : "N/A"}
+                  </span>
                 </div>
-                <span className="text-[10px] font-bold text-ink/30">
-                  {slice.segments[0]?.flightNumber ? `Flight ${slice.segments[0].flightNumber}` : ""}
-                </span>
-              </div>
 
-              {/* Arrival */}
-              <div className="md:text-right">
-                <p className="text-2xl font-black text-ink">{slice.destinationCode}</p>
-                <p className="text-xs font-semibold text-ink/50 mt-0.5">{slice.destinationName}</p>
-                <p className="text-xs font-bold text-orangebrand mt-1">{formatDateTime(slice.arrivingAt)}</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Departure */}
+                  <div>
+                    <p className="text-2xl font-black text-ink">{slice.originCode}</p>
+                    <p className="text-xs font-semibold text-ink/50 mt-0.5">{slice.originName}</p>
+                    <p className="text-xs font-bold text-orangebrand mt-1">{formatDateTime(slice.departingAt)}</p>
+                  </div>
+
+                  {/* Path line */}
+                  <div className="hidden md:flex flex-col items-center flex-1 max-w-[120px] px-2">
+                    <span className="text-[10px] font-black text-ink/40 uppercase tracking-wider">
+                      {slice.segments.length > 1 ? `${slice.segments.length - 1} stop` : "non-stop"}
+                    </span>
+                    <div className="w-full h-0.5 bg-orangebrand/25 relative my-2">
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orangebrand" />
+                    </div>
+                    <span className="text-[10px] font-bold text-ink/30">
+                      {slice.segments[0]?.flightNumber ? `Flight ${slice.segments[0].flightNumber}` : ""}
+                    </span>
+                  </div>
+
+                  {/* Arrival */}
+                  <div className="md:text-right">
+                    <p className="text-2xl font-black text-ink">{slice.destinationCode}</p>
+                    <p className="text-xs font-semibold text-ink/50 mt-0.5">{slice.destinationName}</p>
+                    <p className="text-xs font-bold text-orangebrand mt-1">{formatDateTime(slice.arrivingAt)}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
+            ))}
+          </>
+        )}
       </section>
 
       {/* Passenger Details Summary Card */}

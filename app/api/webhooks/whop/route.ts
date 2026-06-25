@@ -48,13 +48,20 @@ export async function POST(request: Request) {
 
     try {
       if (!booking.passengers.length) throw new Error("Passenger details missing for ticketing");
-      const order = await createDuffelOrder({ offer: booking.offerSnapshot, passengers: booking.passengers });
-      await updateBookingStatus(bookingId, {
-        status: "confirmed",
-        paymentStatus: "succeeded",
-        duffelOrderId: order.id,
-        airlineBookingReference: order.bookingReference
-      });
+      if (booking.vertical === "events") {
+        await updateBookingStatus(bookingId, {
+          status: "confirmed",
+          paymentStatus: "succeeded"
+        });
+      } else {
+        const order = await createDuffelOrder({ offer: booking.offerSnapshot!, passengers: booking.passengers });
+        await updateBookingStatus(bookingId, {
+          status: "confirmed",
+          paymentStatus: "succeeded",
+          duffelOrderId: order.id,
+          airlineBookingReference: order.bookingReference
+        });
+      }
     } catch (error) {
       await updateBookingStatus(bookingId, {
         status: "requires_manual_review",

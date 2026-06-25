@@ -15,6 +15,19 @@ export function calculateFlightPrice(offer: NormalizedFlightOffer) {
   };
 }
 
+export function calculateEventPrice(ticketPrice: number, quantity: number) {
+  const baseTotal = ticketPrice * quantity;
+  const serviceFeeAmount = 5.00; // flat platform fee of $5.00
+  const finalAmount = baseTotal + serviceFeeAmount;
+
+  return {
+    supplierAmount: roundMoney(baseTotal),
+    serviceFeeAmount,
+    finalAmount,
+    currency: "USD"
+  };
+}
+
 function roundMoney(amount: number) {
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }

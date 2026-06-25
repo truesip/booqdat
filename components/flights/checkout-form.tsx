@@ -554,9 +554,9 @@ export function CheckoutForm({ bookingId, booking }: { bookingId: string; bookin
               <div>
                 <h3 className="text-sm font-black text-ink flex items-center gap-1.5">
                   <Armchair className="h-4.5 w-4.5 text-orangebrand" />
-                  Flight to {booking.offerSnapshot.slices[0].destinationCode}
+                  Flight to {booking.offerSnapshot!.slices[0].destinationCode}
                 </h3>
-                <p className="text-[10px] font-black text-ink/40 uppercase mt-0.5">{formatDateShort(booking.offerSnapshot.slices[0].departingAt)}</p>
+                <p className="text-[10px] font-black text-ink/40 uppercase mt-0.5">{formatDateShort(booking.offerSnapshot!.slices[0].departingAt)}</p>
                 <p className="text-xs font-black text-ink mt-2">Passenger 1</p>
               </div>
               <button
